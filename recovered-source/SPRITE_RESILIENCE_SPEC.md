@@ -12,4 +12,4 @@ Uma exceção de rede numa variante interrompe o download antes de tentar as fon
 
 ## Estado
 
-Investigação concluída a partir de PokemonSpriteService.cs. Implementação e regressões em andamento; nenhuma afirmação de correção ou publicação deste ciclo até os checks passarem.
+O [run 37047750380](https://github.com/Juanblack1/pokemonplay/actions/runs/37047750380) aprovou `9aa4bf65d48a10144546a53a674a7905a65be2ec`, incluindo cinco regressões determinísticas, suíte completa, empacotamento e Firestore. A primeira fonte simulada falhou e a segunda retornou PNG válido. Uma resposta sem Content-Length consumiu exatamente 1 MB mais um byte antes da rejeição; a próxima fonte permaneceu disponível. O cache excessivo foi rejeitado e removido após liberar o arquivo. A fonte parada foi cancelada pelo orçamento total, sem novas requisições. Não houve teste de rede instável real. As fixtures do runner foram removidas ao terminar.

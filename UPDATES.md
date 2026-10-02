@@ -1,5 +1,11 @@
 # Atualizações pelo GitHub
 
+## v171.7.0 — Sprites com rede instável
+
+Uma falha rápida de rede ao buscar uma variante de sprite passa a permitir a próxima fonte existente, mantendo um prazo total de seis segundos para essa busca. Respostas sem tamanho declarado e arquivos de cache são lidos com limite de 1 MB mais um byte sentinela, antes da validação PNG. Cache excessivo é rejeitado sem carregar todo o arquivo.
+
+O PR #16 passou pela suíte Windows completa, empacotamento e Firestore no run `37047750380`. Cinco testes determinísticos cobrem fallback de rede, resposta sem tamanho, leitura limitada, limpeza de cache inválido e cancelamento pelo prazo total. Nenhum arquivo Pokémon ou save é modificado.
+
 ## v171.6.0 — Jogos-base GBA e DS completos no importador
 
 Ruby, Sapphire, Diamond e Pearl agora podem ser escolhidos como jogos-base, com nomes e referências de capa próprios. Os seletores oferecem cinco bases GBA, nove DS e oito 3DS. A identificação aceita nomes com underscores e distingue Omega Ruby/Alpha Sapphire das versões GBA. Quando a capa não está presente, o cartão mantém o placeholder existente.
