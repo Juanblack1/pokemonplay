@@ -1,5 +1,9 @@
 # Atualizações pelo GitHub
 
+## Próxima versão — Adicionar ROMs locais
+
+A Biblioteca pode importar ROMs GBA, Nintendo DS e Nintendo 3DS ou examinar uma pasta, mantendo os arquivos no local escolhido. Cabeçalhos GBA/DS ajudam a preencher título e jogo-base; arquivos sem identificação, incluindo títulos 3DS, exigem confirmação do conteúdo Pokémon. Os cartões de hack mostram o selo **HACK ROM**, o nome escolhido e o jogo-base. Saves locais ganham uma pasta isolada por jogo importado.
+
 ## v171.1 — Abrir o app direto da pasta extraída
 
 A release inclui um pacote portátil com `Pokemons Play.exe` na raiz. Extraia o ZIP e abra esse iniciador para começar; o runtime autocontido continua dentro da pasta do app e o pacote de atualização permanece separado.

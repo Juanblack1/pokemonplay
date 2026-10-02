@@ -48,4 +48,12 @@ internal sealed class GameInfo
 
 	public string SaveFolderName;
 
+	public string RomPath;
+
+	public bool IsImported;
+
+	public bool IsHackRom;
+
+	public string BaseGame;
+
 }

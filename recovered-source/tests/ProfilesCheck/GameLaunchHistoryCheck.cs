@@ -7,6 +7,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -447,14 +448,57 @@ internal static class GameLaunchHistoryCheck
             refreshHost.Width = 762;
             Application.DoEvents();
             var chipStrip = (Control)Get(refreshLibrary, "chips");
-            Button[] generationChips = chipStrip.Controls.OfType<Button>().Where(button => button != refreshButton).ToArray();
-            Assert(refreshButton.Visible && refreshButton.Right <= chipStrip.ClientSize.Width && generationChips.All(button => !button.Bounds.IntersectsWith(refreshButton.Bounds)), "refresh action fits beside generation filters at compact width");
+            Button importButton = (Button)Get(refreshLibrary, "importButton");
+            Button[] generationChips = chipStrip.Controls.OfType<Button>().Where(button => button != refreshButton && !Equals(button.Tag, "rom-import")).ToArray();
+            Assert(importButton.Visible && importButton.AccessibleName.Contains("Adicionar jogos") && refreshButton.Visible && refreshButton.Right <= chipStrip.ClientSize.Width && importButton.Right + 8 <= refreshButton.Left && generationChips.All(button => !button.Bounds.IntersectsWith(refreshButton.Bounds) && !button.Bounds.IntersectsWith(importButton.Bounds)), "ROM import and refresh actions fit beside generation filters at compact width");
             Assert(generationChips.All(button => button.Width >= 92 && button.Right <= chipStrip.ClientSize.Width) && generationChips.Select(button => button.Top).Distinct().Count() == 2, "generation filters wrap into readable rows beside refresh at the minimum library width");
             refreshHost.Width = 720;
             Application.DoEvents();
-            Assert(!refreshButton.Visible && refreshButton.AccessibleName.Contains("F5") && generationChips.All(button => button.Right <= chipStrip.ClientSize.Width && button.Width >= 92), "compact layout keeps generation chips clear and F5 refresh available");
+            Assert(!refreshButton.Visible && !importButton.Visible && refreshButton.AccessibleName.Contains("F5") && generationChips.All(button => button.Right <= chipStrip.ClientSize.Width && button.Width >= 92), "compact layout keeps generation chips clear and F5 refresh available");
             refreshHost.Controls.Remove(refreshLibrary);
         }
+
+        string importedRoot = Path.Combine(fixture, "imported-roms");
+        string importedRomFolder = Path.Combine(fixture, "user-rom-folder");
+        Directory.CreateDirectory(importedRomFolder);
+        byte[] gbaHeader = new byte[0xB0];
+        Encoding.ASCII.GetBytes("POKEMON").CopyTo(gbaHeader, 0xA0);
+        string importedGba = Path.Combine(importedRomFolder, "pokemon-emerald.gba");
+        File.WriteAllBytes(importedGba, gbaHeader);
+        Type importedCatalog = app.GetType("ImportedGameCatalog");
+        object identity = Call(importedCatalog, "ReadIdentity", null, importedGba);
+        Assert((bool)identity.GetType().GetProperty("RecognizedPokemon").GetValue(identity) && (bool)Call(importedCatalog, "IsSupportedRom", null, importedGba), "local GBA import recognizes a Pokémon header and supports its ROM extension");
+        Type importedRecordType = app.GetType("ImportedPokemonGame");
+        object importedRecord = Activator.CreateInstance(importedRecordType);
+        importedRecordType.GetProperty("RomPath").SetValue(importedRecord, importedGba);
+        importedRecordType.GetProperty("Title").SetValue(importedRecord, "Pokémon Unbound");
+        importedRecordType.GetProperty("BaseGame").SetValue(importedRecord, "Emerald");
+        importedRecordType.GetProperty("Generation").SetValue(importedRecord, 3);
+        importedRecordType.GetProperty("IsHackRom").SetValue(importedRecord, true);
+        object importedCardGame = Call(importedCatalog, "ToGameInfo", null, importedRecord);
+        Assert((bool)importedCardGame.GetType().GetField("IsImported").GetValue(importedCardGame) && (bool)importedCardGame.GetType().GetField("IsHackRom").GetValue(importedCardGame) && ((string)importedCardGame.GetType().GetField("Subtitle").GetValue(importedCardGame)).Contains("Hack de Emerald") && ((string)importedCardGame.GetType().GetField("Cover").GetValue(importedCardGame)).EndsWith(Path.Combine("Pokemon - Capas", "Emerald.png")), "hack-ROM metadata points to its base game and matching reference cover");
+        using (var hackCard = (Control)Activator.CreateInstance(app.GetType("GameCard"), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { importedCardGame, importedRomFolder }, null))
+        {
+            using var hackBitmap = new Bitmap(hackCard.Width, hackCard.Height);
+            hackCard.DrawToBitmap(hackBitmap, new Rectangle(0, 0, hackBitmap.Width, hackBitmap.Height));
+            Assert(hackCard.AccessibleName.Contains("HACK ROM") && hackCard.Height == 366 && hackBitmap.GetPixel(18, 262).ToArgb() == Color.FromArgb(65, 52, 124).ToArgb(), "hack-ROM card paints a distinct HACK ROM badge and exposes it accessibly");
+        }
+        Type importedListType = typeof(List<>).MakeGenericType(importedRecordType);
+        var importedRecords = (IList)Activator.CreateInstance(importedListType);
+        importedRecords.Add(importedRecord);
+        Call(importedCatalog, "Save", null, importedRoot, importedRecords);
+        var importedGames = (IList)Call(app.GetType("GameCatalog"), "Build", null, importedRoot);
+        Assert(importedGames.Cast<object>().Any(game => (bool)game.GetType().GetField("IsImported").GetValue(game) && (string)game.GetType().GetField("Title").GetValue(game) == "Pokémon Unbound") && File.Exists(importedGba), "local game catalog persists the selected ROM path without copying the original");
+        string importedThreeDs = Path.Combine(importedRomFolder, "pokemon-x.3ds");
+        File.WriteAllBytes(importedThreeDs, new byte[256]);
+        object threeDsIdentity = Call(importedCatalog, "ReadIdentity", null, importedThreeDs);
+        Assert(!(bool)threeDsIdentity.GetType().GetProperty("RecognizedPokemon").GetValue(threeDsIdentity) && (bool)Call(importedCatalog, "IsSupportedRom", null, importedThreeDs), "3DS import requires explicit Pokémon-content confirmation while recognizing the supported file type");
+        importedRecordType.GetProperty("RomPath").SetValue(importedRecord, importedThreeDs);
+        importedRecordType.GetProperty("Title").SetValue(importedRecord, "Pokémon X");
+        importedRecordType.GetProperty("BaseGame").SetValue(importedRecord, "X");
+        importedRecordType.GetProperty("Generation").SetValue(importedRecord, 6);
+        object imported3dsInfo = Call(importedCatalog, "ToGameInfo", null, importedRecord);
+        Assert((string)imported3dsInfo.GetType().GetField("EmulatorProcess").GetValue(imported3dsInfo) == "azahar" && ((string)imported3dsInfo.GetType().GetField("Launcher").GetValue(imported3dsInfo)).Contains("Azahar") && ((string)imported3dsInfo.GetType().GetField("Arguments").GetValue(imported3dsInfo)).Contains(importedThreeDs), "confirmed local 3DS games map to Azahar with the selected file path");
 
         string accentedRoot = Path.Combine(fixture, "accented-games");
         string roms = Path.Combine(accentedRoot, "Pokemon 3DS - Arquivos", "Roms");

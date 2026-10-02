@@ -133,6 +133,8 @@ internal static class GameCatalog
 		string coversDir = Path.Combine(root, "Pokemon 3DS - Capas");
 		string azaharExe = Path.Combine(root, "Pokemon 3DS - Arquivos", "Azahar", "azahar.exe");
 		list.AddRange(DiscoverThreeDsGames(romsDir, coversDir, azaharExe));
+		try { list.AddRange(ImportedGameCatalog.Build(root)); }
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { }
 		return list;
 	}
 
@@ -141,7 +143,7 @@ internal static class GameCatalog
 		List<GameInfo> list = new List<GameInfo>();
 		foreach (GameInfo item in Build(root))
 		{
-			if (item.Generation < 6)
+			if (item.Generation < 6 && !item.IsImported)
 			{
 				list.Add(item);
 			}

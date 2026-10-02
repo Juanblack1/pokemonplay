@@ -9,11 +9,11 @@ internal static class LauncherSettings
             {"HeartGold","Pokemon - HeartGold Version (USA).nds"}, {"SoulSilver","Pokemon - SoulSilver Version (USA).nds"}, {"Platinum","Pokemon - Platinum Version (USA) (Rev 1).nds"},
             {"Black","5216 - Pokemon - Black (DSi Enhanced) (J).nds"}, {"White","Pokemon - White Version (USA, Europe) (NDSi Enhanced).nds"}, {"Black 2","Pokemon - Black Version 2 (USA, Europe) (NDSi Enhanced).nds"}, {"White 2","Pokemon - White Version 2 (USA, Europe) (NDSi Enhanced).nds"}
         };
-    public static string SaveFileName(GameInfo game) => roms.TryGetValue(game.Title, out string rom) ? Path.GetFileNameWithoutExtension(rom) + ".sav" : throw new InvalidOperationException("Jogo sem configuração de save.");
-    internal static string RetroArchSaveFileName(GameInfo game) => roms.TryGetValue(game.Title, out string rom) ? Path.GetFileNameWithoutExtension(rom) + ".srm" : throw new InvalidOperationException("Jogo sem configuração de save.");
+    public static string SaveFileName(GameInfo game) => roms.TryGetValue(game.Title, out string rom) ? Path.GetFileNameWithoutExtension(rom) + ".sav" : game.IsImported ? Path.GetFileNameWithoutExtension(game.RomPath) + ".sav" : throw new InvalidOperationException("Jogo sem configuração de save.");
+    internal static string RetroArchSaveFileName(GameInfo game) => roms.TryGetValue(game.Title, out string rom) ? Path.GetFileNameWithoutExtension(rom) + ".srm" : game.IsImported ? Path.GetFileNameWithoutExtension(game.RomPath) + ".srm" : throw new InvalidOperationException("Jogo sem configuração de save.");
     internal static string SaveFileName(string root, GameInfo game) => roms.TryGetValue(game.Title, out string rom)
         ? Path.GetFileNameWithoutExtension(rom) + (RetroArchSettingsService.UsesRetroArch(root, game) ? ".srm" : ".sav")
-        : throw new InvalidOperationException("Jogo sem configuração de save.");
+        : game.IsImported ? Path.GetFileNameWithoutExtension(game.RomPath) + (RetroArchSettingsService.UsesRetroArch(root, game) ? ".srm" : ".sav") : throw new InvalidOperationException("Jogo sem configuração de save.");
     public static void PrepareGame(string root, GameInfo game, ref string executable, ref string arguments)
         => PrepareGame(root, game, ref executable, ref arguments, out _, out _);
 
@@ -22,15 +22,15 @@ internal static class LauncherSettings
         processName = !string.IsNullOrWhiteSpace(game.EmulatorProcess) ? game.EmulatorProcess : game.Generation == 3 ? "visualboyadvance-m" : game.Generation >= 6 ? "azahar" : "melonDS";
         temporaryConfigPath = null;
         if(game.Generation>=6){ApplyAzahar(root);temporaryConfigPath=AzaharSessionSettingsService.Begin(AzaharConfigPath(root));return;}
-        if(!roms.TryGetValue(game.Title,out string rom))throw new InvalidOperationException("Jogo sem configuração de entrada.");
+        if(!game.IsImported && !roms.TryGetValue(game.Title,out _))throw new InvalidOperationException("Jogo sem configuração de entrada.");
         string dir=Path.Combine(root,game.Generation==3?"Pokemon - Arquivos":"Pokemon DS - Arquivos");
-        string romPath=Path.Combine(dir,rom);
-        if(!File.Exists(romPath))throw new FileNotFoundException("Não encontrei a ROM deste jogo na instalação.",romPath);
+        string romPath=game.IsImported?Path.GetFullPath(game.RomPath):Path.Combine(dir,roms[game.Title]);
+        if(!File.Exists(romPath))throw new FileNotFoundException(game.IsImported?"Não encontrei a ROM local selecionada. Confira se a unidade ou pasta ainda está disponível.":"Não encontrei a ROM deste jogo na instalação.",romPath);
         RetroArchLaunchPlan retroArch=RetroArchSettingsService.CreateLaunch(root,game,romPath);
         if(retroArch!=null){executable=retroArch.ExecutablePath;arguments=retroArch.Arguments;processName="retroarch";temporaryConfigPath=retroArch.TemporaryConfigPath;return;}
         executable=Path.Combine(dir,game.Generation==3?"visualboyadvance-m.exe":"melonDS.exe");
         if(!File.Exists(executable))throw new FileNotFoundException("Não encontrei o executável do emulador instalado.",executable);
-        if(game.Generation==3){string[] configPaths=VbaSessionSettingsService.ConfigPaths(root);ApplyVba(root,game.SaveFolderName);temporaryConfigPath=VbaSessionSettingsService.Begin(configPaths);}else{ApplyMelon(root,game.SaveFolderName,rom);temporaryConfigPath=MelonDsSessionSettingsService.Begin(Path.Combine(dir,"melonDS.toml"));}
+        if(game.Generation==3){string[] configPaths=VbaSessionSettingsService.ConfigPaths(root);ApplyVba(root,game.SaveFolderName);temporaryConfigPath=VbaSessionSettingsService.Begin(configPaths);}else{ApplyMelon(root,game.SaveFolderName,romPath);temporaryConfigPath=MelonDsSessionSettingsService.Begin(Path.Combine(dir,"melonDS.toml"));}
         arguments="\""+romPath+"\"";
     }
     private static void ApplyAzahar(string root)

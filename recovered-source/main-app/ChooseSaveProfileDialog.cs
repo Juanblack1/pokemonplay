@@ -120,6 +120,7 @@ internal sealed class ChooseSaveProfileDialog : Form
     public static bool ChooseForLaunch(IWin32Window owner, string root, GameInfo game)
     {
         SaveProfileService.EnsureEmulatorsClosed();
+        if (game.IsImported) return true;
         using var dialog = new ChooseSaveProfileDialog(root, game);
         if (dialog.ShowDialog(owner) != DialogResult.OK) return false;
         if (game.Generation <= 5) SaveProfileService.Activate(root, game.SaveFolderName, dialog.SelectedProfileId);
