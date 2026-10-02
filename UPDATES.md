@@ -1,5 +1,11 @@
 # Atualizações pelo GitHub
 
+## v171.5.0 — Reencontrar ROMs sem recriar o jogo
+
+**Biblioteca → Adicionar jogos → Gerenciar jogos importados** lista jogos disponíveis e arquivos não encontrados. **Localizar ROM** atualiza o caminho mantendo a identidade do jogo, o nome, o selo de hack e a pasta de save. Escolha o mesmo nome de arquivo no novo local; renomear ROMs ainda exige um tratamento separado dos saves. Nenhum arquivo é copiado ou movido pelo aplicativo.
+
+Arquivos ausentes, sistemas incompatíveis e ROMs já associadas a outro jogo são rejeitados antes de gravar. Catálogo JSON corrompido deixa de impedir a abertura da Biblioteca e recebe uma mensagem acessível no gerenciamento. O PR #14 passou pela suíte Windows, empacotamento e Firestore (run `37045567505`), com 13 novas verificações e remoção automática das fixtures no runner.
+
 ## v171.4.0 — Falhas de sessão 3DS sem alterar configurações
 
 Antes de preparar uma sessão 3DS, o app verifica se a ROM importada e o Azahar estão disponíveis. Um arquivo ausente recebe orientação sem alterar controles nem criar uma sessão temporária. A suíte completa agora inclui as regressões da sessão Azahar, que antes eram chamadas apenas pelo comando focado. O PR #13 passou pelos checks Windows e Firestore no run `37044110723`, incluindo a preservação dos bytes da configuração em falhas e a criação da sessão quando os arquivos existem.

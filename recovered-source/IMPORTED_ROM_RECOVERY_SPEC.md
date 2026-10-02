@@ -19,3 +19,7 @@ O catálogo conserva entradas cujo arquivo desapareceu, mas a Biblioteca esconde
 2. Janela de gerenciamento seguindo os diálogos Pixel existentes, com seleção, caminho legível e ação Localizar ROM.
 3. Integração ao menu e atualização da biblioteca.
 4. Testes, evidências, PR e release. Reutilizar o checkout/cache; verificar downloads em fluxo e não criar novas cópias dos ZIPs no disco.
+
+## Resultado verificado
+
+O [run 37045567505](https://github.com/Juanblack1/pokemonplay/actions/runs/37045567505) aprovou `3c2e0c65fdf598545003e18e2b9c10baf4ecb411`, incluindo os 13 casos novos, a suíte completa, o empacotamento Windows e as 79 verificações de regras da nuvem. O PR #14 foi integrado em `d6585959baec18190b649b0adfed0093b0a9da5c`. A configuração/catálogo permaneceu intacta nos erros; os bytes de ROM e save foram preservados no sucesso. Os controles passaram pelas verificações geométricas em 620 px. Não houve teste com emulador ou leitor de tela reais. O CI removeu suas fixtures ao terminar; o checkout e os caches locais foram reutilizados.
