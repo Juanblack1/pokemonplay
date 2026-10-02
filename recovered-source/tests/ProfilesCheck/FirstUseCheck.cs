@@ -49,7 +49,7 @@ internal static class FirstUseCheck
             Assert(guide.Controls.Cast<Control>().All(control => control.Right <= guide.Width && control.Bottom <= guide.Height), "first-use guidance controls fit at minimum launcher width");
             ((Button)guide.Controls.Cast<Control>().Single(control => control is Button)).PerformClick();
             var menu = ((Control)Field(library, "importButton")).ContextMenuStrip;
-            Assert(menu.Visible && menu.Items.Count == 2, "first-use action opens file and folder import choices even from the keyboard");
+            Assert(menu.Visible && menu.Items.Cast<ToolStripItem>().Any(item => item.Text.Contains("arquivo")) && menu.Items.Cast<ToolStripItem>().Any(item => item.Text.Contains("pasta")), "first-use action opens file and folder import choices even from the keyboard");
             menu.Close();
             host.Controls.Remove(library);
             host.Close();
