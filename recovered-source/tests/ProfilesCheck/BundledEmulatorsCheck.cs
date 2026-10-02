@@ -28,6 +28,14 @@ internal static class BundledEmulatorsCheck
         string external=Path.Combine(root,"external-retroarch.exe");File.WriteAllText(external,"fixture");
         settings.GetType().GetProperty("ExecutablePath").SetValue(settings,external); Call(service,"Save",moved,settings);
         Assert((string)Property(Call(service,"Load",moved),"ExecutablePath")==external,"explicit external emulator selection is preserved");
+        settings=Call(app.GetType("BundledEmulators"),"Defaults",moved); Call(service,"Save",moved,settings);
+        var gbaGame=Activator.CreateInstance(app.GetType("GameInfo"));gbaGame.GetType().GetField("Generation").SetValue(gbaGame,3);gbaGame.GetType().GetField("SaveFolderName").SetValue(gbaGame,"Bundle GBA");
+        string gbaRom=Path.Combine(root,"fixture.gba"); File.WriteAllText(gbaRom,"fixture");
+        var plan=Call(service,"CreateLaunch",moved,gbaGame,gbaRom);
+        string session=(string)Property(plan,"TemporaryConfigPath");string config=File.ReadAllText(session);
+        Assert(((string)Property(plan,"Arguments")).Contains("--config") && config.Contains("input_player1_up = \"w\"") && config.Contains("config_save_on_exit = \"false\""),"bundled launch uses persistent user config and app keyboard preset without persisting session overrides");
+        Assert(File.Exists(Path.Combine(moved,"Settings","Emulators","RetroArch","retroarch.cfg")),"RetroAchievements config is outside the runtime replaced by updates");
+        Call(service,"DeleteSessionConfig",session);
         string legacy=Path.Combine(root,"legacy-install","Pokemon - Arquivos","visualboyadvance-m.exe");Directory.CreateDirectory(Path.GetDirectoryName(legacy));File.WriteAllText(legacy,"fixture");
         Assert(!(bool)Property(Call(service,"Load",Path.GetDirectoryName(Path.GetDirectoryName(legacy))),"UseForGba"),"installations without a bundle keep their existing standalone engine");
         var game=Activator.CreateInstance(app.GetType("GameInfo"));game.GetType().GetField("Generation").SetValue(game,6);game.GetType().GetField("IsImported").SetValue(game,true);

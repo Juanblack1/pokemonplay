@@ -19,10 +19,19 @@ public static class CoreSmoke {
 '@
 [CoreSmoke]::Check($ra,'mgba_libretro.dll')
 [CoreSmoke]::Check($ra,'melondsds_libretro.dll')
-foreach($executable in @((Join-Path $ra 'retroarch.exe'),(Join-Path $Directory 'Emulators/Azahar/azahar.exe'))){
-    $process=Start-Process -FilePath $executable -ArgumentList '--version' -PassThru -WindowStyle Hidden
-    if(!$process.WaitForExit(20000)){$process.Kill();throw "Executável não concluiu --version: $executable"}
-    if($process.ExitCode -ne 0){throw "Executável falhou (dependências ou inicialização): $executable ($($process.ExitCode))"}
+$executable=Join-Path $ra 'retroarch.exe'
+$process=Start-Process -FilePath $executable -ArgumentList '--version' -PassThru -WindowStyle Hidden
+if(!$process.WaitForExit(20000)){$process.Kill();throw 'RetroArch não concluiu --version.'}
+if($process.ExitCode -ne 0){throw "RetroArch falhou: $($process.ExitCode)"}
+# Azahar's current Qt frontend does not implement --version. Open without a game
+# and check that it survives startup, then close only this smoke process.
+$executable=Join-Path $Directory 'Emulators/Azahar/azahar.exe'
+$process=Start-Process -FilePath $executable -PassThru -WindowStyle Hidden
+try {
+    if($process.WaitForExit(5000)){throw "Azahar encerrou durante inicialização: $($process.ExitCode)"}
+    Write-Output 'PASS Azahar survives startup with its packaged dependencies (no ROM loaded).'
+} finally {
+    if(!$process.HasExited){$null=$process.CloseMainWindow();if(!$process.WaitForExit(5000)){$process.Kill();$process.WaitForExit()}}
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $sourceStage=Join-Path $Directory 'source-distribution'; New-Item -ItemType Directory $sourceStage | Out-Null

@@ -38,8 +38,8 @@ internal static class RetroArchSettingsService
             {
                 var bundled = BundledEmulators.Defaults(root);
                 settings.ExecutablePath = bundled.ExecutablePath;
-                settings.GbaCorePath = bundled.GbaCorePath;
-                settings.DsCorePath = bundled.DsCorePath;
+                if(settings.GbaCorePath.Replace('\\','/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/",StringComparison.OrdinalIgnoreCase)) settings.GbaCorePath = bundled.GbaCorePath;
+                if(settings.DsCorePath.Replace('\\','/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/",StringComparison.OrdinalIgnoreCase)) settings.DsCorePath = bundled.DsCorePath;
             }
             return settings;
         }
