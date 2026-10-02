@@ -5,6 +5,25 @@ on:
 permissions:
   contents: read
 jobs:
+  firestore-rules:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: recovered-source/tests/FirestoreRulesCheck
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - name: Verificar isolamento por UID no emulador local
+        run: npx -y firebase-tools@latest emulators:exec --only firestore --project demo-pokemonplay-rules "npm test"
   verify:
     runs-on: windows-latest
     steps:
