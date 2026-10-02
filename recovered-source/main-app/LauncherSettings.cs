@@ -9,11 +9,12 @@ internal static class LauncherSettings
             {"HeartGold","Pokemon - HeartGold Version (USA).nds"}, {"SoulSilver","Pokemon - SoulSilver Version (USA).nds"}, {"Platinum","Pokemon - Platinum Version (USA) (Rev 1).nds"},
             {"Black","5216 - Pokemon - Black (DSi Enhanced) (J).nds"}, {"White","Pokemon - White Version (USA, Europe) (NDSi Enhanced).nds"}, {"Black 2","Pokemon - Black Version 2 (USA, Europe) (NDSi Enhanced).nds"}, {"White 2","Pokemon - White Version 2 (USA, Europe) (NDSi Enhanced).nds"}
         };
-    public static string SaveFileName(GameInfo game) => roms.TryGetValue(game.Title, out string rom) ? Path.GetFileNameWithoutExtension(rom) + ".sav" : game.IsImported ? Path.GetFileNameWithoutExtension(game.RomPath) + ".sav" : throw new InvalidOperationException("Jogo sem configuração de save.");
-    internal static string RetroArchSaveFileName(GameInfo game) => roms.TryGetValue(game.Title, out string rom) ? Path.GetFileNameWithoutExtension(rom) + ".srm" : game.IsImported ? Path.GetFileNameWithoutExtension(game.RomPath) + ".srm" : throw new InvalidOperationException("Jogo sem configuração de save.");
-    internal static string SaveFileName(string root, GameInfo game) => roms.TryGetValue(game.Title, out string rom)
-        ? Path.GetFileNameWithoutExtension(rom) + (RetroArchSettingsService.UsesRetroArch(root, game) ? ".srm" : ".sav")
-        : game.IsImported ? Path.GetFileNameWithoutExtension(game.RomPath) + (RetroArchSettingsService.UsesRetroArch(root, game) ? ".srm" : ".sav") : throw new InvalidOperationException("Jogo sem configuração de save.");
+    private static string SaveBaseName(GameInfo game) => game.IsImported
+        ? Path.GetFileNameWithoutExtension(game.RomPath)
+        : roms.TryGetValue(game.Title, out string rom) ? Path.GetFileNameWithoutExtension(rom) : throw new InvalidOperationException("Jogo sem configuração de save.");
+    public static string SaveFileName(GameInfo game) => SaveBaseName(game) + ".sav";
+    internal static string RetroArchSaveFileName(GameInfo game) => SaveBaseName(game) + ".srm";
+    internal static string SaveFileName(string root, GameInfo game) => SaveBaseName(game) + (RetroArchSettingsService.UsesRetroArch(root, game) ? ".srm" : ".sav");
     public static void PrepareGame(string root, GameInfo game, ref string executable, ref string arguments)
         => PrepareGame(root, game, ref executable, ref arguments, out _, out _);
 
