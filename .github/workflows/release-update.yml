@@ -1,0 +1,37 @@
+name: Publicar atualização do Pokémon Play
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verificar a aplicação e o atualizador
+        shell: pwsh
+        run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
+      - name: Compilar pacote do aplicativo
+        shell: pwsh
+        run: ./recovered-source/tools/publish-update.ps1 -Tag '${{ github.ref_name }}' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-release'
+      - name: Publicar release estável
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_OUTPUT: ${{ runner.temp }}/pokemonplay-release
+        run: |
+          gh release view $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --verify-tag --generate-notes --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Não foi possível criar a release.' }
+          }
+          gh release upload $env:RELEASE_TAG "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip.sha256" --repo $env:RELEASE_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Não foi possível publicar o pacote.' }

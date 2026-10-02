@@ -1,0 +1,26 @@
+.vs/
+**/bin/
+**/obj/
+.idea/
+*.user
+*.suo
+recovered-source/.tmp/
+pesquisa-pokemon-home-emuladores-pkhex.md
+
+# Build output, local installs, user saves, and design/test captures are never release source.
+**/__pycache__/
+output/
+PokemonPlayRuntime/
+Saves/
+Pokemon Bank/
+Settings/
+.complete-v*
+Pokemons Play.exe
+recovered-source/payload/
+**/*.sav
+**/*.rom
+**/*.gba
+**/*.nds
+**/*.3ds
+recovered-source/tests/**/output/
+recovered-source/main-app/Assets/Designs/*-preview.png
