@@ -24,6 +24,10 @@ internal static class LauncherSettings
         temporaryConfigPath = null;
         if(game.Generation>=6)
         {
+            if(File.Exists(BundledEmulators.Azahar(root)) && !File.Exists(executable))
+            {
+                executable=BundledEmulators.Azahar(root);
+            }
             if(game.IsImported && !File.Exists(game.RomPath))
                 throw new FileNotFoundException("Não encontrei a ROM local selecionada. Confira se a unidade ou pasta ainda está disponível.",game.RomPath);
             if(!File.Exists(executable))

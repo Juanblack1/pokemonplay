@@ -21,6 +21,22 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - name: Preparar emuladores e fontes oficiais
+        shell: pwsh
+        run: ./recovered-source/tools/prepare-emulators.ps1 -Directory '${{ runner.temp }}/pokemonplay-emulators'
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+        with:
+          msystem: MINGW64
+          update: true
+          install: git pkgconf mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+      - name: Compilar os cores incluídos
+        shell: msys2 {0}
+        env:
+          POKEMONPLAY_EMULATOR_BUILD: ${{ runner.temp }}/pokemonplay-emulators
+        run: bash ./recovered-source/tools/build-emulator-cores.sh
+      - name: Verificar binários reais e empacotar fontes correspondentes
+        shell: pwsh
+        run: ./recovered-source/tools/verify-emulator-bundle.ps1 -Directory '${{ runner.temp }}/pokemonplay-emulators' -OutputDirectory '${{ runner.temp }}/pokemonplay-sources'
       - name: Verificar a aplicação e o atualizador
         shell: pwsh
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
@@ -29,7 +45,7 @@ jobs:
         env:
           POKEMONPLAY_SIGNING_PFX_BASE64: ${{ secrets.POKEMONPLAY_SIGNING_PFX_BASE64 }}
           POKEMONPLAY_SIGNING_PFX_PASSWORD: ${{ secrets.POKEMONPLAY_SIGNING_PFX_PASSWORD }}
-        run: ./recovered-source/tools/publish-update.ps1 -Tag '${{ github.ref_name }}' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-release'
+        run: ./recovered-source/tools/publish-update.ps1 -Tag '${{ github.ref_name }}' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-release' -EmulatorDirectory '${{ runner.temp }}/pokemonplay-emulators/Emulators'
       - name: Publicar release estável
         shell: pwsh
         env:
@@ -43,5 +59,5 @@ jobs:
             gh release create $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --verify-tag --generate-notes --latest
             if ($LASTEXITCODE -ne 0) { throw 'Não foi possível criar a release.' }
           }
-          gh release upload $env:RELEASE_TAG "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip.sha256" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip.sha256" --repo $env:RELEASE_REPOSITORY
+          gh release upload $env:RELEASE_TAG "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip.sha256" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip.sha256" "${{ runner.temp }}/pokemonplay-sources/pokemon-play-emulator-sources.zip" "${{ runner.temp }}/pokemonplay-sources/pokemon-play-emulator-sources.zip.sha256" --repo $env:RELEASE_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'Não foi possível publicar o pacote.' }

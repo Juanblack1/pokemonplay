@@ -226,7 +226,8 @@ internal sealed class SettingsView : BufferedPanel
   if(!File.Exists(executable)){status.ForeColor=AppTheme.Red;status.Text="Localize e salve o executável do RetroArch primeiro.";return;}
   try
   {
-   RetroArchProcessStarter(new ProcessStartInfo{FileName=Path.GetFullPath(executable),WorkingDirectory=Path.GetDirectoryName(Path.GetFullPath(executable)),UseShellExecute=true});
+   string accountArguments=string.Equals(Path.GetFullPath(executable),BundledEmulators.RetroArch(root),StringComparison.OrdinalIgnoreCase)?"--config \""+BundledEmulators.RetroArchConfig(root)+"\"":string.Empty;
+   RetroArchProcessStarter(new ProcessStartInfo{FileName=Path.GetFullPath(executable),Arguments=accountArguments,WorkingDirectory=Path.GetDirectoryName(Path.GetFullPath(executable)),UseShellExecute=true});
    status.ForeColor=AppTheme.Green;status.Text="RetroArch aberto. Configure a conta em Configurações > Conquistas.";
   }
   catch(Exception ex) when(ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException or System.Security.SecurityException)

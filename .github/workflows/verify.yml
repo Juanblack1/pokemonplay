@@ -33,9 +33,25 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - name: Preparar emuladores e fontes oficiais
+        shell: pwsh
+        run: ./recovered-source/tools/prepare-emulators.ps1 -Directory '${{ runner.temp }}/pokemonplay-emulators'
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+        with:
+          msystem: MINGW64
+          update: true
+          install: git pkgconf mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+      - name: Compilar os cores incluídos
+        shell: msys2 {0}
+        env:
+          POKEMONPLAY_EMULATOR_BUILD: ${{ runner.temp }}/pokemonplay-emulators
+        run: bash ./recovered-source/tools/build-emulator-cores.sh
+      - name: Verificar binários reais e empacotar fontes correspondentes
+        shell: pwsh
+        run: ./recovered-source/tools/verify-emulator-bundle.ps1 -Directory '${{ runner.temp }}/pokemonplay-emulators' -OutputDirectory '${{ runner.temp }}/pokemonplay-sources'
       - name: Executar ProfilesCheck
         shell: pwsh
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
       - name: Compilar e validar o pacote Windows
         shell: pwsh
-        run: ./recovered-source/tools/publish-update.ps1 -Tag 'v171.1.0' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-verify'
+        run: ./recovered-source/tools/publish-update.ps1 -Tag 'v171.1.0' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-verify' -EmulatorDirectory '${{ runner.temp }}/pokemonplay-emulators/Emulators'
