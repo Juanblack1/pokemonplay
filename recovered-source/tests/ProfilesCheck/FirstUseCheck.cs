@@ -20,7 +20,7 @@ internal static class FirstUseCheck
         Directory.CreateDirectory(fixture);
         Type dialogType = app.GetType("RomImportDialog");
         Type identityType = app.GetType("RomIdentity");
-        foreach (var sample in new[] { ("Pokemon_Unbound.gba", "FireRed", 3, 3), ("Pokemon_Renegade_Platinum.nds", "Platinum", 4, 7), ("Pokemon_X.3ds", "X", 6, 8) })
+        foreach (var sample in new[] { ("Pokemon_Unbound.gba", "FireRed", 3, 5), ("Pokemon_Renegade_Platinum.nds", "Platinum", 4, 9), ("Pokemon_X.3ds", "X", 6, 8) })
         {
             string rom = Path.Combine(fixture, sample.Item1);
             object identity = Activator.CreateInstance(identityType, new object[] { "POKEMON", sample.Item2, sample.Item3, true });

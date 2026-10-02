@@ -8,8 +8,8 @@ internal sealed class RomImportDialog : Form
 {
 	private static readonly (string Name, int Generation)[] Bases =
 	{
-		("FireRed", 3), ("LeafGreen", 3), ("Emerald", 3), ("HeartGold", 4), ("SoulSilver", 4),
-		("Platinum", 4), ("Black", 5), ("White", 5), ("Black 2", 5), ("White 2", 5),
+		("FireRed", 3), ("LeafGreen", 3), ("Emerald", 3), ("Ruby", 3), ("Sapphire", 3), ("HeartGold", 4), ("SoulSilver", 4),
+		("Platinum", 4), ("Diamond", 4), ("Pearl", 4), ("Black", 5), ("White", 5), ("Black 2", 5), ("White 2", 5),
 		("X", 6), ("Y", 6), ("Omega Ruby", 6), ("Alpha Sapphire", 6), ("Sun", 6), ("Moon", 6), ("Ultra Sun", 6), ("Ultra Moon", 6)
 	};
 	private readonly TextBox titleInput;

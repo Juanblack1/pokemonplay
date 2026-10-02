@@ -113,6 +113,7 @@ internal static class ImportedGameCatalog
 		string file = title switch
 		{
 			"FireRed" => "FireRed.png", "LeafGreen" => "LeafGreen.png", "Emerald" => "Emerald.png",
+			"Ruby" => "Ruby.png", "Sapphire" => "Sapphire.png", "Diamond" => "Diamond.png", "Pearl" => "Pearl.png",
 			"HeartGold" => "HeartGold.png", "SoulSilver" => "SoulSilver.png", "Platinum" => "Platinum.png",
 			"Black" => "Black.png", "White" => "White.png", "Black 2" => "Black2.png", "White 2" => "White2.png",
 			"X" => "Pokemon X.png", "Y" => "Pokemon Y.png", "Omega Ruby" => "Pokemon Omega Ruby.png", "Alpha Sapphire" => "Pokemon Alpha Sapphire.png",
@@ -194,7 +195,13 @@ internal static class ImportedGameCatalog
 
 	private static string InferBaseGame(string title)
 	{
-		string value = title.Replace(" ", string.Empty).Replace("-", string.Empty).ToUpperInvariant();
+		string value = title.Replace(" ", string.Empty).Replace("-", string.Empty).Replace("_", string.Empty).ToUpperInvariant();
+		if (value.Contains("OMEGARUBY")) return "Omega Ruby";
+		if (value.Contains("ALPHASAPPHIRE")) return "Alpha Sapphire";
+		if (value.Contains("RUBY")) return "Ruby";
+		if (value.Contains("SAPPHIRE")) return "Sapphire";
+		if (value.Contains("DIAMOND")) return "Diamond";
+		if (value.Contains("PEARL")) return "Pearl";
 		if (value.Contains("FIRERED")) return "FireRed";
 		if (value.Contains("LEAFGREEN")) return "LeafGreen";
 		if (value.Contains("EMERALD")) return "Emerald";
