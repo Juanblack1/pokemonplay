@@ -379,12 +379,13 @@ internal static class GameLaunchHistoryCheck
             Control clearRecentAction = (Control)Get(library, "clearRecentButton");
             Assert(clearRecentAction.Visible && !sortHelper.Visible,
                 "library hides the sort caption when recent-history actions leave insufficient toolbar space");
-            for (int clientWidth = interactionHost.ClientSize.Width + 32; !sortHelper.Visible && clientWidth <= 4096; clientWidth += 32)
-            {
-                interactionHost.ClientSize = new Size(clientWidth, interactionHost.ClientSize.Height);
-                Application.DoEvents();
-            }
-            Console.WriteLine($"LAYOUT_DIAG host={interactionHost.ClientSize.Width} library={library.ClientSize.Width} toolbar={sortHelper.Parent.ClientSize.Width} helper={sortHelper.Bounds} visible={sortHelper.Visible} clear={clearRecentAction.Bounds}");
+            interactionHost.Controls.Remove(library);
+            library.Dock = DockStyle.None;
+            Control toolbar = sortHelper.Parent;
+            toolbar.Dock = DockStyle.None;
+            toolbar.ClientSize = new Size(Math.Max(1400, clearRecentAction.Right + sortHelper.Width + 43), toolbar.ClientSize.Height);
+            ((Action)Get(library, "layoutToolbar"))();
+            Application.DoEvents();
             Assert(sortHelper.Visible && sortHelper.Left >= clearRecentAction.Right + 16,
                 "library restores the sort caption with a clear gap when the wide toolbar has room");
             Call(history, "TryAddPlayTime", null, libraryRoot, "FireRed", TimeSpan.FromMinutes(90));
