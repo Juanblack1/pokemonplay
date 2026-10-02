@@ -14,6 +14,7 @@ Referência estudada: [configuração de emuladores do Playnite](https://api.pla
 - Nome sugerido vem do arquivo, preservando nomes de hacks e hífens. Edição mantém o nome salvo; campo limita a 80 caracteres. A ação de edição deve dizer Salvar.
 - Confirmação de conteúdo Pokémon continua obrigatória para 3DS e arquivos não reconhecidos.
 - ROMs e saves não são copiados nem alterados por essa orientação.
+- Nome de save de ROM importada deriva do arquivo escolhido mesmo quando o título coincide com FireRed ou outro título legado; cobrir `.sav`, `.srm` e seleção contextual de extensão.
 
 ## Verificação
 

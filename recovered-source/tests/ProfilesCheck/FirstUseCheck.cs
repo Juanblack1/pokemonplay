@@ -58,11 +58,18 @@ internal static class FirstUseCheck
         object existing = Activator.CreateInstance(importedType);
         importedType.GetProperty("Title").SetValue(existing, "My Pokémon hack");
         importedType.GetProperty("BaseGame").SetValue(existing, "Emerald");
+        importedType.GetProperty("RomPath").SetValue(existing, Path.Combine(fixture, "my-custom-rom.gba"));
+        importedType.GetProperty("Generation").SetValue(existing, 3);
         object gbaIdentity = Activator.CreateInstance(identityType, new object[] { "POKEMON", "FireRed", 3, true });
         using (var editDialog = (Form)Activator.CreateInstance(dialogType, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { Path.Combine(fixture, "another-name.gba"), gbaIdentity, existing }, null))
         {
             Assert(((TextBox)Field(editDialog, "titleInput")).Text == "My Pokémon hack" && ((ComboBox)Field(editDialog, "basePicker")).SelectedItem.ToString() == "Emerald" && ((Button)editDialog.AcceptButton).Text == "Salvar", "editing keeps the custom title and base and names the save action correctly");
         }
+        importedType.GetProperty("Title").SetValue(existing, "FireRed");
+        object importedGame = app.GetType("ImportedGameCatalog").GetMethod("ToGameInfo", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new[] { existing });
+        Type launcherSettings = app.GetType("LauncherSettings");
+        object CallSaveName(string method, object[] arguments) => launcherSettings.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).Single(candidate => candidate.Name == method && candidate.GetParameters().Length == arguments.Length).Invoke(null, arguments);
+        Assert((string)CallSaveName("SaveFileName", new[] { importedGame }) == "my-custom-rom.sav" && (string)CallSaveName("RetroArchSaveFileName", new[] { importedGame }) == "my-custom-rom.srm" && (string)CallSaveName("SaveFileName", new[] { fixture, importedGame }) == "my-custom-rom.sav", "imported ROMs use their own save filename even when named like a legacy game");
         string launcher = Path.Combine(fixture, "Pokemon - Executaveis", "Pokemon FireRed", "Pokemon FireRed.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(launcher));
         File.WriteAllText(launcher, "test fixture, never executed");
