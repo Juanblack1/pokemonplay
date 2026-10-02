@@ -14,3 +14,7 @@ O fluxo GBA/DS valida a ROM e o executável antes de aplicar configurações. O 
 ## Evidência planejada
 
 `AzaharSessionCheck` reproduz os dois arquivos ausentes e confirma a sessão válida com fixtures que não são executadas. A suíte completa e o empacotamento Windows verificam regressões. Não é um teste de emulação real.
+
+## Resultado
+
+Em 2026-10-02, o [run 37044110723](https://github.com/Juanblack1/pokemonplay/actions/runs/37044110723) aprovou o commit `2cddedb3306577a8c134fd7a58cf465b2677d0b6`: os dois arquivos ausentes preservaram a configuração e não criaram marcador; a sessão válida continuou funcionando. A suíte completa e o empacotamento passaram. A suíte removeu suas fixtures temporárias no runner. O build local passou com apenas o aviso preexistente CS0108.

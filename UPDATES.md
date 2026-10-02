@@ -1,5 +1,9 @@
 # Atualizações pelo GitHub
 
+## v171.4.0 — Falhas de sessão 3DS sem alterar configurações
+
+Antes de preparar uma sessão 3DS, o app verifica se a ROM importada e o Azahar estão disponíveis. Um arquivo ausente recebe orientação sem alterar controles nem criar uma sessão temporária. A suíte completa agora inclui as regressões da sessão Azahar, que antes eram chamadas apenas pelo comando focado. O PR #13 passou pelos checks Windows e Firestore no run `37044110723`, incluindo a preservação dos bytes da configuração em falhas e a criação da sessão quando os arquivos existem.
+
 ## v171.3.0 — Primeiro jogo com menos erros
 
 A visão geral da Biblioteca orienta a adicionar ROMs quando não há jogos locais disponíveis, oferece arquivo ou pasta e explica que o emulador precisa ser configurado e o login é opcional. O importador mostra somente jogos-base do console selecionado e sugere o nome do arquivo, preservando nomes de hacks com cabeçalhos herdados. A edição mantém o título escolhido e oferece **Salvar**.
