@@ -21,6 +21,8 @@ try{
     $taskCodeSigningEku=$taskCertificate.Extensions | Where-Object {$_ -is [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]} | ForEach-Object {$_.EnhancedKeyUsages} | Where-Object {$_.Value -eq '1.3.6.1.5.5.7.3.3'}
     if(!$taskCodeSigningEku){throw 'O certificado não possui o uso estendido Code Signing.'}
     if($taskCertificate.NotAfter -le (Get-Date)){throw 'O certificado de assinatura expirou.'}
+    $taskPublicKeySize=$taskCertificate.PublicKey.Key.KeySize
+    if($taskCertificate.PublicKey.Oid.Value -ne '1.2.840.113549.1.1.1' -or $taskPublicKeySize -lt 2048 -or $taskPublicKeySize -gt 4096){throw 'Use uma chave RSA de 2048 a 4096 bits para compatibilidade com App Control.'}
 
     $taskSdkRoot=Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
     $taskSignTool=Get-ChildItem -LiteralPath $taskSdkRoot -Filter signtool.exe -Recurse -File -ErrorAction Stop | Where-Object {$_.FullName -match '\\x64\\signtool\.exe$'} | Sort-Object FullName -Descending | Select-Object -First 1
