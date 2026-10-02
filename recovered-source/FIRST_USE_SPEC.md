@@ -20,6 +20,8 @@ Referência estudada: [configuração de emuladores do Playnite](https://api.pla
 
 `FirstUseCheck` cobre bases, nomes, confirmação, acessibilidade, estados da biblioteca e limites dos controles em 1000 px. A suíte completa ProfilesCheck e o empacotamento do workflow Windows verificam integração. Layout geométrico é evidência parcial: não substitui inspeção visual com emulador real.
 
+Evidência de 2026-10-02: [run 37043170957](https://github.com/Juanblack1/pokemonplay/actions/runs/37043170957), ambos os jobs aprovados para `e8ee7d8717d575c0610659a2654ab69ccbe2758b`. As 19 verificações novas passaram; a suíte completa terminou com `ALL CHECKS PASSED; temporary fixtures removed.` O PR #12 foi integrado em `693e0dfaf360d859dec497f4c717df679fef3e2f`. O build local também passou, com um aviso preexistente CS0108. A política deste computador continua impedindo a inspeção do aplicativo não assinado; os testes Windows foram executados no runner GitHub.
+
 ## Próximos ciclos candidatos
 
 - Diagnóstico acionável de emuladores ausentes ao iniciar uma ROM.

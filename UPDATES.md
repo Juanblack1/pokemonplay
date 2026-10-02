@@ -1,5 +1,11 @@
 # Atualizações pelo GitHub
 
+## v171.3.0 — Primeiro jogo com menos erros
+
+A visão geral da Biblioteca orienta a adicionar ROMs quando não há jogos locais disponíveis, oferece arquivo ou pasta e explica que o emulador precisa ser configurado e o login é opcional. O importador mostra somente jogos-base do console selecionado e sugere o nome do arquivo, preservando nomes de hacks com cabeçalhos herdados. A edição mantém o título escolhido e oferece **Salvar**.
+
+ROMs importadas com nomes iguais aos títulos legados agora usam o nome do seu próprio arquivo para localizar saves `.sav` e `.srm`. O PR #12 passou pela suíte completa Windows, empacotamento e 79 verificações de isolamento da nuvem (run `37043170957`); 19 novas verificações cobrem o primeiro uso. As fixtures da suíte foram removidas automaticamente ao final no runner.
+
 ## v171.2.0 — Adicionar ROMs locais e verificar isolamento da nuvem
 
 A Biblioteca pode importar ROMs GBA, Nintendo DS e Nintendo 3DS ou examinar uma pasta, mantendo os arquivos no local escolhido. Cabeçalhos GBA/DS ajudam a preencher título e jogo-base; arquivos sem identificação, incluindo títulos 3DS, exigem confirmação do conteúdo Pokémon. Os cartões de hack mostram o selo **HACK ROM**, o nome escolhido e o jogo-base. Saves locais ganham uma pasta isolada por jogo importado.
