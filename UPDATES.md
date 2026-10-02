@@ -1,5 +1,9 @@
 # Atualizações pelo GitHub
 
+## v171.1 — Abrir o app direto da pasta extraída
+
+A release inclui um pacote portátil com `Pokemons Play.exe` na raiz. Extraia o ZIP e abra esse iniciador para começar; o runtime autocontido continua dentro da pasta do app e o pacote de atualização permanece separado.
+
 ## v171 — Simplificar a publicação segura
 
 O login Google usa o fluxo nativo com PKCE sem enviar um segredo OAuth embutido no aplicativo. O workflow de release executa a suíte ProfilesCheck antes de compilar e publicar o pacote Windows autocontido.

@@ -11,6 +11,7 @@ if($taskVersion -notmatch '\.'){$taskVersion+='.0.0'}elseif(($taskVersion -split
 $taskWorkspace=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $taskBuild=Join-Path ([IO.Path]::GetTempPath()) ('pokemonplay-release-'+[guid]::NewGuid().ToString('N'))
 $taskRuntime=Join-Path $taskBuild 'PokemonPlayRuntime'
+$taskLauncher=Join-Path $taskBuild 'launcher'
 $taskHelper=Join-Path $taskBuild 'updater'
 $taskOutput=[IO.Path]::GetFullPath($OutputDirectory)
 try{
@@ -24,6 +25,10 @@ try{
     if($LASTEXITCODE -ne 0){throw 'Falha ao compilar o atualizador.'}
     Copy-Item -LiteralPath (Join-Path $taskHelper 'PokemonPlayUpdater.exe') -Destination $taskRuntime
     Copy-Item -LiteralPath (Join-Path $taskHelper 'PokemonPlayUpdater.exe.config') -Destination $taskRuntime
+    & dotnet build (Join-Path $taskWorkspace 'recovered-source\launcher\PokemonsPlayLauncher.csproj') -c Release -o $taskLauncher
+    if($LASTEXITCODE -ne 0){throw 'Falha ao compilar o iniciador portátil.'}
+    $taskPortableLauncher=Join-Path $taskLauncher 'Pokemons Play.exe'
+    if(!(Test-Path -LiteralPath $taskPortableLauncher)){throw 'Iniciador portátil ausente no pacote.'}
     @{version=$Tag;repository=$Repository} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRuntime 'app-release.json') -Encoding utf8
     @{repository=$Repository} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRuntime 'UpdateSource.json') -Encoding utf8
     Get-ChildItem -LiteralPath $taskRuntime -Filter '*.pdb' | Remove-Item
@@ -37,7 +42,23 @@ try{
     finally{$taskArchive.Dispose()}
     $taskDigest=(Get-FileHash -LiteralPath $taskZip -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath ($taskZip+'.sha256') -Value ($taskDigest+'  pokemon-play-win-x64-update.zip') -Encoding ascii
+    $taskPortableZip=Join-Path $taskOutput 'pokemon-play-win-x64-portable.zip'
+    $taskPortableArchive=[IO.Compression.ZipFile]::Open($taskPortableZip,[IO.Compression.ZipArchiveMode]::Create)
+    try{
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskPortableArchive,$taskPortableLauncher,'Pokemons Play.exe',[IO.Compression.CompressionLevel]::Optimal)|Out-Null
+        foreach($taskFile in Get-ChildItem -LiteralPath $taskRuntime -File -Recurse){$taskRelative=$taskFile.FullName.Substring($taskBuild.Length+1).Replace('\','/');[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskPortableArchive,$taskFile.FullName,$taskRelative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null}
+    }
+    finally{$taskPortableArchive.Dispose()}
+    $taskUpdateCheck=[IO.Compression.ZipFile]::OpenRead($taskZip)
+    try{$taskUpdateNames=@($taskUpdateCheck.Entries | ForEach-Object {$_.FullName});if($taskUpdateNames -notcontains 'PokemonPlayRuntime/Pokemons Play.exe'){throw 'O pacote de atualização não contém o executável esperado.'};if($taskUpdateNames -contains 'Pokemons Play.exe'){throw 'O pacote de atualização contém uma entrada de launcher inesperada.'}}
+    finally{$taskUpdateCheck.Dispose()}
+    $taskPortableCheck=[IO.Compression.ZipFile]::OpenRead($taskPortableZip)
+    try{$taskPortableNames=@($taskPortableCheck.Entries | ForEach-Object {$_.FullName});if($taskPortableNames -notcontains 'Pokemons Play.exe' -or $taskPortableNames -notcontains 'PokemonPlayRuntime/Pokemons Play.exe'){throw 'O pacote portátil não contém o launcher ou o runtime esperado.'}}
+    finally{$taskPortableCheck.Dispose()}
+    $taskPortableDigest=(Get-FileHash -LiteralPath $taskPortableZip -Algorithm SHA256).Hash.ToLowerInvariant()
+    Set-Content -LiteralPath ($taskPortableZip+'.sha256') -Value ($taskPortableDigest+'  pokemon-play-win-x64-portable.zip') -Encoding ascii
     Write-Output "Pacote da release $Tag pronto: $taskZip"
+    Write-Output "Pacote portátil da release $Tag pronto: $taskPortableZip"
 }
 finally{
     if(Test-Path -LiteralPath $taskBuild){$taskResolved=(Resolve-Path -LiteralPath $taskBuild).Path;$taskTempPrefix=[IO.Path]::GetFullPath([IO.Path]::GetTempPath());if(!$taskResolved.StartsWith($taskTempPrefix,[StringComparison]::OrdinalIgnoreCase)){throw 'Pasta temporária inválida.'};Remove-Item -LiteralPath $taskResolved -Recurse}

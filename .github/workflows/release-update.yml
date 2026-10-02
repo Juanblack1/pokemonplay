@@ -33,5 +33,5 @@ jobs:
             gh release create $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --verify-tag --generate-notes --latest
             if ($LASTEXITCODE -ne 0) { throw 'Não foi possível criar a release.' }
           }
-          gh release upload $env:RELEASE_TAG "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip.sha256" --repo $env:RELEASE_REPOSITORY
+          gh release upload $env:RELEASE_TAG "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip.sha256" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip.sha256" --repo $env:RELEASE_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'Não foi possível publicar o pacote.' }
