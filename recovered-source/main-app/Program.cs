@@ -10,6 +10,7 @@ internal static class Program
         try { Run(args); }
         catch (Exception error) {
             try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup-error.log"), error.ToString()); } catch { }
+            if(args.Length==2&&args[0]=="--update-ready"){Environment.ExitCode=1;return;}
             throw;
         }
 	}
