@@ -1,8 +1,10 @@
 # Atualizações pelo GitHub
 
-## Próxima versão — Adicionar ROMs locais
+## v171.2.0 — Adicionar ROMs locais e verificar isolamento da nuvem
 
 A Biblioteca pode importar ROMs GBA, Nintendo DS e Nintendo 3DS ou examinar uma pasta, mantendo os arquivos no local escolhido. Cabeçalhos GBA/DS ajudam a preencher título e jogo-base; arquivos sem identificação, incluindo títulos 3DS, exigem confirmação do conteúdo Pokémon. Os cartões de hack mostram o selo **HACK ROM**, o nome escolhido e o jogo-base. Saves locais ganham uma pasta isolada por jogo importado.
+
+As regras ativas do Firestore foram verificadas em 79 testes locais de acesso, com dois UIDs e visitantes anônimos, incluindo os saves e o banco global Pokémon. O CI passa a repetir essa suíte. Os pacotes públicos continuam sem ROMs, BIOS ou emuladores de terceiros, e a assinatura Windows permanece opcional nesta etapa.
 
 ## v171.1 — Abrir o app direto da pasta extraída
 
