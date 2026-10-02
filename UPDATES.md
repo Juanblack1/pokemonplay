@@ -1,5 +1,11 @@
 # Atualizações pelo GitHub
 
+## v171.6.0 — Jogos-base GBA e DS completos no importador
+
+Ruby, Sapphire, Diamond e Pearl agora podem ser escolhidos como jogos-base, com nomes e referências de capa próprios. Os seletores oferecem cinco bases GBA, nove DS e oito 3DS. A identificação aceita nomes com underscores e distingue Omega Ruby/Alpha Sapphire das versões GBA. Quando a capa não está presente, o cartão mantém o placeholder existente.
+
+O PR #15 passou pela suíte Windows completa, empacotamento e Firestore no run `37046587904`, incluindo 24 novas verificações de identificação, console, seletor, referência de capa e desenho sem imagem disponível. Não foram distribuídas novas capas ou ROMs.
+
 ## v171.5.0 — Reencontrar ROMs sem recriar o jogo
 
 **Biblioteca → Adicionar jogos → Gerenciar jogos importados** lista jogos disponíveis e arquivos não encontrados. **Localizar ROM** atualiza o caminho mantendo a identidade do jogo, o nome, o selo de hack e a pasta de save. Escolha o mesmo nome de arquivo no novo local; renomear ROMs ainda exige um tratamento separado dos saves. Nenhum arquivo é copiado ou movido pelo aplicativo.
