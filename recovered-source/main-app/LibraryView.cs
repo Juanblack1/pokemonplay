@@ -72,6 +72,7 @@ internal sealed class LibraryView : BufferedPanel
 		var importMenu = new ContextMenuStrip();
 		importMenu.Items.Add("Selecionar arquivo(s) de ROM…", null, (_, _) => SelectRomFiles());
 		importMenu.Items.Add("Examinar uma pasta…", null, (_, _) => SelectRomFolder());
+		importMenu.Items.Add("Gerenciar jogos importados…", null, (_, _) => ManageImportedGames());
 		importButton.ContextMenuStrip = importMenu;
 		importButton.Tag = "rom-import";
 		importButton.AccessibleName = "Adicionar jogos Pokémon de arquivos ou de uma pasta";
@@ -293,6 +294,13 @@ internal sealed class LibraryView : BufferedPanel
 			refreshButton.SetBounds(chips.ClientSize.Width - refreshWidth - 24, 6, refreshWidth, 36);
 		if (showImport)
 			importButton.SetBounds(chips.ClientSize.Width - 24 - (showRefresh ? refreshWidth + 8 : 0) - importWidth, 6, importWidth, 36);
+	}
+
+	private void ManageImportedGames()
+	{
+		using var dialog = new ImportedGameManagerDialog(root);
+		dialog.ShowDialog(this);
+		if (dialog.Changed) RefreshCatalog();
 	}
 
 	private void SelectRomFiles()

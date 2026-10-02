@@ -28,6 +28,27 @@ internal static class ImportedGameCatalog
 		return Load(root).Where(entry => File.Exists(entry.RomPath)).Select(ToGameInfo).ToList();
 	}
 
+	internal static List<ImportedPokemonGame> Entries(string root) => Load(root);
+
+	internal static GameInfo Relocate(string root, string id, string newPath)
+	{
+		List<ImportedPokemonGame> entries = Load(root);
+		ImportedPokemonGame entry = entries.SingleOrDefault(candidate => candidate.Id == id)
+			?? throw new InvalidDataException("O jogo não está mais no catálogo. Atualize a lista e tente novamente.");
+		string fullPath = Path.GetFullPath(newPath);
+		if (!File.Exists(fullPath)) throw new FileNotFoundException("Não encontrei a ROM selecionada.", fullPath);
+		if (!ExtensionMatchesGeneration(fullPath, entry.Generation))
+			throw new InvalidDataException("Escolha uma ROM do mesmo sistema que o jogo original.");
+		if (!string.Equals(Path.GetFileName(fullPath), Path.GetFileName(entry.RomPath), StringComparison.OrdinalIgnoreCase))
+			throw new InvalidDataException("Para preservar a associação com seus saves, escolha o arquivo com o mesmo nome: " + Path.GetFileName(entry.RomPath));
+		if (entries.Any(candidate => candidate.Id != id && SamePath(candidate.RomPath, fullPath)))
+			throw new InvalidDataException("Esta ROM já está associada a outro jogo da biblioteca.");
+		ReadIdentity(fullPath); // Confirm access before changing persisted metadata.
+		entry.RomPath = fullPath;
+		Save(root, entries);
+		return ToGameInfo(entry);
+	}
+
 	internal static int ImportFiles(IWin32Window owner, string root, IEnumerable<string> paths)
 	{
 		List<ImportedPokemonGame> entries = Load(root);
@@ -108,7 +129,7 @@ internal static class ImportedGameCatalog
 		var info = new FileInfo(path);
 		if (info.Length <= 0 || info.Length > MaximumSettingsBytes) throw new InvalidDataException("O catálogo de ROMs locais está inválido.");
 		var entries = JsonSerializer.Deserialize<List<ImportedPokemonGame>>(File.ReadAllText(path)) ?? new List<ImportedPokemonGame>();
-		if (entries.Count > MaximumEntries || entries.Any(entry => entry == null || !Guid.TryParseExact(entry.Id, "N", out _) || !IsSupportedRom(entry.RomPath) || string.IsNullOrWhiteSpace(entry.Title) || entry.Title.Length > 80 || string.IsNullOrWhiteSpace(entry.BaseGame) || entry.Generation is < 3 or > 6 || !ExtensionMatchesGeneration(entry.RomPath, entry.Generation)))
+		if (entries.Count > MaximumEntries || entries.Any(entry => entry == null || !Guid.TryParseExact(entry.Id, "N", out _) || !IsSupportedRom(entry.RomPath) || string.IsNullOrWhiteSpace(entry.Title) || entry.Title.Length > 80 || string.IsNullOrWhiteSpace(entry.BaseGame) || entry.Generation is < 3 or > 6 || !ExtensionMatchesGeneration(entry.RomPath, entry.Generation)) || entries.Select(entry => entry.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != entries.Count)
 			throw new InvalidDataException("O catálogo de ROMs locais contém dados inválidos. Os arquivos originais foram preservados.");
 		return entries;
 	}

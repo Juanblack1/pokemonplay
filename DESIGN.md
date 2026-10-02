@@ -2,6 +2,10 @@
 
 ## Biblioteca — ROMs locais e hacks Pokémon
 
+### Recuperar ROM movida
+
+**Adicionar jogos → Gerenciar jogos importados** apresenta inclusive entradas com arquivo não encontrado. A janela mantém lista, caminho selecionável e ação **Localizar ROM**; a confirmação vincula o novo caminho ao mesmo jogo. O seletor e o retorno explicam que o nome do arquivo deve ser o mesmo para manter a associação com o save. Resultados completos permanecem disponíveis para acessibilidade e em tooltip. A janela usa a paleta e a tipografia existentes e adapta a lista à altura disponível; nenhum arquivo é movido pelo app.
+
 ### Primeiro uso
 
 Quando não há ROM importada disponível nem executável local de jogo, a visão geral da Biblioteca oferece **Comece adicionando um jogo** e abre as opções de arquivo ou pasta. A orientação explica emulador e login opcional; desaparece durante filtros e para instalações já configuradas. Mantém os cartões de referência do catálogo e a identidade Pixel existente. No importador, o jogo-base fica limitado ao console do arquivo e o nome sugerido vem do arquivo para respeitar hacks com cabeçalhos herdados. Ao editar, a ação é **Salvar**.

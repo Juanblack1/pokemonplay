@@ -134,7 +134,7 @@ internal static class GameCatalog
 		string azaharExe = Path.Combine(root, "Pokemon 3DS - Arquivos", "Azahar", "azahar.exe");
 		list.AddRange(DiscoverThreeDsGames(romsDir, coversDir, azaharExe));
 		try { list.AddRange(ImportedGameCatalog.Build(root)); }
-		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { }
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException) { }
 		return list;
 	}
 
