@@ -39,14 +39,20 @@ internal static class BundledEmulatorArchive
                 try
                 {
                     byte[] buffer = new byte[128 * 1024];
+                    var checkedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    RejectReparseAncestors(stage, checkedDirectories);
                     foreach (var item in entries)
                     {
                         string destination = GetDestination(stage, item.Path);
-                        RejectReparseAncestors(destination);
-                        if (item.Directory) Directory.CreateDirectory(destination);
+                        RejectReparseAncestors(destination, checkedDirectories);
+                        if (item.Directory) {
+                            Directory.CreateDirectory(destination);
+                            RejectReparseAncestors(destination, checkedDirectories);
+                        }
                         else
                         {
                             Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                            RejectReparseAncestors(Path.GetDirectoryName(destination), checkedDirectories);
                             using var source = item.Entry.Open();
                             using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, buffer.Length);
                             CopyExactly(source, output, item.Entry.Length, buffer);
@@ -122,12 +128,17 @@ internal static class BundledEmulatorArchive
         return destination;
     }
 
-    private static void RejectReparseAncestors(string path)
+    private static void RejectReparseAncestors(string path, HashSet<string> checkedDirectories = null)
     {
         for (string current = Path.GetFullPath(path); !string.IsNullOrEmpty(current); current = Path.GetDirectoryName(current))
         {
-            if ((File.Exists(current) || Directory.Exists(current)) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException("Links não são permitidos na pasta de emuladores.");
+            if (checkedDirectories?.Contains(current) == true) break;
+            if (File.Exists(current) || Directory.Exists(current)) {
+                var attributes = File.GetAttributes(current);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidDataException("Links não são permitidos na pasta de emuladores.");
+                if ((attributes & FileAttributes.Directory) != 0) checkedDirectories?.Add(current);
+            }
         }
     }
 

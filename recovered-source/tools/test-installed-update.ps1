@@ -30,7 +30,17 @@ try{
     $taskProcess=Start-Process -FilePath $taskHelper -ArgumentList @($taskExited.Id,('"'+$taskRoot+'"'),('"'+$taskStage+'"')) -WindowStyle Hidden -PassThru
     $taskTimer=[Diagnostics.Stopwatch]::StartNew()
     while(!(Test-Path (Join-Path $taskStage 'success')) -and !(Test-Path (Join-Path $taskStage 'failed')) -and $taskTimer.Elapsed.TotalSeconds -lt 100){Start-Sleep -Milliseconds 250}
-    if(!(Test-Path (Join-Path $taskStage 'success'))){throw "Actual legacy updater failed or timed out. Evidence: $taskRoot"}
+    if(!(Test-Path (Join-Path $taskStage 'success'))){
+        Write-Output "Helper exited: $($taskProcess.HasExited); stage failed marker: $(Test-Path (Join-Path $taskStage 'failed'))"
+        foreach($candidateRoot in @($taskRuntime,(Join-Path $taskStage 'failed-runtime'))){
+            if(Test-Path $candidateRoot){
+                Get-ChildItem $candidateRoot -Filter 'emulator-extraction-error.log' -Recurse | ForEach-Object {Get-Content $_.FullName}
+                Get-ChildItem $candidateRoot -Directory -Filter '.emulators-extract-*' | ForEach-Object {Write-Output "Incomplete extraction: $(@(Get-ChildItem $_.FullName -File -Recurse).Count) files"}
+                Write-Output "Emulators ready: $(Test-Path (Join-Path $candidateRoot 'Emulators/THIRD_PARTY.txt'))"
+            }
+        }
+        throw "Actual legacy updater failed or timed out. Evidence: $taskRoot"
+    }
     $taskActual=Get-Content (Join-Path $taskRuntime 'app-release.json') -Raw | ConvertFrom-Json
     if($taskActual.version -ne $taskExpected.version){throw 'Version was not advanced.'}
     foreach($relative in $taskSentinels.Keys){if((Get-FileHash (Join-Path $taskRoot $relative)).Hash -ne $taskSentinels[$relative]){throw "Sentinel changed: $relative"}}

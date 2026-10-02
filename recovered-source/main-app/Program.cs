@@ -71,7 +71,11 @@ internal static class Program
 			}
 			return;
 		}
-        BundledEmulatorArchive.EnsureExtracted(AppDomain.CurrentDomain.BaseDirectory);
+        try { BundledEmulatorArchive.EnsureExtracted(AppDomain.CurrentDomain.BaseDirectory); }
+        catch (Exception error) {
+            try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "emulator-extraction-error.log"), error.ToString()); } catch { }
+            throw;
+        }
         GameSessionSettingsService.RecoverAbandonedSessions();
         using var launcher=new LauncherForm(AppPaths.Root);
         if(args.Length==2&&args[0]=="--update-ready")
