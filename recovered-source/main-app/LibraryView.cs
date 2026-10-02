@@ -445,6 +445,17 @@ internal sealed class LibraryView : BufferedPanel
 		content.SuspendLayout();
 		foreach (Control old in new List<Control>(GetChildren(content))) old.Dispose();
 		content.Controls.Clear();
+		if (generationFilter == 0 && !favoritesOnly && !recentOnly && !alphabeticalOnly && !mostPlayedOnly && num == 0 && text.Length == 0 &&
+			!games.Any(game => game.IsImported ? File.Exists(game.RomPath) : !string.IsNullOrEmpty(game.Launcher) && File.Exists(Path.Combine(root, game.Launcher))))
+		{
+			var gettingStarted = new EmptyStatePanel("Comece adicionando um jogo", "Adicione ROMs Pokémon GBA, DS ou 3DS. Depois configure o emulador em Configurações. Login é opcional.", "ADICIONAR JOGOS", (sender, _) =>
+			{
+				if (sender is Control action) importButton.ContextMenuStrip.Show(action, new Point(0, action.Height));
+			});
+			gettingStarted.Tag = "library-getting-started";
+			gettingStarted.AccessibleName = "Primeiros passos para jogar Pokémon";
+			content.Controls.Add(gettingStarted);
+		}
 		bool flag = false;
 		for (int i = 3; i <= 6; i++)
 		{

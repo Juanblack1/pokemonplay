@@ -45,14 +45,18 @@ internal sealed class RomImportDialog : Form
 		titleInput = new TextBox { Location = new Point(24, 160), Size = new Size(460, 32), Text = existing?.Title ?? GuessTitle(this.romPath, identity) };
 		var baseLabel = new Label { Text = "Jogo-base", Location = new Point(24, 205), Size = new Size(460, 22), ForeColor = AppTheme.TextSecondary };
 		basePicker = new ComboBox { Location = new Point(24, 229), Size = new Size(460, 34), DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.Text, Font = AppTheme.Body };
-		foreach (var item in Bases) basePicker.Items.Add(item.Name);
+		foreach (var item in Bases.Where(item => MatchesSystem(extension, item.Generation))) basePicker.Items.Add(item.Name);
 		string selectedBase = existing?.BaseGame ?? identity.BaseGame;
-		int selectedIndex = Array.FindIndex(Bases, item => string.Equals(item.Name, selectedBase, StringComparison.OrdinalIgnoreCase));
+		int selectedIndex = basePicker.Items.IndexOf(selectedBase);
 		basePicker.SelectedIndex = selectedIndex < 0 ? 0 : selectedIndex;
+		titleInput.MaxLength = 80;
+		titleInput.AccessibleName = "Nome do jogo na biblioteca";
+		basePicker.AccessibleName = "Jogo-base compatível com o sistema da ROM";
+		basePicker.AccessibleDescription = "Mostra somente jogos do mesmo console que o arquivo selecionado.";
 		hackCheck = new CheckBox { Text = "Esta é uma hack ROM de Pokémon", Location = new Point(24, 274), Size = new Size(460, 28), AutoSize = false, Checked = existing?.IsHackRom ?? false, ForeColor = AppTheme.Text };
 		var helper = new Label { Text = "Marque para exibir o selo HACK ROM e o jogo-base no cartão. A capa usa a do jogo-base como referência. O arquivo não é copiado.", Location = new Point(24, 306), Size = new Size(460, 42), ForeColor = AppTheme.TextMuted };
 		var cancel = new ThemeButton("Cancelar", ButtonKind.Secondary) { Location = new Point(272, 376), Size = new Size(100, 36), AutoSize = false, DialogResult = DialogResult.Cancel };
-		var add = new ThemeButton("Adicionar", ButtonKind.Primary) { Location = new Point(384, 376), Size = new Size(100, 36), AutoSize = false };
+		var add = new ThemeButton(existing == null ? "Adicionar" : "Salvar", ButtonKind.Primary) { Location = new Point(384, 376), Size = new Size(100, 36), AutoSize = false };
 		add.Click += (_, _) => SaveResult();
 		Controls.AddRange(new Control[] { heading, fileInfo, confirmContent, titleLabel, titleInput, baseLabel, basePicker, hackCheck, helper, cancel, add });
 		AcceptButton = add;
@@ -97,9 +101,13 @@ internal sealed class RomImportDialog : Form
 
 	private static string GuessTitle(string path, RomIdentity identity)
 	{
-		string fromHeader = identity.HeaderTitle.Trim();
-		return fromHeader.Length > 0 ? fromHeader : Path.GetFileNameWithoutExtension(path).Replace('_', ' ').Replace('-', ' ').Trim();
+		string fromFile = Path.GetFileNameWithoutExtension(path).Replace('_', ' ').Trim();
+		return fromFile.Length > 0 ? fromFile : identity.HeaderTitle.Trim();
 	}
+
+	private static bool MatchesSystem(string extension, int generation) => generation == 3
+		? extension.Equals(".gba", StringComparison.OrdinalIgnoreCase)
+		: generation is 4 or 5 ? extension.Equals(".nds", StringComparison.OrdinalIgnoreCase) : IsThreeDs(extension);
 
 	private static bool IsThreeDs(string extension) => new[] { ".3ds", ".cci", ".cxi", ".3dsx", ".zcci" }.Contains(extension, StringComparer.OrdinalIgnoreCase);
 }
