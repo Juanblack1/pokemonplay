@@ -21,16 +21,24 @@ try{
     if(!(Test-Path -LiteralPath $taskAppAssembly)){throw 'Assembly principal ausente no pacote.'}
     $taskAssemblyText=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($taskAppAssembly))
     if($taskAssemblyText.Contains('client_secret') -or $taskAssemblyText.Contains('GOCSPX-')){throw 'O pacote contém um marcador de credencial OAuth confidencial.'}
-    & dotnet build (Join-Path $taskWorkspace 'recovered-source\updater\PokemonPlayUpdater.csproj') -c Release -o $taskHelper
+    & dotnet publish (Join-Path $taskWorkspace 'recovered-source\updater\PokemonPlayUpdater.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $taskHelper
     if($LASTEXITCODE -ne 0){throw 'Falha ao compilar o atualizador.'}
-    Copy-Item -LiteralPath (Join-Path $taskHelper 'PokemonPlayUpdater.exe') -Destination $taskRuntime
-    Copy-Item -LiteralPath (Join-Path $taskHelper 'PokemonPlayUpdater.exe.config') -Destination $taskRuntime
-    & dotnet build (Join-Path $taskWorkspace 'recovered-source\launcher\PokemonsPlayLauncher.csproj') -c Release -o $taskLauncher
+    $taskUpdaterExecutable=Join-Path $taskHelper 'PokemonPlayUpdater.exe'
+    if(!(Test-Path -LiteralPath $taskUpdaterExecutable)){throw 'Executável self-contained do atualizador ausente.'}
+    if(@(Get-ChildItem -LiteralPath $taskHelper -Filter '*.dll' -File).Count -gt 0){throw 'O atualizador não foi publicado como executável single-file.'}
+    Get-ChildItem -LiteralPath $taskHelper -File | Where-Object Extension -ne '.pdb' | Copy-Item -Destination $taskRuntime
+    & dotnet publish (Join-Path $taskWorkspace 'recovered-source\launcher\PokemonsPlayLauncher.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $taskLauncher
     if($LASTEXITCODE -ne 0){throw 'Falha ao compilar o iniciador portátil.'}
     $taskPortableLauncher=Join-Path $taskLauncher 'Pokemons Play.exe'
-    if(!(Test-Path -LiteralPath $taskPortableLauncher)){throw 'Iniciador portátil ausente no pacote.'}
+    if(!(Test-Path -LiteralPath $taskPortableLauncher)){throw 'Executável self-contained do iniciador portátil ausente.'}
+    if(@(Get-ChildItem -LiteralPath $taskLauncher -Filter '*.dll' -File).Count -gt 0){throw 'O iniciador portátil não foi publicado como executável single-file.'}
     @{version=$Tag;repository=$Repository} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRuntime 'app-release.json') -Encoding utf8
     @{repository=$Repository} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRuntime 'UpdateSource.json') -Encoding utf8
+    $taskSigningRequested=$env:POKEMONPLAY_REQUIRE_SIGNING -eq 'true' -or ![string]::IsNullOrWhiteSpace($env:POKEMONPLAY_SIGNING_PFX_BASE64) -or ![string]::IsNullOrWhiteSpace($env:POKEMONPLAY_SIGNING_PFX_PASSWORD)
+    if($taskSigningRequested){
+        & (Join-Path $PSScriptRoot 'sign-windows-package.ps1') -Directory $taskBuild
+        if($LASTEXITCODE -ne 0){throw 'A assinatura/verificação dos binários Windows falhou.'}
+    }
     Get-ChildItem -LiteralPath $taskRuntime -Filter '*.pdb' | Remove-Item
     New-Item -ItemType Directory -Path $taskOutput -Force | Out-Null
     $taskZip=Join-Path $taskOutput 'pokemon-play-win-x64-update.zip'

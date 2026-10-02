@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net48</TargetFramework><UseWindowsForms>true</UseWindowsForms><LangVersion>latest</LangVersion><AssemblyName>PokemonPlayUpdater</AssemblyName></PropertyGroup>
-  <ItemGroup><PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" /></ItemGroup>
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>PokemonPlayUpdater</AssemblyName>
+  </PropertyGroup>
 </Project>

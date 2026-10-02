@@ -92,7 +92,7 @@ internal sealed class AppUpdateService : IDisposable
             string helper=Path.Combine(root,"PokemonPlayRuntime","PokemonPlayUpdater.exe");
             if(!File.Exists(helper))helper=Path.Combine(AppContext.BaseDirectory,"PokemonPlayUpdater.exe");
             if(!File.Exists(helper))throw new FileNotFoundException("O atualizador não está instalado. A versão atual foi preservada.");
-            File.Copy(helper,Path.Combine(stage,"PokemonPlayUpdater.exe"));if(File.Exists(helper+".config"))File.Copy(helper+".config",Path.Combine(stage,"PokemonPlayUpdater.exe.config"));return stage;
+            File.Copy(helper,Path.Combine(stage,"PokemonPlayUpdater.exe"));return stage;
         }
         catch{TryClean(stage);throw;}
     }

@@ -18,6 +18,15 @@ jobs:
           if ($readiness -notmatch '(?m)^<!-- public-release-status: ready -->\s*$') {
             throw 'Publicação bloqueada: RELEASE_READINESS.md ainda não marca a distribuição como pronta.'
           }
+      - name: Exigir o certificado de assinatura Windows
+        shell: pwsh
+        env:
+          POKEMONPLAY_SIGNING_PFX_BASE64: ${{ secrets.POKEMONPLAY_SIGNING_PFX_BASE64 }}
+          POKEMONPLAY_SIGNING_PFX_PASSWORD: ${{ secrets.POKEMONPLAY_SIGNING_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:POKEMONPLAY_SIGNING_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:POKEMONPLAY_SIGNING_PFX_PASSWORD)) {
+            throw 'Publicação bloqueada: configure os secrets do certificado de assinatura Authenticode do Pokémon Play.'
+          }
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
@@ -26,6 +35,10 @@ jobs:
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
       - name: Compilar pacote do aplicativo
         shell: pwsh
+        env:
+          POKEMONPLAY_REQUIRE_SIGNING: 'true'
+          POKEMONPLAY_SIGNING_PFX_BASE64: ${{ secrets.POKEMONPLAY_SIGNING_PFX_BASE64 }}
+          POKEMONPLAY_SIGNING_PFX_PASSWORD: ${{ secrets.POKEMONPLAY_SIGNING_PFX_PASSWORD }}
         run: ./recovered-source/tools/publish-update.ps1 -Tag '${{ github.ref_name }}' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-release'
       - name: Publicar release estável
         shell: pwsh
