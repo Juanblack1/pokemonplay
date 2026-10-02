@@ -58,7 +58,7 @@ internal static class Program
                     if(!string.Equals(app.MainModule.FileName,Path.Combine(root,"PokemonPlayRuntime","Pokemons Play.exe"),StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Processo de preparação fora da instalação.");
                 }catch(Exception)when(app.HasExited){}
                 for(int attempt=0;attempt<1200;attempt++) {
-                    if(File.Exists(Path.Combine(stage,"prepared")))return;
+                    if(File.Exists(Path.Combine(stage,"prepared"))){File.WriteAllText(Path.Combine(stage,"preparation-complete"),"ok");return;}
                     if(app==null||app.HasExited)break;
                     Thread.Sleep(500);
                 }

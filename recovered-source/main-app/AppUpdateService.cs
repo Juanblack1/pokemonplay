@@ -114,6 +114,12 @@ internal sealed class AppUpdateService : IDisposable
         using var manifest=JsonDocument.Parse(File.ReadAllText(Path.Combine(runtime,"app-release.json")));
         if(manifest.RootElement.GetProperty("version").GetString()!=expectedTag||!NormalizeRepository(manifest.RootElement.GetProperty("repository").GetString()).Equals(repository,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("O pacote não corresponde à versão e ao repositório selecionados.");
     }
+    internal static bool CanCleanCompletedStage(string stage)
+    {
+        if(File.Exists(Path.Combine(stage,"failed")))return !Directory.Exists(Path.Combine(stage,"previous-runtime"));
+        return File.Exists(Path.Combine(stage,"success"))&&File.Exists(Path.Combine(stage,"prepared"))&&
+            (!File.Exists(Path.Combine(stage,"PokemonPlayPreparationUpdater.exe"))||File.Exists(Path.Combine(stage,"preparation-complete")));
+    }
     internal static void TryClean(string stage){try{if(Directory.Exists(stage))Directory.Delete(stage,true);}catch(IOException){}catch(UnauthorizedAccessException){}}
     public void Dispose()=>http.Dispose();
 }

@@ -38,6 +38,17 @@ internal static class AppUpdatesCheck
             {using var writer=new StreamWriter(archive.CreateEntry("PokemonPlayRuntime/"+entry).Open());writer.Write(entry=="app-release.json"?JsonSerializer.Serialize(new{version=manifestTag,repository="owner/repository"}):"fixture");}
             if(extra!=null){using var writer=new StreamWriter(archive.CreateEntry(extra).Open());writer.Write("unsafe");}return file;
         }
+        string cleanupStage=Path.Combine(fixture,"cleanup-stage");Directory.CreateDirectory(cleanupStage);
+        File.WriteAllText(Path.Combine(cleanupStage,"success"),"ok");
+        Assert(!AppUpdateService.CanCleanCompletedStage(cleanupStage),"early bootstrap success retains the preparation backup");
+        File.WriteAllText(Path.Combine(cleanupStage,"prepared"),"ok");File.WriteAllText(Path.Combine(cleanupStage,"PokemonPlayPreparationUpdater.exe"),"fixture");
+        Assert(!AppUpdateService.CanCleanCompletedStage(cleanupStage),"completed launcher retains backup until supervision completes");
+        File.WriteAllText(Path.Combine(cleanupStage,"preparation-complete"),"ok");
+        Assert(AppUpdateService.CanCleanCompletedStage(cleanupStage),"completed preparation permits stage cleanup");
+        File.WriteAllText(Path.Combine(cleanupStage,"failed"),"failed");Directory.CreateDirectory(Path.Combine(cleanupStage,"previous-runtime"));
+        Assert(!AppUpdateService.CanCleanCompletedStage(cleanupStage),"failed rollback retains the previous runtime backup");
+        Directory.Delete(Path.Combine(cleanupStage,"previous-runtime"));
+        Assert(AppUpdateService.CanCleanCompletedStage(cleanupStage),"completed rollback permits stage cleanup");
         string valid=Zip("valid");string stage=Path.Combine(fixture,"valid-stage");Directory.CreateDirectory(stage);AppUpdateService.ExtractPackage(valid,stage,nextTag,"owner/repository");
         Assert(File.Exists(Path.Combine(stage,"PokemonPlayRuntime","Pokemons Play.exe")),"validated update extracts only a complete application runtime");
         Reject(()=>AppUpdateService.ExtractPackage(Zip("traversal","PokemonPlayRuntime/../Settings/config.json"),Path.Combine(fixture,"traversal"),nextTag,"owner/repository"),"update rejects zip traversal before touching user data");

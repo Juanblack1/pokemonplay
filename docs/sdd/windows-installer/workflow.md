@@ -1,13 +1,13 @@
 # Pokémon Play — workflow agêntico SDD para instalador Windows
 
-Status: preparação; implementação e publicação ainda não executadas.
+Status: implementação concluída; validação final no CI e publicação pendentes.
 Data: 2026-10-02.
 
 ## Objetivo e escopo
 
 Entregar um único arquivo de instalação `pokemon-play-win-x64-setup.exe` para quem baixa a aplicação. O instalador coloca os arquivos no computador, cria atalhos e oferece abrir o launcher. As próximas versões continuam chegando pelo atualizador interno, com preservação dos dados. Manter o ZIP portátil disponível.
 
-Um único arquivo para download não implica um único arquivo em disco: runtime, saves e configurações continuam em pastas. Não incluir jogos, ROMs, BIOS ou emuladores de terceiros. Não alterar recursos de jogo, banco ou nuvem nesta entrega.
+Um único arquivo para download não implica um único arquivo em disco: runtime, saves e configurações continuam em pastas. Preservar os emuladores e fontes correspondentes já publicados na v171.8.0. Não incluir jogos, ROMs, BIOS ou chaves. Não alterar recursos de jogo, banco ou nuvem nesta entrega.
 
 ## Evidências do projeto
 
@@ -33,7 +33,7 @@ Consequência: usar uma pasta gravável por usuário mantém o contrato atual de
 | R6 | Preservar rollback e validação de integridade existentes. | Pacote corrompido, manifesto incorreto, runtime em uso e falha na abertura da versão nova não eliminam dados nem deixam o runtime anterior indisponível. |
 | R7 | Desinstalar remove arquivos gerenciados e atalhos, preservando os dados pessoais por padrão. | Desinstalação após criar sentinelas; dados sobrevivem e reinstalação os reconhece. |
 | R8 | ZIP portátil e instalações antigas continuam atualizando pelo contrato existente. | Atualização em uma pasta portátil com sentinelas; nova instalação não move ou apaga uma instalação portátil. |
-| R9 | Distribuição contém apenas arquivos permitidos do aplicativo. | Inspeção do instalador/ZIP; sem dados locais, credenciais, ROMs, BIOS ou emuladores. |
+| R9 | Distribuição contém apenas arquivos permitidos do aplicativo e emuladores existentes. | Inspeção do instalador/ZIP; sem dados locais, credenciais, ROMs ou BIOS; fontes correspondentes preservadas. |
 | R10 | Documentar instalação, atualização, opção portátil e desinstalação com preservação de dados. | README corresponde ao comportamento efetivamente verificado. |
 | R11 | Reinstalação respeita aplicativo/emulador aberto e evita substituir runtime em uso. | Bloqueio claro ou fechamento consentido; teste sem perda de dados. Instalador antigo não faz downgrade silencioso. |
 

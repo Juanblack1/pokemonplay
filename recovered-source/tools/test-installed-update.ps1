@@ -31,16 +31,24 @@ Copy-Item -LiteralPath (Join-Path $taskRuntime 'PokemonPlayUpdater.exe') -Destin
 $taskExited=Start-Process -FilePath $env:ComSpec -ArgumentList '/c exit 0' -WindowStyle Hidden -Wait -PassThru
 $taskProcess=$null
 try{
-    $taskProcess=Start-Process -FilePath $taskHelper -ArgumentList @($taskExited.Id,('"'+$taskRoot+'"'),('"'+$taskStage+'"')) -WindowStyle Hidden -PassThru
+    $taskChildTemp=Join-Path $taskRoot 'isolated-temp'
+    New-Item -ItemType Directory -Path $taskChildTemp | Out-Null
+    $taskStart=[Diagnostics.ProcessStartInfo]::new($taskHelper)
+    $taskStart.UseShellExecute=$false;$taskStart.CreateNoWindow=$true
+    $taskStart.Arguments=([string]$taskExited.Id)+' "'+$taskRoot+'" "'+$taskStage+'"'
+    $taskStart.Environment['TEMP']=$taskChildTemp
+    $taskStart.Environment['TMP']=$taskChildTemp
+    $taskStart.Environment['POKEMONPLAY_RETROARCH_TEMP']=Join-Path $taskChildTemp 'retroarch'
+    $taskProcess=[Diagnostics.Process]::Start($taskStart)
     $taskTimer=[Diagnostics.Stopwatch]::StartNew()
-    while(!((Test-Path (Join-Path $taskStage 'success')) -and (Test-Path (Join-Path $taskStage 'prepared'))) -and !(Test-Path (Join-Path $taskStage 'failed')) -and $taskTimer.Elapsed.TotalSeconds -lt 650){Start-Sleep -Milliseconds 250}
+    while(!((Test-Path (Join-Path $taskStage 'success')) -and (Test-Path (Join-Path $taskStage 'prepared')) -and (Test-Path (Join-Path $taskStage 'preparation-complete'))) -and !(Test-Path (Join-Path $taskStage 'failed')) -and $taskTimer.Elapsed.TotalSeconds -lt 650){Start-Sleep -Milliseconds 250}
     if($CorruptEmulatorArchive){
         if(!(Test-Path (Join-Path $taskStage 'failed')) -or (Get-Content (Join-Path $taskRuntime 'app-release.json') -Raw | ConvertFrom-Json).version -ne $taskOldVersion -or (Get-FileHash (Join-Path $taskRuntime 'Pokemons Play.exe')).Hash -ne $taskOldHash){throw 'Preparation failure did not restore the previous runtime.'}
         foreach($relative in $taskSentinels.Keys){if((Get-FileHash (Join-Path $taskRoot $relative)).Hash -ne $taskSentinels[$relative]){throw "Rollback changed sentinel: $relative"}}
         Write-Output "PASS corrupt emulator preparation restores previous runtime and preserves data. Evidence: $taskRoot"
         return
     }
-    if(!(Test-Path (Join-Path $taskStage 'prepared')) -or !(Test-Path (Join-Path $taskStage 'success'))){
+    if(!(Test-Path (Join-Path $taskStage 'prepared')) -or !(Test-Path (Join-Path $taskStage 'success')) -or !(Test-Path (Join-Path $taskStage 'preparation-complete'))){
         Write-Output "Helper exited: $($taskProcess.HasExited); stage failed marker: $(Test-Path (Join-Path $taskStage 'failed'))"
         foreach($candidateRoot in @($taskRuntime,(Join-Path $taskStage 'failed-runtime'),(Join-Path $taskStage 'failed-preparation-runtime'))){
             if(Test-Path $candidateRoot){

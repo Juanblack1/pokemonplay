@@ -245,7 +245,7 @@ internal sealed class LauncherForm : Form
     private void CleanCompletedUpdates()
     {
         if(IsDisposed)return;
-        try{foreach(string stage in Directory.GetDirectories(root,".pokemonplay-update-*")){string name=Path.GetFileName(stage);if(Guid.TryParseExact(name.Substring(20),"N",out _)&&(File.GetAttributes(stage)&FileAttributes.ReparsePoint)==0&&(File.Exists(Path.Combine(stage,"success"))||File.Exists(Path.Combine(stage,"failed"))))AppUpdateService.TryClean(stage);}}
+        try{foreach(string stage in Directory.GetDirectories(root,".pokemonplay-update-*")){string name=Path.GetFileName(stage);if(Guid.TryParseExact(name.Substring(20),"N",out _)&&(File.GetAttributes(stage)&FileAttributes.ReparsePoint)==0&&AppUpdateService.CanCleanCompletedStage(stage))AppUpdateService.TryClean(stage);}}
         catch(IOException){}catch(UnauthorizedAccessException){}
     }
 
