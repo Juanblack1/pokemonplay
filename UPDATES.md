@@ -1,5 +1,13 @@
 # Atualizações pelo GitHub
 
+## v171.8.0 — Emuladores e cores incluídos
+
+Primeira instalação inclui RetroArch 1.22.2, core mGBA 0.10.5, core melonDS DS 1.4.0 e Azahar 2126.1.2. Novas instalações detectam os componentes automaticamente. O preset de teclado é aplicado aos cores incluídos; configuração RetroArch fica em Settings/Emulators, fora do runtime atualizado. Escolhas externas/opt-out e emuladores legados são preservados; caminhos do bundle são recalculados quando a pasta portátil é movida. A distribuição continua sem ROMs, BIOS, firmware, chaves ou dados de usuários. 3DS ainda exige arquivos/dados compatíveis com Azahar.
+
+PR #17 aprovado no run `37051941873`; release aprovada/publicada no run `37053483819`. Ambos recompilaram os cores, carregaram as DLLs com ABI Libretro 1, verificaram RetroArch --version e inicialização Azahar sem ROM, executaram ProfilesCheck completo e validaram os ZIPs. Fontes/dependências dos cores compilados e fontes upstream dos emuladores foram publicados em asset separado com licenças/instruções. Não foi verificada jogabilidade com ROM real.
+
+Downloads anônimos completos verificados em 2026-10-02; digests coincidem com sidecars e API GitHub. Portátil: 499.755.772 bytes, SHA-256 `47d2854033b86b2efe2980ce00afc2c97e457bceefd722c7a4ff3c7d16504c58`. Atualização: 452.402.142 bytes, SHA-256 `ca935905d0c37a11af5ef1a901800518c42c6cf0fdffca69db552ad7633cfe0d`. Fontes: 145.145.858 bytes, SHA-256 `4bc68a8944921b9596a49fbd1117b12a5e67c5a1fa0b0e28851ffb3db5ce70cf`. Verificação por streaming, sem salvar ZIPs no computador do proprietário. Executável legado local inalterado. Pastas temporárias antigas cuja remoção foi bloqueada continuam preservadas; nenhum mecanismo alternativo de exclusão foi utilizado.
+
 ## v171.7.0 — Sprites com rede instável
 
 Uma falha rápida de rede ao buscar uma variante de sprite passa a permitir a próxima fonte existente, mantendo um prazo total de seis segundos para essa busca. Respostas sem tamanho declarado e arquivos de cache são lidos com limite de 1 MB mais um byte sentinela, antes da validação PNG. Cache excessivo é rejeitado sem carregar todo o arquivo.
