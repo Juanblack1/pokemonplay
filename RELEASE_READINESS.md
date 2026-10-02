@@ -1,5 +1,7 @@
 # Prontidão para distribuição pública
 
+<!-- public-release-status: blocked -->
+
 **Estado da auditoria (2026-10-02): não tornar o repositório público ainda.** O repositório `Juanblack1/pokemonplay` está privado. A release v171.1.0 é a versão mais recente; os workflows Windows de PR e release passaram (runs `36955572832` e `36955753712`).
 
 ## Pronto para distribuição
@@ -16,3 +18,5 @@
 3. **Regras do Firestore:** confirmar no projeto Firebase que as regras do servidor limitam leitura e gravação ao UID autenticado. O código organiza documentos por UID, mas as regras implantadas não estão neste repositório. A sessão autenticada recebeu do Firebase Console a mensagem de que o projeto não existe ou a conta não tem permissão para listar apps; a lista de bancos no Cloud Console retornou erro do servidor sem linhas. Portanto, as regras continuam sem verificação. Manter sincronização na nuvem indisponível para uma distribuição pública até essa confirmação; o uso local do launcher não depende dela.
 
 Depois de resolver e verificar os três itens, revisar a lista de assets, tornar o repositório público e testar o download da release sem autenticação em uma sessão anônima.
+
+O workflow que publica tags `v*` só pode prosseguir quando o marcador acima for alterado para `<!-- public-release-status: ready -->` após a auditoria completa. Mantenha-o como `blocked` enquanto qualquer item desta lista estiver pendente.
