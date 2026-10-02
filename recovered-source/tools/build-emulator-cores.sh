@@ -5,7 +5,8 @@ sources="$bundle/sources"
 ra="$bundle/Emulators/RetroArch"
 mkdir -p "$ra/cores" "$ra/info" "$bundle/build"
 cmake -S "$sources/mgba" -B "$bundle/build/mgba" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_LIBRETRO=ON -DBUILD_QT=OFF -DBUILD_SDL=OFF -DBUILD_STATIC=ON -DBUILD_SHARED=OFF \
+  -DBUILD_LIBRETRO=ON -DSKIP_LIBRARY=ON -DBUILD_QT=OFF -DBUILD_SDL=OFF -DBUILD_STATIC=ON -DBUILD_SHARED=OFF \
+  -DBUILD_GL=OFF -DBUILD_GLES2=OFF -DBUILD_GLES3=OFF -DUSE_EPOXY=OFF \
   -DUSE_FFMPEG=OFF -DUSE_ZLIB=OFF -DUSE_PNG=OFF -DUSE_MINIZIP=OFF -DUSE_LZMA=OFF -DUSE_LUA=OFF \
   -DCMAKE_SHARED_LINKER_FLAGS='-static-libgcc -static-libstdc++' -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 cmake --build "$bundle/build/mgba" --parallel 4

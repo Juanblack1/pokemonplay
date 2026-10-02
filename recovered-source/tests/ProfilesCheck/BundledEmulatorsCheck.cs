@@ -6,7 +6,7 @@ using System.Reflection;
 internal static class BundledEmulatorsCheck
 {
     static object Call(Type type,string name,params object[] args) => type.GetMethods(BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic).Single(m=>m.Name==name&&m.GetParameters().Length==args.Length).Invoke(null,args);
-    static object Property(object value,string name)=>value.GetType().GetProperty(name).GetValue(value);
+    static object Property(object value,string name)=>value.GetType().GetProperty(name,BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance).GetValue(value);
     static void Assert(bool value,string message){if(!value)throw new Exception(message);Console.WriteLine("PASS "+message);}
     internal static void Run(string root,Assembly app)
     {

@@ -34,12 +34,12 @@ internal static class RetroArchSettingsService
         {
             var settings = JsonSerializer.Deserialize<RetroArchSettings>(File.ReadAllText(path)) ?? new RetroArchSettings();
             // Stored bundle paths are derived again when the portable folder moves.
-            if (settings.ExecutablePath.Replace('\\', '/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/", StringComparison.OrdinalIgnoreCase))
+            if (settings.ExecutablePath?.Replace('\\', '/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/", StringComparison.OrdinalIgnoreCase)==true)
             {
                 var bundled = BundledEmulators.Defaults(root);
                 settings.ExecutablePath = bundled.ExecutablePath;
-                if(settings.GbaCorePath.Replace('\\','/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/",StringComparison.OrdinalIgnoreCase)) settings.GbaCorePath = bundled.GbaCorePath;
-                if(settings.DsCorePath.Replace('\\','/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/",StringComparison.OrdinalIgnoreCase)) settings.DsCorePath = bundled.DsCorePath;
+                if(settings.GbaCorePath?.Replace('\\','/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/",StringComparison.OrdinalIgnoreCase)==true) settings.GbaCorePath = bundled.GbaCorePath;
+                if(settings.DsCorePath?.Replace('\\','/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/",StringComparison.OrdinalIgnoreCase)==true) settings.DsCorePath = bundled.DsCorePath;
             }
             return settings;
         }
