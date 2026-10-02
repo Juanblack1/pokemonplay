@@ -384,6 +384,7 @@ internal static class GameLaunchHistoryCheck
                 interactionHost.ClientSize = new Size(clientWidth, interactionHost.ClientSize.Height);
                 Application.DoEvents();
             }
+            Console.WriteLine($"LAYOUT_DIAG host={interactionHost.ClientSize.Width} library={library.ClientSize.Width} toolbar={sortHelper.Parent.ClientSize.Width} helper={sortHelper.Bounds} visible={sortHelper.Visible} clear={clearRecentAction.Bounds}");
             Assert(sortHelper.Visible && sortHelper.Left >= clearRecentAction.Right + 16,
                 "library restores the sort caption with a clear gap when the wide toolbar has room");
             Call(history, "TryAddPlayTime", null, libraryRoot, "FireRed", TimeSpan.FromMinutes(90));
