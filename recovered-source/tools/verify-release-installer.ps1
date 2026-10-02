@@ -23,7 +23,7 @@ if($LASTEXITCODE -ne 0){throw 'Older runtime fixture build failed.'}
 $taskManifest.version='v'+$taskOlderVersion
 $taskManifest | ConvertTo-Json | Set-Content (Join-Path $taskRuntime 'app-release.json') -Encoding utf8
 $taskOlderOutput=Join-Path $taskFixture 'older-setup'
-& (Join-Path $PSScriptRoot 'build-installer.ps1') -RuntimeDirectory $taskRuntime -Version $taskOlderVersion -OutputDirectory $taskOlderOutput -CompilerPath $CompilerPath
+& (Join-Path $PSScriptRoot 'build-installer.ps1') -RuntimeDirectory $taskRuntime -Version $taskOlderVersion -OutputDirectory $taskOlderOutput -CompilerPath $CompilerPath -FastFixture
 $taskOlderSetup=Join-Path $taskOlderOutput 'pokemon-play-win-x64-setup.exe'
 $taskNewSetup=Join-Path $ReleaseDirectory 'pokemon-play-win-x64-setup.exe'
 & (Join-Path $PSScriptRoot 'test-installed-update.ps1') -UpdateZipPath (Join-Path $ReleaseDirectory 'pokemon-play-win-x64-update.zip') -OlderRuntimeDirectory $taskRuntime

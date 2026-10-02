@@ -7,6 +7,9 @@
 #ifndef InstallerOutputDirectory
   #error InstallerOutputDirectory is required
 #endif
+#ifndef CompressionMode
+  #define CompressionMode "lzma2"
+#endif
 #define RuntimeExe AddBackslash(RuntimeDirectory) + "Pokemons Play.exe"
 #ifndef VersionMS
   #error VersionMS is required
@@ -23,7 +26,7 @@ VersionInfoVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\PokemonPlay
 DisableDirPage=yes
 DefaultGroupName=Pokémon Play
-DisableProgramGroupPage=yes
+DisableProgramGroupPage=no
 UsePreviousAppDir=no
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -31,7 +34,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir={#InstallerOutputDirectory}
 OutputBaseFilename=pokemon-play-win-x64-setup
-Compression=lzma2
+Compression={#CompressionMode}
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\PokemonPlayRuntime\Pokemons Play.exe

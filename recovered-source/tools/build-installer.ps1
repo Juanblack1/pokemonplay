@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory=$true)][string]$RuntimeDirectory,
     [Parameter(Mandatory=$true)][string]$Version,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
-    [Parameter(Mandatory=$true)][string]$CompilerPath
+    [Parameter(Mandatory=$true)][string]$CompilerPath,
+    [switch]$FastFixture
 )
 $ErrorActionPreference='Stop'
 $taskVersion=$Version.TrimStart('v')
@@ -32,7 +33,8 @@ New-Item -ItemType Directory -Path $taskOutput -Force | Out-Null
 $taskScript=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\installer\pokemon-play.iss'))
 $taskVersionMS=([uint32]$taskParts[0] -shl 16) -bor [uint32]$taskParts[1]
 $taskVersionLS=[uint32]$taskParts[2] -shl 16
-& $taskCompiler "/DVersionMS=$taskVersionMS" "/DVersionLS=$taskVersionLS" "/DRuntimeDirectory=$taskRuntime" "/DAppVersion=$taskVersion" "/DInstallerOutputDirectory=$taskOutput" $taskScript
+$taskCompression=if($FastFixture){'none'}else{'lzma2'}
+& $taskCompiler "/DCompressionMode=$taskCompression" "/DVersionMS=$taskVersionMS" "/DVersionLS=$taskVersionLS" "/DRuntimeDirectory=$taskRuntime" "/DAppVersion=$taskVersion" "/DInstallerOutputDirectory=$taskOutput" $taskScript
 if($LASTEXITCODE -ne 0){throw "Falha ao compilar instalador (código $LASTEXITCODE)."}
 if(!(Test-Path -LiteralPath $taskArtifact -PathType Leaf)){throw 'O compilador não gerou o instalador esperado.'}
 $taskDigest=(Get-FileHash -LiteralPath $taskArtifact -Algorithm SHA256).Hash.ToLowerInvariant()
