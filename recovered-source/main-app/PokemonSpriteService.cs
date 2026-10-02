@@ -89,7 +89,9 @@ internal static class PokemonSpriteService
             return null;
         try
         {
-            byte[] bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+            byte[] bytes;
+            using (var cachedStream = File.OpenRead(path))
+                bytes = await ReadBoundedAsync(cachedStream, CancellationToken.None).ConfigureAwait(false);
             if (IsValidSprite(bytes))
             {
                 try { File.SetLastAccessTimeUtc(path, DateTime.UtcNow); }
@@ -121,19 +123,7 @@ internal static class PokemonSpriteService
             if (cached != null)
                 return cached;
 
-            byte[] bytes = null;
-            foreach (Uri source in SpriteUris(species, shiny, female))
-            {
-                using HttpResponseMessage response = await Client.GetAsync(source, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaximumSpriteBytes)
-                    continue;
-                byte[] candidate = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                if (IsValidSprite(candidate))
-                {
-                    bytes = candidate;
-                    break;
-                }
-            }
+            byte[] bytes = await FetchSpriteBytesAsync(Client, species, shiny, female).ConfigureAwait(false);
             if (bytes == null)
                 return null;
 
@@ -173,6 +163,42 @@ internal static class PokemonSpriteService
         {
             Downloads.Release();
         }
+    }
+
+    internal static async Task<byte[]> FetchSpriteBytesAsync(HttpClient client, int species, bool shiny, bool female)
+    {
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+        foreach (Uri source in SpriteUris(species, shiny, female))
+        {
+            try
+            {
+                using HttpResponseMessage response = await client.GetAsync(source, HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaximumSpriteBytes) continue;
+                using Stream stream = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
+                byte[] candidate = await ReadBoundedAsync(stream, budget.Token).ConfigureAwait(false);
+                if (IsValidSprite(candidate)) return candidate;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
+            {
+                if (budget.IsCancellationRequested) break;
+                // A failed variant must not prevent the next existing fallback source.
+            }
+        }
+        return null;
+    }
+
+    private static async Task<byte[]> ReadBoundedAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        byte[] buffer = new byte[81920];
+        using var result = new MemoryStream();
+        while (result.Length <= MaximumSpriteBytes)
+        {
+            int remaining = MaximumSpriteBytes + 1 - (int)result.Length;
+            int count = await stream.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remaining)), cancellationToken).ConfigureAwait(false);
+            if (count == 0) return result.ToArray();
+            result.Write(buffer, 0, count);
+        }
+        return null;
     }
 
     private static void PruneCache()
