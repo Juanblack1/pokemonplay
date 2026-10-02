@@ -41,12 +41,34 @@ internal static class AzaharSessionCheck
         object game = Activator.CreateInstance(app.GetType("GameInfo"));
         game.GetType().GetField("Title").SetValue(game, "X");
         game.GetType().GetField("Generation").SetValue(game, 6);
-        object[] args = { install, game, "azahar.exe", "", null, null };
+        string azaharExecutable = Path.Combine(install, "Pokemon 3DS - Arquivos", "Azahar", "azahar.exe");
+        File.WriteAllText(azaharExecutable, "fixture, never executed");
+        object[] args = { install, game, azaharExecutable, "", null, null };
         Call(app.GetType("LauncherSettings"), "PrepareGame", null, args);
         marker = (string)args[5];
         Assert((string)args[4] == "azahar" && IsMarker(service, marker) && File.ReadAllText(localConfig).Contains("pauseWhenInBackground=true"), "3DS launch selects Azahar and creates a managed pause session");
         Call(app.GetType("GameSessionSettingsService"), "Cleanup", null, marker);
         Assert(!File.ReadAllText(localConfig).Contains("pauseWhenInBackground"), "closing the managed 3DS session restores Azahar configuration");
+
+        byte[] beforeMissingLaunch = File.ReadAllBytes(localConfig);
+        object[] missingExecutableArgs = { install, game, Path.Combine(install, "missing-azahar.exe"), "", null, null };
+        bool missingExecutableRejected = false;
+        try { Call(app.GetType("LauncherSettings"), "PrepareGame", null, missingExecutableArgs); }
+        catch (TargetInvocationException exception) when (exception.InnerException is FileNotFoundException error && error.Message.Contains("Azahar")) { missingExecutableRejected = true; }
+        Assert(missingExecutableRejected && missingExecutableArgs[5] == null && File.ReadAllBytes(localConfig).SequenceEqual(beforeMissingLaunch), "missing Azahar is explained before modifying controls or creating a session");
+
+        game.GetType().GetField("IsImported").SetValue(game, true);
+        string importedRom = Path.Combine(install, "moved-pokemon-x.3ds");
+        game.GetType().GetField("RomPath").SetValue(game, importedRom);
+        object[] missingRomArgs = { install, game, azaharExecutable, "", null, null };
+        bool missingRomRejected = false;
+        try { Call(app.GetType("LauncherSettings"), "PrepareGame", null, missingRomArgs); }
+        catch (TargetInvocationException exception) when (exception.InnerException is FileNotFoundException error && error.FileName == importedRom) { missingRomRejected = true; }
+        Assert(missingRomRejected && missingRomArgs[5] == null && File.ReadAllBytes(localConfig).SequenceEqual(beforeMissingLaunch), "missing imported 3DS ROM is rejected before changing emulator configuration");
+        File.WriteAllText(importedRom, "fixture, never executed");
+        Call(app.GetType("LauncherSettings"), "PrepareGame", null, missingRomArgs);
+        Assert(IsMarker(service, (string)missingRomArgs[5]), "available imported 3DS ROM and Azahar still create a managed session");
+        Call(app.GetType("GameSessionSettingsService"), "Cleanup", null, (string)missingRomArgs[5]);
 
         string recoveryConfig = Path.Combine(temporaryRoot, "abandoned-azahar.ini");
         File.WriteAllText(recoveryConfig, "[UI]\npauseWhenInBackground=false\n");

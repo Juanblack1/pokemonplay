@@ -22,7 +22,16 @@ internal static class LauncherSettings
     {
         processName = !string.IsNullOrWhiteSpace(game.EmulatorProcess) ? game.EmulatorProcess : game.Generation == 3 ? "visualboyadvance-m" : game.Generation >= 6 ? "azahar" : "melonDS";
         temporaryConfigPath = null;
-        if(game.Generation>=6){ApplyAzahar(root);temporaryConfigPath=AzaharSessionSettingsService.Begin(AzaharConfigPath(root));return;}
+        if(game.Generation>=6)
+        {
+            if(game.IsImported && !File.Exists(game.RomPath))
+                throw new FileNotFoundException("Não encontrei a ROM local selecionada. Confira se a unidade ou pasta ainda está disponível.",game.RomPath);
+            if(!File.Exists(executable))
+                throw new FileNotFoundException("Não encontrei o Azahar. Coloque o emulador em Pokemon 3DS - Arquivos\\Azahar e tente novamente.",executable);
+            ApplyAzahar(root);
+            temporaryConfigPath=AzaharSessionSettingsService.Begin(AzaharConfigPath(root));
+            return;
+        }
         if(!game.IsImported && !roms.TryGetValue(game.Title,out _))throw new InvalidOperationException("Jogo sem configuração de entrada.");
         string dir=Path.Combine(root,game.Generation==3?"Pokemon - Arquivos":"Pokemon DS - Arquivos");
         string romPath=game.IsImported?Path.GetFullPath(game.RomPath):Path.Combine(dir,roms[game.Title]);
