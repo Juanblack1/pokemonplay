@@ -22,17 +22,26 @@ internal static class RetroArchSettingsService
         string coresDirectory = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(executablePath)) ?? string.Empty, "cores");
         string[] candidates = gba
             ? new[] { "mgba_libretro.dll", "vbam_libretro.dll", "vba_next_libretro.dll" }
-            : new[] { "melonds_ds_libretro.dll", "melonds_libretro.dll", "desmume_libretro.dll" };
+            : new[] { "melonds_ds_libretro.dll", "melondsds_libretro.dll", "melonds_libretro.dll", "desmume_libretro.dll" };
         return candidates.Select(name => Path.Combine(coresDirectory, name)).FirstOrDefault(File.Exists) ?? string.Empty;
     }
 
     internal static RetroArchSettings Load(string root)
     {
         string path = SettingsPath(root);
-        if (!File.Exists(path)) return new RetroArchSettings();
+        if (!File.Exists(path)) return BundledEmulators.Defaults(root);
         try
         {
-            return JsonSerializer.Deserialize<RetroArchSettings>(File.ReadAllText(path)) ?? new RetroArchSettings();
+            var settings = JsonSerializer.Deserialize<RetroArchSettings>(File.ReadAllText(path)) ?? new RetroArchSettings();
+            // Stored bundle paths are derived again when the portable folder moves.
+            if (settings.ExecutablePath?.Replace('\\', '/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/", StringComparison.OrdinalIgnoreCase)==true)
+            {
+                var bundled = BundledEmulators.Defaults(root);
+                settings.ExecutablePath = bundled.ExecutablePath;
+                if(settings.GbaCorePath?.Replace('\\','/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/",StringComparison.OrdinalIgnoreCase)==true) settings.GbaCorePath = bundled.GbaCorePath;
+                if(settings.DsCorePath?.Replace('\\','/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/",StringComparison.OrdinalIgnoreCase)==true) settings.DsCorePath = bundled.DsCorePath;
+            }
+            return settings;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -101,8 +110,24 @@ internal static class RetroArchSettingsService
             "savefile_directory = \"" + ConfigValue(saveDirectory) + "\"",
             "savestate_directory = \"" + ConfigValue(saveDirectory) + "\""
         };
+        if (string.Equals(Path.GetFullPath(settings.ExecutablePath), BundledEmulators.RetroArch(root), StringComparison.OrdinalIgnoreCase))
+        {
+            string data = BundledEmulators.DataDirectory(root, "RetroArch");
+            Directory.CreateDirectory(data);
+            BundledEmulators.RetroArchConfig(root);
+            string binary = Path.GetDirectoryName(settings.ExecutablePath);
+            config = config.Concat(new[] { "libretro_directory = \"" + ConfigValue(Path.Combine(binary, "cores")) + "\"",
+                "libretro_info_path = \"" + ConfigValue(Path.Combine(binary, "info")) + "\"",
+                "assets_directory = \"" + ConfigValue(Path.Combine(binary, "assets")) + "\"",
+                "system_directory = \"" + ConfigValue(Path.Combine(data, "system")) + "\"" }).ToArray();
+            string[] keys=LauncherSettings.KeyboardFor(root).Concat(InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json")).ExtraKeys).ToArray();
+            string[] actions={"up","down","left","right","a","b","l","r","start","select","x","y"};
+            config=config.Concat(actions.Select((action,index)=>"input_player1_"+action+" = \""+RetroArchKey(keys[index])+"\"")).Concat(new[]{"config_save_on_exit = \"false\""}).ToArray();
+        }
         File.WriteAllLines(configPath, config);
         string arguments = "-L " + Quote(corePath) + " --appendconfig " + Quote(configPath) + " " + Quote(Path.GetFullPath(romPath));
+        if (string.Equals(Path.GetFullPath(settings.ExecutablePath), BundledEmulators.RetroArch(root), StringComparison.OrdinalIgnoreCase))
+            arguments = "--config " + Quote(BundledEmulators.RetroArchConfig(root)) + " " + arguments;
         return new RetroArchLaunchPlan(settings.ExecutablePath, arguments, configPath);
     }
 
@@ -115,6 +140,7 @@ internal static class RetroArchSettingsService
     }
 
     private static string ConfigValue(string value) => value.Replace("\"", "\\\"", StringComparison.Ordinal);
+    private static string RetroArchKey(string key) => key switch {"Backspace"=>"backspace","Enter"=>"enter","Shift"=>"shift","Ctrl"=>"ctrl","Alt"=>"alt",_=>key.ToLowerInvariant()};
 
     private static string Quote(string value)
     {

@@ -10,7 +10,11 @@ Um launcher Windows para organizar jogos Pokémon, saves, perfis, controles, ban
 
 O pacote portátil inclui um iniciador simples e o runtime do aplicativo; não exige instalação separada do .NET. As atualizações disponíveis aparecem no próprio launcher e preservam as pastas de saves. `pokemon-play-win-x64-update.zip` é destinado ao atualizador do aplicativo.
 
-O launcher não inclui jogos, ROMs, BIOS ou emuladores de terceiros. Para jogar títulos GBA, Nintendo DS e Nintendo 3DS, abra **Biblioteca → Adicionar jogos** e selecione ROMs ou uma pasta. O Pokemon Play guarda o caminho e os metadados no perfil local; não copia nem envia os arquivos. Cabeçalhos GBA/DS com Pokémon ajudam a preencher título e jogo-base; arquivos 3DS e títulos sem identificação pedem confirmação de que são Pokémon. Para uma hack ROM, marque **Esta é uma hack ROM de Pokémon**: o cartão mostra o nome escolhido, o selo **HACK ROM** e “Hack de [jogo-base]”, usando a capa do jogo-base como referência. A execução depende de um emulador compatível configurado na pasta da biblioteca. O login Google é opcional e só é necessário para usar os recursos de cópia na nuvem.
+Os novos pacotes incluem **RetroArch com mGBA (GBA), melonDS DS (Nintendo DS) e Azahar (Nintendo 3DS)**. Em uma instalação nova, os emuladores são encontrados automaticamente: não é necessário instalar o RetroArch nem baixar cores. Instalações legadas e escolhas explícitas de emuladores externos são preservadas. Fontes correspondentes e licenças estão no asset `pokemon-play-emulator-sources.zip` da mesma release.
+
+O launcher não inclui jogos, ROMs, BIOS, firmware ou chaves de console. Para jogar, abra **Biblioteca → Adicionar jogos**, selecione suas ROMs ou uma pasta, confira o jogo-base e confirme. O Pokemon Play guarda o caminho e os metadados; não copia nem envia os arquivos. Para uma hack ROM, marque **Esta é uma hack ROM de Pokémon**: o cartão mostra o nome escolhido, o selo **HACK ROM** e “Hack de [jogo-base]”. Clique no cartão importado para jogar. 3DS exige arquivo/formato e eventuais dados de console compatíveis com o Azahar; incluir o emulador não elimina essas exigências. O login Google é opcional.
+
+Para conquistas opcionais, abra **Configurações → RetroAchievements → Abrir RetroArch · configurar conta**, ative Conquistas no RetroArch e informe sua conta RetroAchievements. A configuração fica em `Settings/Emulators/RetroArch`; saves continuam no perfil do jogo. O Azahar mantém seus dados no diretório padrão do usuário, fora do runtime substituído nas atualizações.
 
 ## Requisitos
 

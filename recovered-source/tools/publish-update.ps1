@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$Tag,
     [Parameter(Mandatory=$true)][string]$Repository,
-    [Parameter(Mandatory=$true)][string]$OutputDirectory
+    [Parameter(Mandatory=$true)][string]$OutputDirectory,
+    [Parameter(Mandatory=$true)][string]$EmulatorDirectory
 )
 $ErrorActionPreference='Stop'
 if($Tag -notmatch '^v[0-9]{1,5}(\.[0-9]{1,5}){0,2}$'){throw 'Use uma tag estável como v114 ou v114.1.0.'}
@@ -17,6 +18,12 @@ $taskOutput=[IO.Path]::GetFullPath($OutputDirectory)
 try{
     & dotnet publish (Join-Path $taskWorkspace 'recovered-source\main-app\Pokemons Play.csproj') -c Release -r win-x64 --self-contained true "-p:Version=$taskVersion" -o $taskRuntime
     if($LASTEXITCODE -ne 0){throw 'Falha ao compilar o aplicativo.'}
+    $taskEmulators=[IO.Path]::GetFullPath($EmulatorDirectory)
+    foreach($taskRequired in @('RetroArch/retroarch.exe','RetroArch/cores/mgba_libretro.dll','RetroArch/cores/melondsds_libretro.dll','Azahar/azahar.exe','THIRD_PARTY.txt')){
+        if(!(Test-Path -LiteralPath (Join-Path $taskEmulators $taskRequired) -PathType Leaf)){throw "Componente obrigatório ausente: $taskRequired"}
+    }
+    Copy-Item -LiteralPath $taskEmulators -Destination (Join-Path $taskRuntime 'Emulators') -Recurse
+    if(@(Get-ChildItem (Join-Path $taskRuntime 'Emulators') -File -Recurse | Where-Object {$_.Extension -in '.gba','.nds','.3ds','.cci','.cxi','.sav','.srm','.pfx' -or $_.Name -in 'bios7.bin','bios9.bin','firmware.bin','aes_keys.txt'}).Count -gt 0){throw 'Dados de jogo/usuário proibidos no runtime dos emuladores.'}
     $taskAppAssembly=Join-Path $taskRuntime 'Pokemons Play.dll'
     if(!(Test-Path -LiteralPath $taskAppAssembly)){throw 'Assembly principal ausente no pacote.'}
     $taskAssemblyText=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($taskAppAssembly))
@@ -44,7 +51,7 @@ try{
     $taskZip=Join-Path $taskOutput 'pokemon-play-win-x64-update.zip'
     if(Test-Path -LiteralPath $taskZip){throw 'O pacote de saída já existe. Use uma pasta nova para esta release.'}
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    # Zip exactly the runtime folder, never the repository's ROMs, saves or credentials.
+    # Zip the freshly built runtime and verified emulator bundle, never local libraries or saves.
     $taskArchive=[IO.Compression.ZipFile]::Open($taskZip,[IO.Compression.ZipArchiveMode]::Create)
     try{foreach($taskFile in Get-ChildItem -LiteralPath $taskRuntime -File -Recurse){$taskRelative=$taskFile.FullName.Substring($taskBuild.Length+1).Replace('\','/');[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskArchive,$taskFile.FullName,$taskRelative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null}}
     finally{$taskArchive.Dispose()}
