@@ -107,7 +107,7 @@ internal sealed class ImportedGameManagerDialog : Form
         }
     }
 
-    private static bool IsCatalogError(Exception ex) => ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException or System.Security.SecurityException;
+    private static bool IsCatalogError(Exception ex) => ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or ArgumentException or System.Security.SecurityException;
 
     private void SetStatus(string text, bool error = false)
     {

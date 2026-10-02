@@ -44,7 +44,7 @@ internal static class ImportedRomRecoveryCheck
             if (!invalid.Contains("absent")) File.WriteAllBytes(invalid, romBytes);
             bool rejected = false;
             try { Call(Catalog, "Relocate", null, fixture, id, invalid); }
-            catch (TargetInvocationException exception) when (exception.InnerException is IOException) { rejected = true; }
+            catch (TargetInvocationException exception) when (exception.InnerException is IOException or InvalidDataException) { rejected = true; }
             Assert(rejected && File.ReadAllBytes(catalogPath).SequenceEqual(originalCatalog), "invalid replacement preserves catalog: " + Path.GetFileName(invalid));
         }
 
