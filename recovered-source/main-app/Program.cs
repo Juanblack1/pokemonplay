@@ -7,6 +7,14 @@ internal static class Program
 	[STAThread]
 	public static void Main(string[] args)
 	{
+        try { Run(args); }
+        catch (Exception error) {
+            try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup-error.log"), error.ToString()); } catch { }
+            throw;
+        }
+	}
+    private static void Run(string[] args)
+	{
 		Application.EnableVisualStyles();
 		Application.SetCompatibleTextRenderingDefault(defaultValue: false);
 		if (args.Length == 3 && args[0] == "--render-previews")
@@ -71,18 +79,17 @@ internal static class Program
 			}
 			return;
 		}
-        try { BundledEmulatorArchive.EnsureExtracted(AppDomain.CurrentDomain.BaseDirectory); }
-        catch (Exception error) {
-            try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "emulator-extraction-error.log"), error.ToString()); } catch { }
-            throw;
+        string updateStage=null;
+        if(args.Length==2&&args[0]=="--update-ready") {
+            string candidate=Path.GetFullPath(args[1]);string name=Path.GetFileName(candidate);
+            if(string.Equals(Path.GetDirectoryName(candidate),Path.GetFullPath(AppPaths.Root),StringComparison.OrdinalIgnoreCase)&&name.StartsWith(".pokemonplay-update-",StringComparison.Ordinal)&&Guid.TryParseExact(name.Substring(20),"N",out _)&&Directory.Exists(candidate)) updateStage=candidate;
         }
+        if(updateStage!=null&&File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"emulators-runtime.zip")))
+            UpdatePreparationForm.Prepare(AppDomain.CurrentDomain.BaseDirectory,AppPaths.Root,updateStage);
+        else BundledEmulatorArchive.EnsureExtracted(AppDomain.CurrentDomain.BaseDirectory);
         GameSessionSettingsService.RecoverAbandonedSessions();
         using var launcher=new LauncherForm(AppPaths.Root);
-        if(args.Length==2&&args[0]=="--update-ready")
-        {
-            string stage=Path.GetFullPath(args[1]);string name=Path.GetFileName(stage);
-            if(string.Equals(Path.GetDirectoryName(stage),Path.GetFullPath(AppPaths.Root),StringComparison.OrdinalIgnoreCase)&&name.StartsWith(".pokemonplay-update-",StringComparison.Ordinal)&&Guid.TryParseExact(name.Substring(20),"N",out _)&&Directory.Exists(stage))launcher.UpdateReadyStage=stage;
-        }
+        launcher.UpdateReadyStage=updateStage;
 		Application.Run(launcher);
 	}
 	private static void ScrollPreview(Control parent)

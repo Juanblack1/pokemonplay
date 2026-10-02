@@ -26,6 +26,13 @@ $taskOlderOutput=Join-Path $taskFixture 'older-setup'
 & (Join-Path $PSScriptRoot 'build-installer.ps1') -RuntimeDirectory $taskRuntime -Version $taskOlderVersion -OutputDirectory $taskOlderOutput -CompilerPath $CompilerPath -FastFixture
 $taskOlderSetup=Join-Path $taskOlderOutput 'pokemon-play-win-x64-setup.exe'
 $taskNewSetup=Join-Path $ReleaseDirectory 'pokemon-play-win-x64-setup.exe'
+# Exercise the exact updater distributed before this change, rather than a rebuilt substitute.
+$taskLegacyZip=Join-Path $taskFixture 'legacy-update.zip'
+Invoke-WebRequest 'https://github.com/Juanblack1/pokemonplay/releases/download/v171.8.0/pokemon-play-win-x64-update.zip' -OutFile $taskLegacyZip
+if((Get-FileHash $taskLegacyZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'ca935905d0c37a11af5ef1a901800518c42c6cf0fdffca69db552ad7633cfe0d'){throw 'Legacy updater fixture digest mismatch.'}
+$taskLegacyArchive=[IO.Compression.ZipFile]::OpenRead($taskLegacyZip)
+try{[IO.Compression.ZipFileExtensions]::ExtractToFile($taskLegacyArchive.GetEntry('PokemonPlayRuntime/PokemonPlayUpdater.exe'),(Join-Path $taskRuntime 'PokemonPlayUpdater.exe'),$true)}finally{$taskLegacyArchive.Dispose()}
 & (Join-Path $PSScriptRoot 'test-installed-update.ps1') -UpdateZipPath (Join-Path $ReleaseDirectory 'pokemon-play-win-x64-update.zip') -OlderRuntimeDirectory $taskRuntime
+& (Join-Path $PSScriptRoot 'test-installed-update.ps1') -UpdateZipPath (Join-Path $ReleaseDirectory 'pokemon-play-win-x64-update.zip') -OlderRuntimeDirectory $taskRuntime -CorruptEmulatorArchive
 & (Join-Path $PSScriptRoot 'test-installer.ps1') -SetupPath $taskOlderSetup -NewerSetupPath $taskNewSetup -OlderSetupPath $taskOlderSetup -TimeoutSeconds 600
 Write-Output 'Installer lifecycle, upgrade, downgrade and data preservation verified.'

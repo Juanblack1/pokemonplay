@@ -50,7 +50,7 @@ function Assert-Check([bool]$condition,[string]$name) {
 function Invoke-Setup([string]$exe,[string]$phase,[bool]$expectFailure = $false) {
     $log = Join-Path $evidenceRoot "$phase.log"
     $arguments = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=`"$log`"")
-    if ($phase -notlike '*uninstall') {
+    if ($phase -notin @('uninstall','final-uninstall')) {
         $taskSelection = if ($TestDesktopShortcut) { '/TASKS="desktopicon"' } else { '/TASKS=""' }
         $arguments += @("/DIR=`"$installRoot`"", "/GROUP=`"$groupName`"", $taskSelection)
     }

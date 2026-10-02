@@ -66,6 +66,10 @@ internal static class AppUpdatesCheck
         string rollback=Stage();try{Apply(installRoot,rollback,()=>throw new IOException("simulated startup failure"));throw new Exception("rollback did not run");}catch(IOException){}
         Assert(File.ReadAllText(Path.Combine(runtime,"Pokemons Play.exe"))=="old","installer restores the old runtime when the new app cannot start");
         Apply(installRoot,Stage(),()=>{});Assert(File.ReadAllText(Path.Combine(runtime,"Pokemons Play.exe"))=="new"&&File.ReadAllText(Path.Combine(installRoot,"Saves","progress.sav"))=="saved progress","successful installer replaces only runtime and preserves user saves");
+        File.WriteAllText(Path.Combine(runtime,"Pokemons Play.exe"),"stable before preparation");
+        string preparation=Stage();Apply(installRoot,preparation,()=>{});File.WriteAllText(Path.Combine(preparation,"success"),"bootstrap acknowledged");
+        engine.GetMethod("RestorePrepared",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{installRoot,preparation});
+        Assert(File.ReadAllText(Path.Combine(runtime,"Pokemons Play.exe"))=="stable before preparation"&&File.ReadAllText(Path.Combine(installRoot,"Saves","progress.sav"))=="saved progress"&&!File.Exists(Path.Combine(preparation,"success")),"preparation failure restores the previous runtime after bootstrap acknowledgment and preserves saves");
     }
     private static System.Collections.Generic.IEnumerable<Control> Controls(Control parent)=>parent.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(Controls(c)));
     private sealed class FakeHttp(byte[] bytes):HttpMessageHandler

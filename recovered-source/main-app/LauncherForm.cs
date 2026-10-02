@@ -63,7 +63,7 @@ internal sealed class LauncherForm : Form
 		};
         Shown+=async(_,_)=>
         {
-            if(UpdateReadyStage!=null)File.WriteAllText(Path.Combine(UpdateReadyStage,"ready"),AppRelease.Tag);
+            if(UpdateReadyStage!=null){File.WriteAllText(Path.Combine(UpdateReadyStage,"ready"),AppRelease.Tag);File.WriteAllText(Path.Combine(UpdateReadyStage,"prepared"),AppRelease.Tag);}
             if(UpdatesEnabled){await CheckForUpdates();updateTimer.Start();await System.Threading.Tasks.Task.Delay(5000);CleanCompletedUpdates();}
         };
         updateTimer.Tick+=async(_,_)=>await CheckForUpdates();

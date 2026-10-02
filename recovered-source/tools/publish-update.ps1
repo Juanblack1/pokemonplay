@@ -56,7 +56,11 @@ try{
     # tree in one nested archive; the new launcher expands it before confirming readiness.
     $taskEmulatorArchive=Join-Path $taskBuild 'emulators-runtime.zip'
     $taskNested=[IO.Compression.ZipFile]::Open($taskEmulatorArchive,[IO.Compression.ZipArchiveMode]::Create)
-    try{foreach($taskFile in Get-ChildItem -LiteralPath (Join-Path $taskRuntime 'Emulators') -File -Recurse){$taskRelative=$taskFile.FullName.Substring($taskRuntime.Length+1).Replace('\','/');[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskNested,$taskFile.FullName,$taskRelative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null}}
+    try{
+        $taskEmulatorFiles=@(Get-ChildItem -LiteralPath (Join-Path $taskRuntime 'Emulators') -File -Recurse)
+        if($taskEmulatorFiles.Count -gt 32768 -or ($taskEmulatorFiles | Measure-Object Length -Sum).Sum -gt 2GB){throw 'Os emuladores excedem os limites de extração do aplicativo.'}
+        foreach($taskFile in $taskEmulatorFiles){$taskRelative=$taskFile.FullName.Substring($taskRuntime.Length+1).Replace('\','/');[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskNested,$taskFile.FullName,$taskRelative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null}
+    }
     finally{$taskNested.Dispose()}
     # The portable ZIP and installer continue shipping the fully expanded runtime.
     $taskArchive=[IO.Compression.ZipFile]::Open($taskZip,[IO.Compression.ZipArchiveMode]::Create)
@@ -65,6 +69,7 @@ try{
         [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskArchive,$taskEmulatorArchive,'PokemonPlayRuntime/emulators-runtime.zip',[IO.Compression.CompressionLevel]::NoCompression)|Out-Null
     }
     finally{$taskArchive.Dispose()}
+    if((Get-Item -LiteralPath $taskZip).Length -gt 512MB){throw 'O pacote excede o limite de download dos launchers instalados.'}
     $taskDigest=(Get-FileHash -LiteralPath $taskZip -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath ($taskZip+'.sha256') -Value ($taskDigest+'  pokemon-play-win-x64-update.zip') -Encoding ascii
     $taskPortableZip=Join-Path $taskOutput 'pokemon-play-win-x64-portable.zip'

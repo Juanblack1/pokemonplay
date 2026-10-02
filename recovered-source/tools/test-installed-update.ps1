@@ -1,12 +1,15 @@
 param(
     [Parameter(Mandatory)][string]$UpdateZipPath,
-    [Parameter(Mandatory)][string]$OlderRuntimeDirectory
+    [Parameter(Mandatory)][string]$OlderRuntimeDirectory,
+    [switch]$CorruptEmulatorArchive
 )
 $ErrorActionPreference='Stop'
 $taskRoot=Join-Path ([IO.Path]::GetTempPath()) ('PP atualização '+[guid]::NewGuid().ToString('N').Substring(0,8))
 New-Item -ItemType Directory -Path $taskRoot | Out-Null
 $taskRuntime=Join-Path $taskRoot 'PokemonPlayRuntime'
 Copy-Item -LiteralPath $OlderRuntimeDirectory -Destination $taskRuntime -Recurse
+$taskOldVersion=(Get-Content (Join-Path $taskRuntime 'app-release.json') -Raw | ConvertFrom-Json).version
+$taskOldHash=(Get-FileHash (Join-Path $taskRuntime 'Pokemons Play.exe')).Hash
 $taskSentinels=@{}
 foreach($relative in @('Saves/QA/progress.sav','Settings/SaveProfiles/QA.json','Settings/Emulators/RetroArch/test.cfg','Pokemon Bank/test.pk9','Backups/Automaticos/test.bin')){
     $path=Join-Path $taskRoot $relative;New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
@@ -20,6 +23,7 @@ try{
     foreach($entry in $taskZip.Entries){if(!$entry.FullName.StartsWith('PokemonPlayRuntime/') -or $entry.FullName.Contains('..')){throw 'Unexpected update package path.'}}
 }finally{$taskZip.Dispose()}
 Expand-Archive -LiteralPath $UpdateZipPath -DestinationPath $taskStage
+if($CorruptEmulatorArchive){[IO.File]::WriteAllText((Join-Path $taskStage 'PokemonPlayRuntime/emulators-runtime.zip'),'synthetic corrupt archive')}
 $taskExpected=Get-Content (Join-Path $taskStage 'PokemonPlayRuntime/app-release.json') -Raw | ConvertFrom-Json
 $taskHelper=Join-Path $taskStage 'PokemonPlayUpdater.exe'
 Copy-Item -LiteralPath (Join-Path $taskRuntime 'PokemonPlayUpdater.exe') -Destination $taskHelper
@@ -29,12 +33,18 @@ $taskProcess=$null
 try{
     $taskProcess=Start-Process -FilePath $taskHelper -ArgumentList @($taskExited.Id,('"'+$taskRoot+'"'),('"'+$taskStage+'"')) -WindowStyle Hidden -PassThru
     $taskTimer=[Diagnostics.Stopwatch]::StartNew()
-    while(!(Test-Path (Join-Path $taskStage 'success')) -and !(Test-Path (Join-Path $taskStage 'failed')) -and $taskTimer.Elapsed.TotalSeconds -lt 100){Start-Sleep -Milliseconds 250}
-    if(!(Test-Path (Join-Path $taskStage 'success'))){
+    while(!((Test-Path (Join-Path $taskStage 'success')) -and (Test-Path (Join-Path $taskStage 'prepared'))) -and !(Test-Path (Join-Path $taskStage 'failed')) -and $taskTimer.Elapsed.TotalSeconds -lt 650){Start-Sleep -Milliseconds 250}
+    if($CorruptEmulatorArchive){
+        if(!(Test-Path (Join-Path $taskStage 'failed')) -or (Get-Content (Join-Path $taskRuntime 'app-release.json') -Raw | ConvertFrom-Json).version -ne $taskOldVersion -or (Get-FileHash (Join-Path $taskRuntime 'Pokemons Play.exe')).Hash -ne $taskOldHash){throw 'Preparation failure did not restore the previous runtime.'}
+        foreach($relative in $taskSentinels.Keys){if((Get-FileHash (Join-Path $taskRoot $relative)).Hash -ne $taskSentinels[$relative]){throw "Rollback changed sentinel: $relative"}}
+        Write-Output "PASS corrupt emulator preparation restores previous runtime and preserves data. Evidence: $taskRoot"
+        return
+    }
+    if(!(Test-Path (Join-Path $taskStage 'prepared')) -or !(Test-Path (Join-Path $taskStage 'success'))){
         Write-Output "Helper exited: $($taskProcess.HasExited); stage failed marker: $(Test-Path (Join-Path $taskStage 'failed'))"
-        foreach($candidateRoot in @($taskRuntime,(Join-Path $taskStage 'failed-runtime'))){
+        foreach($candidateRoot in @($taskRuntime,(Join-Path $taskStage 'failed-runtime'),(Join-Path $taskStage 'failed-preparation-runtime'))){
             if(Test-Path $candidateRoot){
-                Get-ChildItem $candidateRoot -Filter 'emulator-extraction-error.log' -Recurse | ForEach-Object {Get-Content $_.FullName}
+                Get-ChildItem $candidateRoot -Filter '*error.log' -Recurse | ForEach-Object {Get-Content $_.FullName}
                 Get-ChildItem $candidateRoot -Directory -Filter '.emulators-extract-*' | ForEach-Object {Write-Output "Incomplete extraction: $(@(Get-ChildItem $_.FullName -File -Recurse).Count) files"}
                 Write-Output "Emulators ready: $(Test-Path (Join-Path $candidateRoot 'Emulators/THIRD_PARTY.txt'))"
             }
@@ -42,6 +52,7 @@ try{
         throw "Actual legacy updater failed or timed out. Evidence: $taskRoot"
     }
     $taskActual=Get-Content (Join-Path $taskRuntime 'app-release.json') -Raw | ConvertFrom-Json
+    if(Test-Path (Join-Path $taskStage 'preparation-failed-details.txt')){throw (Get-Content (Join-Path $taskStage 'preparation-failed-details.txt') -Raw)}
     if($taskActual.version -ne $taskExpected.version){throw 'Version was not advanced.'}
     foreach($relative in $taskSentinels.Keys){if((Get-FileHash (Join-Path $taskRoot $relative)).Hash -ne $taskSentinels[$relative]){throw "Sentinel changed: $relative"}}
     foreach($relative in @('Emulators/RetroArch/retroarch.exe','Emulators/RetroArch/cores/mgba_libretro.dll','Emulators/RetroArch/cores/melondsds_libretro.dll','Emulators/Azahar/azahar.exe','Emulators/THIRD_PARTY.txt')){
