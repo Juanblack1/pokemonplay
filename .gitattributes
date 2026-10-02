@@ -1,1 +1,2 @@
 Pokemons[[:space:]]Play.exe filter=lfs diff=lfs merge=lfs -text
+*.sh text eol=lf

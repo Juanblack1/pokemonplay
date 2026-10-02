@@ -171,6 +171,7 @@ internal static class LauncherSettings
 		ReadSelections(root, out var preset, out var _);
 		return preset;
 	}
+    internal static string[] KeyboardFor(string root) => InputDeviceProfile.KeyboardKeys(ReadPreset(root),ReadCustomKeys(root));
 
 	private static int ReadScreen(string root)
 	{

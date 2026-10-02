@@ -120,6 +120,9 @@ internal static class RetroArchSettingsService
                 "libretro_info_path = \"" + ConfigValue(Path.Combine(binary, "info")) + "\"",
                 "assets_directory = \"" + ConfigValue(Path.Combine(binary, "assets")) + "\"",
                 "system_directory = \"" + ConfigValue(Path.Combine(data, "system")) + "\"" }).ToArray();
+            string[] keys=LauncherSettings.KeyboardFor(root).Concat(InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json")).ExtraKeys).ToArray();
+            string[] actions={"up","down","left","right","a","b","l","r","start","select","x","y"};
+            config=config.Concat(actions.Select((action,index)=>"input_player1_"+action+" = \""+RetroArchKey(keys[index])+"\"")).Concat(new[]{"config_save_on_exit = \"false\""}).ToArray();
         }
         File.WriteAllLines(configPath, config);
         string arguments = "-L " + Quote(corePath) + " --appendconfig " + Quote(configPath) + " " + Quote(Path.GetFullPath(romPath));
@@ -137,6 +140,7 @@ internal static class RetroArchSettingsService
     }
 
     private static string ConfigValue(string value) => value.Replace("\"", "\\\"", StringComparison.Ordinal);
+    private static string RetroArchKey(string key) => key switch {"Backspace"=>"backspace","Enter"=>"enter","Shift"=>"shift","Ctrl"=>"ctrl","Alt"=>"alt",_=>key.ToLowerInvariant()};
 
     private static string Quote(string value)
     {

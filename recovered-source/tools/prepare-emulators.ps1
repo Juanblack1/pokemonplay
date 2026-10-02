@@ -13,11 +13,14 @@ function Fetch([string]$Url,[string]$Name,[string]$Sha){
 }
 function Clone([string]$Repo,[string]$Ref,[string]$Name){
     $target=Join-Path $sources $Name
-    & git clone --recursive "https://github.com/$Repo.git" $target
+    & git init $target
     if($LASTEXITCODE -ne 0){throw "Clone falhou: $Repo"}
-    & git -C $target checkout $Ref
+    & git -C $target remote add origin "https://github.com/$Repo.git"
+    & git -C $target fetch --depth 1 origin $Ref
     if($LASTEXITCODE -ne 0){throw "Ref ausente: $Repo $Ref"}
-    & git -C $target submodule update --init --recursive
+    & git -C $target checkout --detach FETCH_HEAD
+    if($LASTEXITCODE -ne 0){throw "Ref ausente: $Repo $Ref"}
+    & git -C $target submodule update --init --recursive --depth 1
     if($LASTEXITCODE -ne 0){throw "Submódulos ausentes: $Repo"}
 }
 $ra=Fetch 'https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z' 'RetroArch.7z' 'b2139b1d0f9d4526dc6b5ce23cbb3efdc766096fa6f2c3df016818b486ac6372'
