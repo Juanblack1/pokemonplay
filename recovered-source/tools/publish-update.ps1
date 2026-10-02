@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory=$true)][string]$Tag,
     [Parameter(Mandatory=$true)][string]$Repository,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
-    [Parameter(Mandatory=$true)][string]$EmulatorDirectory
+    [Parameter(Mandatory=$true)][string]$EmulatorDirectory,
+    [Parameter(Mandatory=$true)][string]$InstallerCompilerPath
 )
 $ErrorActionPreference='Stop'
 if($Tag -notmatch '^v[0-9]{1,5}(\.[0-9]{1,5}){0,2}$'){throw 'Use uma tag estável como v114 ou v114.1.0.'}
@@ -10,7 +11,7 @@ if($Repository -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$
 $taskVersion=$Tag.Substring(1)
 if($taskVersion -notmatch '\.'){$taskVersion+='.0.0'}elseif(($taskVersion -split '\.').Length -eq 2){$taskVersion+='.0'}
 $taskWorkspace=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$taskBuild=Join-Path ([IO.Path]::GetTempPath()) ('pokemonplay-release-'+[guid]::NewGuid().ToString('N'))
+$taskBuild=Join-Path ([IO.Path]::GetTempPath()) ('pp-'+[guid]::NewGuid().ToString('N').Substring(0,8))
 $taskRuntime=Join-Path $taskBuild 'PokemonPlayRuntime'
 $taskLauncher=Join-Path $taskBuild 'launcher'
 $taskHelper=Join-Path $taskBuild 'updater'
@@ -51,9 +52,18 @@ try{
     $taskZip=Join-Path $taskOutput 'pokemon-play-win-x64-update.zip'
     if(Test-Path -LiteralPath $taskZip){throw 'O pacote de saída já existe. Use uma pasta nova para esta release.'}
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    # Zip the freshly built runtime and verified emulator bundle, never local libraries or saves.
+    # Older launchers accept at most 4096 outer entries. Keep the complete emulator
+    # tree in one nested archive; the new launcher expands it before confirming readiness.
+    $taskEmulatorArchive=Join-Path $taskBuild 'emulators-runtime.zip'
+    $taskNested=[IO.Compression.ZipFile]::Open($taskEmulatorArchive,[IO.Compression.ZipArchiveMode]::Create)
+    try{foreach($taskFile in Get-ChildItem -LiteralPath (Join-Path $taskRuntime 'Emulators') -File -Recurse){$taskRelative=$taskFile.FullName.Substring($taskRuntime.Length+1).Replace('\','/');[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskNested,$taskFile.FullName,$taskRelative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null}}
+    finally{$taskNested.Dispose()}
+    # The portable ZIP and installer continue shipping the fully expanded runtime.
     $taskArchive=[IO.Compression.ZipFile]::Open($taskZip,[IO.Compression.ZipArchiveMode]::Create)
-    try{foreach($taskFile in Get-ChildItem -LiteralPath $taskRuntime -File -Recurse){$taskRelative=$taskFile.FullName.Substring($taskBuild.Length+1).Replace('\','/');[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskArchive,$taskFile.FullName,$taskRelative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null}}
+    try{
+        foreach($taskFile in Get-ChildItem -LiteralPath $taskRuntime -File -Recurse){$taskRelative=$taskFile.FullName.Substring($taskBuild.Length+1).Replace('\','/');if($taskRelative.StartsWith('PokemonPlayRuntime/Emulators/')){continue};[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskArchive,$taskFile.FullName,$taskRelative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null}
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskArchive,$taskEmulatorArchive,'PokemonPlayRuntime/emulators-runtime.zip',[IO.Compression.CompressionLevel]::NoCompression)|Out-Null
+    }
     finally{$taskArchive.Dispose()}
     $taskDigest=(Get-FileHash -LiteralPath $taskZip -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath ($taskZip+'.sha256') -Value ($taskDigest+'  pokemon-play-win-x64-update.zip') -Encoding ascii
@@ -65,13 +75,21 @@ try{
     }
     finally{$taskPortableArchive.Dispose()}
     $taskUpdateCheck=[IO.Compression.ZipFile]::OpenRead($taskZip)
-    try{$taskUpdateNames=@($taskUpdateCheck.Entries | ForEach-Object {$_.FullName});if($taskUpdateNames -notcontains 'PokemonPlayRuntime/Pokemons Play.exe'){throw 'O pacote de atualização não contém o executável esperado.'};if($taskUpdateNames -contains 'Pokemons Play.exe'){throw 'O pacote de atualização contém uma entrada de launcher inesperada.'}}
+    try{$taskUpdateNames=@($taskUpdateCheck.Entries | ForEach-Object {$_.FullName});if($taskUpdateNames.Count -gt 4096){throw 'O pacote excede o limite aceito pelos launchers anteriores.'};if($taskUpdateNames -notcontains 'PokemonPlayRuntime/Pokemons Play.exe'){throw 'O pacote de atualização não contém o executável esperado.'};if($taskUpdateNames -notcontains 'PokemonPlayRuntime/emulators-runtime.zip'){throw 'Emuladores ausentes do pacote.'};if($taskUpdateNames -contains 'Pokemons Play.exe'){throw 'O pacote de atualização contém uma entrada de launcher inesperada.'}}
     finally{$taskUpdateCheck.Dispose()}
     $taskPortableCheck=[IO.Compression.ZipFile]::OpenRead($taskPortableZip)
     try{$taskPortableNames=@($taskPortableCheck.Entries | ForEach-Object {$_.FullName});if($taskPortableNames -notcontains 'Pokemons Play.exe' -or $taskPortableNames -notcontains 'PokemonPlayRuntime/Pokemons Play.exe'){throw 'O pacote portátil não contém o launcher ou o runtime esperado.'}}
     finally{$taskPortableCheck.Dispose()}
     $taskPortableDigest=(Get-FileHash -LiteralPath $taskPortableZip -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath ($taskPortableZip+'.sha256') -Value ($taskPortableDigest+'  pokemon-play-win-x64-portable.zip') -Encoding ascii
+    & (Join-Path $PSScriptRoot 'build-installer.ps1') -RuntimeDirectory $taskRuntime -Version $taskVersion -OutputDirectory $taskOutput -CompilerPath $InstallerCompilerPath
+    if ($taskSigningRequested) {
+        & (Join-Path $PSScriptRoot 'sign-windows-package.ps1') -Directory $taskOutput
+        if ($LASTEXITCODE -ne 0) { throw 'A assinatura do instalador falhou.' }
+        $taskSetup=Join-Path $taskOutput 'pokemon-play-win-x64-setup.exe'
+        $taskSetupDigest=(Get-FileHash -LiteralPath $taskSetup -Algorithm SHA256).Hash.ToLowerInvariant()
+        Set-Content -LiteralPath ($taskSetup+'.sha256') -Value ($taskSetupDigest+'  pokemon-play-win-x64-setup.exe') -Encoding ascii
+    }
     Write-Output "Pacote da release $Tag pronto: $taskZip"
     Write-Output "Pacote portátil da release $Tag pronto: $taskPortableZip"
 }

@@ -54,4 +54,7 @@ jobs:
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
       - name: Compilar e validar o pacote Windows
         shell: pwsh
-        run: ./recovered-source/tools/publish-update.ps1 -Tag 'v171.1.0' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-verify' -EmulatorDirectory '${{ runner.temp }}/pokemonplay-emulators/Emulators'
+        run: |
+          $compiler = ./recovered-source/tools/prepare-installer-tool.ps1
+          ./recovered-source/tools/publish-update.ps1 -Tag 'v171.9.0' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-verify' -EmulatorDirectory '${{ runner.temp }}/pokemonplay-emulators/Emulators' -InstallerCompilerPath $compiler
+          ./recovered-source/tools/verify-release-installer.ps1 -ReleaseDirectory '${{ runner.temp }}/pokemonplay-verify' -CompilerPath $compiler

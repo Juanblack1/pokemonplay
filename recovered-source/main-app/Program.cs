@@ -71,6 +71,7 @@ internal static class Program
 			}
 			return;
 		}
+        BundledEmulatorArchive.EnsureExtracted(AppDomain.CurrentDomain.BaseDirectory);
         GameSessionSettingsService.RecoverAbandonedSessions();
         using var launcher=new LauncherForm(AppPaths.Root);
         if(args.Length==2&&args[0]=="--update-ready")

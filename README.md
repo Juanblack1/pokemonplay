@@ -4,9 +4,13 @@ Um launcher Windows para organizar jogos Pokémon, saves, perfis, controles, ban
 
 ## Baixar e abrir
 
-1. Abra [Releases](https://github.com/Juanblack1/pokemonplay/releases/latest) e baixe `pokemon-play-win-x64-portable.zip`.
-2. Extraia o ZIP completo em uma pasta gravável no computador.
-3. Abra `Pokemons Play.exe` na raiz da pasta extraída.
+1. Abra [Releases](https://github.com/Juanblack1/pokemonplay/releases/latest) e baixe `pokemon-play-win-x64-setup.exe`.
+2. Execute o instalador e siga as instruções. A instalação é para o usuário atual e não exige administrador.
+3. Abra Pokémon Play pelo menu Iniciar ou pelo atalho opcional na área de trabalho.
+
+O instalador coloca o aplicativo em `%LOCALAPPDATA%\Programs\PokemonPlay`. As próximas versões chegam pelo próprio launcher: não é necessário reinstalar. Saves, perfis, Banco Pokémon, configurações e backups são preservados em atualizações e reinstalações. A desinstalação remove o aplicativo e os atalhos, mantendo os dados nessa pasta. Para remover os dados definitivamente, confira e copie seu progresso antes de apagar a pasta manualmente. Feche o aplicativo e seus emuladores antes de instalar ou desinstalar; um instalador antigo não substitui uma versão mais recente.
+
+Prefere usar sem instalar? Baixe `pokemon-play-win-x64-portable.zip`, extraia o ZIP completo em uma pasta gravável e abra `Pokemons Play.exe` na raiz. Instalações portáteis anteriores permanecem na pasta escolhida e continuam atualizando; o instalador não migra os dados de outra pasta automaticamente.
 
 O pacote portátil inclui um iniciador simples e o runtime do aplicativo; não exige instalação separada do .NET. As atualizações disponíveis aparecem no próprio launcher e preservam as pastas de saves. `pokemon-play-win-x64-update.zip` é destinado ao atualizador do aplicativo.
 
