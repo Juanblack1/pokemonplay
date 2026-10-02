@@ -1,11 +1,18 @@
 name: Verificar pull requests
 on:
+  workflow_dispatch:
+    inputs:
+      reuseEmulators:
+        description: 'Smoke test com emuladores já verificados na v171.8.0 (sem publicação)'
+        type: boolean
+        default: false
   pull_request:
     branches: [main]
 permissions:
   contents: read
 jobs:
   firestore-rules:
+    if: ${{ !inputs.reuseEmulators }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -34,21 +41,45 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Preparar emuladores e fontes oficiais
+        if: ${{ !inputs.reuseEmulators }}
         shell: pwsh
         run: ./recovered-source/tools/prepare-emulators.ps1 -Directory '${{ runner.temp }}/pokemonplay-emulators'
       - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+        if: ${{ !inputs.reuseEmulators }}
         with:
           msystem: MINGW64
           update: true
           install: git pkgconf mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
       - name: Compilar os cores incluídos
+        if: ${{ !inputs.reuseEmulators }}
         shell: msys2 {0}
         env:
           POKEMONPLAY_EMULATOR_BUILD: ${{ runner.temp }}/pokemonplay-emulators
         run: bash ./recovered-source/tools/build-emulator-cores.sh
       - name: Verificar binários reais e empacotar fontes correspondentes
+        if: ${{ !inputs.reuseEmulators }}
         shell: pwsh
         run: ./recovered-source/tools/verify-emulator-bundle.ps1 -Directory '${{ runner.temp }}/pokemonplay-emulators' -OutputDirectory '${{ runner.temp }}/pokemonplay-sources'
+      - name: Preparar fixture com emuladores verificados da release anterior
+        if: ${{ inputs.reuseEmulators }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'pokemonplay-emulators'
+          New-Item -ItemType Directory -Path $fixture | Out-Null
+          gh release download v171.8.0 --repo '${{ github.repository }}' --pattern pokemon-play-win-x64-update.zip --dir $fixture
+          if ($LASTEXITCODE -ne 0) { throw 'Download da fixture falhou.' }
+          $digest = gh api 'repos/${{ github.repository }}/releases/tags/v171.8.0' --jq '.assets[] | select(.name == "pokemon-play-win-x64-update.zip") | .digest'
+          if ($LASTEXITCODE -ne 0 -or $digest -notmatch '^sha256:[a-f0-9]{64}$') { throw 'Digest da fixture ausente.' }
+          $zip = Join-Path $fixture 'pokemon-play-win-x64-update.zip'
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $digest.Substring(7)) { throw 'Hash da fixture incorreto.' }
+          [IO.Compression.ZipFile]::ExtractToDirectory($zip, $fixture)
+          $source = [IO.Path]::GetFullPath((Join-Path $fixture 'PokemonPlayRuntime/Emulators'))
+          $target = [IO.Path]::GetFullPath((Join-Path $fixture 'Emulators'))
+          $prefix = [IO.Path]::GetFullPath($fixture) + [IO.Path]::DirectorySeparatorChar
+          if (!$source.StartsWith($prefix) -or !$target.StartsWith($prefix)) { throw 'Pasta de fixture inválida.' }
+          [IO.Directory]::Move($source, $target)
       - name: Executar ProfilesCheck
         shell: pwsh
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
