@@ -63,7 +63,7 @@ internal sealed class LauncherForm : Form
 		};
         Shown+=async(_,_)=>
         {
-            if(UpdateReadyStage!=null)File.WriteAllText(Path.Combine(UpdateReadyStage,"ready"),AppRelease.Tag);
+            if(UpdateReadyStage!=null){File.WriteAllText(Path.Combine(UpdateReadyStage,"ready"),AppRelease.Tag);File.WriteAllText(Path.Combine(UpdateReadyStage,"prepared"),AppRelease.Tag);}
             if(UpdatesEnabled){await CheckForUpdates();updateTimer.Start();await System.Threading.Tasks.Task.Delay(5000);CleanCompletedUpdates();}
         };
         updateTimer.Tick+=async(_,_)=>await CheckForUpdates();
@@ -245,7 +245,7 @@ internal sealed class LauncherForm : Form
     private void CleanCompletedUpdates()
     {
         if(IsDisposed)return;
-        try{foreach(string stage in Directory.GetDirectories(root,".pokemonplay-update-*")){string name=Path.GetFileName(stage);if(Guid.TryParseExact(name.Substring(20),"N",out _)&&(File.GetAttributes(stage)&FileAttributes.ReparsePoint)==0&&(File.Exists(Path.Combine(stage,"success"))||File.Exists(Path.Combine(stage,"failed"))))AppUpdateService.TryClean(stage);}}
+        try{foreach(string stage in Directory.GetDirectories(root,".pokemonplay-update-*")){string name=Path.GetFileName(stage);if(Guid.TryParseExact(name.Substring(20),"N",out _)&&(File.GetAttributes(stage)&FileAttributes.ReparsePoint)==0&&AppUpdateService.CanCleanCompletedStage(stage))AppUpdateService.TryClean(stage);}}
         catch(IOException){}catch(UnauthorizedAccessException){}
     }
 

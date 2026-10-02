@@ -38,6 +38,17 @@ internal static class AppUpdatesCheck
             {using var writer=new StreamWriter(archive.CreateEntry("PokemonPlayRuntime/"+entry).Open());writer.Write(entry=="app-release.json"?JsonSerializer.Serialize(new{version=manifestTag,repository="owner/repository"}):"fixture");}
             if(extra!=null){using var writer=new StreamWriter(archive.CreateEntry(extra).Open());writer.Write("unsafe");}return file;
         }
+        string cleanupStage=Path.Combine(fixture,"cleanup-stage");Directory.CreateDirectory(cleanupStage);
+        File.WriteAllText(Path.Combine(cleanupStage,"success"),"ok");
+        Assert(!AppUpdateService.CanCleanCompletedStage(cleanupStage),"early bootstrap success retains the preparation backup");
+        File.WriteAllText(Path.Combine(cleanupStage,"prepared"),"ok");File.WriteAllText(Path.Combine(cleanupStage,"PokemonPlayPreparationUpdater.exe"),"fixture");
+        Assert(!AppUpdateService.CanCleanCompletedStage(cleanupStage),"completed launcher retains backup until supervision completes");
+        File.WriteAllText(Path.Combine(cleanupStage,"preparation-complete"),"ok");
+        Assert(AppUpdateService.CanCleanCompletedStage(cleanupStage),"completed preparation permits stage cleanup");
+        File.WriteAllText(Path.Combine(cleanupStage,"failed"),"failed");Directory.CreateDirectory(Path.Combine(cleanupStage,"previous-runtime"));
+        Assert(!AppUpdateService.CanCleanCompletedStage(cleanupStage),"failed rollback retains the previous runtime backup");
+        Directory.Delete(Path.Combine(cleanupStage,"previous-runtime"));
+        Assert(AppUpdateService.CanCleanCompletedStage(cleanupStage),"completed rollback permits stage cleanup");
         string valid=Zip("valid");string stage=Path.Combine(fixture,"valid-stage");Directory.CreateDirectory(stage);AppUpdateService.ExtractPackage(valid,stage,nextTag,"owner/repository");
         Assert(File.Exists(Path.Combine(stage,"PokemonPlayRuntime","Pokemons Play.exe")),"validated update extracts only a complete application runtime");
         Reject(()=>AppUpdateService.ExtractPackage(Zip("traversal","PokemonPlayRuntime/../Settings/config.json"),Path.Combine(fixture,"traversal"),nextTag,"owner/repository"),"update rejects zip traversal before touching user data");
@@ -66,6 +77,10 @@ internal static class AppUpdatesCheck
         string rollback=Stage();try{Apply(installRoot,rollback,()=>throw new IOException("simulated startup failure"));throw new Exception("rollback did not run");}catch(IOException){}
         Assert(File.ReadAllText(Path.Combine(runtime,"Pokemons Play.exe"))=="old","installer restores the old runtime when the new app cannot start");
         Apply(installRoot,Stage(),()=>{});Assert(File.ReadAllText(Path.Combine(runtime,"Pokemons Play.exe"))=="new"&&File.ReadAllText(Path.Combine(installRoot,"Saves","progress.sav"))=="saved progress","successful installer replaces only runtime and preserves user saves");
+        File.WriteAllText(Path.Combine(runtime,"Pokemons Play.exe"),"stable before preparation");
+        string preparation=Stage();Apply(installRoot,preparation,()=>{});File.WriteAllText(Path.Combine(preparation,"success"),"bootstrap acknowledged");
+        engine.GetMethod("RestorePrepared",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{installRoot,preparation});
+        Assert(File.ReadAllText(Path.Combine(runtime,"Pokemons Play.exe"))=="stable before preparation"&&File.ReadAllText(Path.Combine(installRoot,"Saves","progress.sav"))=="saved progress"&&!File.Exists(Path.Combine(preparation,"success")),"preparation failure restores the previous runtime after bootstrap acknowledgment and preserves saves");
     }
     private static System.Collections.Generic.IEnumerable<Control> Controls(Control parent)=>parent.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(Controls(c)));
     private sealed class FakeHttp(byte[] bytes):HttpMessageHandler

@@ -40,12 +40,20 @@ jobs:
       - name: Verificar a aplicação e o atualizador
         shell: pwsh
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
+      - name: Preparar compilador do instalador
+        shell: pwsh
+        run: |
+          $compiler = ./recovered-source/tools/prepare-installer-tool.ps1
+          "POKEMONPLAY_ISCC=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Compilar pacote do aplicativo (assinatura opcional)
         shell: pwsh
         env:
           POKEMONPLAY_SIGNING_PFX_BASE64: ${{ secrets.POKEMONPLAY_SIGNING_PFX_BASE64 }}
           POKEMONPLAY_SIGNING_PFX_PASSWORD: ${{ secrets.POKEMONPLAY_SIGNING_PFX_PASSWORD }}
-        run: ./recovered-source/tools/publish-update.ps1 -Tag '${{ github.ref_name }}' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-release' -EmulatorDirectory '${{ runner.temp }}/pokemonplay-emulators/Emulators'
+        run: ./recovered-source/tools/publish-update.ps1 -Tag '${{ github.ref_name }}' -Repository '${{ github.repository }}' -OutputDirectory '${{ runner.temp }}/pokemonplay-release' -EmulatorDirectory '${{ runner.temp }}/pokemonplay-emulators/Emulators' -InstallerCompilerPath $env:POKEMONPLAY_ISCC
+      - name: Verificar instalação e preservação dos dados
+        shell: pwsh
+        run: ./recovered-source/tools/verify-release-installer.ps1 -ReleaseDirectory '${{ runner.temp }}/pokemonplay-release' -CompilerPath $env:POKEMONPLAY_ISCC
       - name: Publicar release estável
         shell: pwsh
         env:
@@ -56,8 +64,14 @@ jobs:
         run: |
           gh release view $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY
           if ($LASTEXITCODE -ne 0) {
-            gh release create $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --verify-tag --generate-notes --latest
+            gh release create $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --verify-tag --generate-notes --draft
             if ($LASTEXITCODE -ne 0) { throw 'Não foi possível criar a release.' }
           }
-          gh release upload $env:RELEASE_TAG "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip.sha256" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip.sha256" "${{ runner.temp }}/pokemonplay-sources/pokemon-play-emulator-sources.zip" "${{ runner.temp }}/pokemonplay-sources/pokemon-play-emulator-sources.zip.sha256" --repo $env:RELEASE_REPOSITORY
+          $draft = gh release view $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --json isDraft --jq .isDraft
+          if ($LASTEXITCODE -ne 0 -or $draft -ne 'true') { throw 'A release precisa estar em rascunho antes do upload.' }
+          gh release upload $env:RELEASE_TAG "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-update.zip.sha256" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-portable.zip.sha256" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-setup.exe" "$env:RELEASE_OUTPUT/pokemon-play-win-x64-setup.exe.sha256" "${{ runner.temp }}/pokemonplay-sources/pokemon-play-emulator-sources.zip" "${{ runner.temp }}/pokemonplay-sources/pokemon-play-emulator-sources.zip.sha256" --repo $env:RELEASE_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'Não foi possível publicar o pacote.' }
+          $assets = gh release view $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --json assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $assets.assets.Count -ne 8) { throw 'Release incompleta; mantida em rascunho.' }
+          gh release edit $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Não foi possível liberar a release completa.' }
