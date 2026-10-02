@@ -1,5 +1,9 @@
 # Sistema visual — Pokemons Play v26 · Pixel
 
+## Biblioteca — ROMs locais e hacks Pokémon
+
+**Adicionar jogos** abre opções para selecionar ROMs GBA, Nintendo DS e Nintendo 3DS ou examinar uma pasta, sem copiar os arquivos. Cada arquivo passa por uma etapa curta de classificação. Cabeçalhos GBA/DS com Pokémon ajudam a preencher título e jogo-base; títulos 3DS e arquivos sem identificação exigem confirmação explícita de conteúdo Pokémon. A pessoa pode marcar a opção de hack e escolhe o nome e o jogo-base. Cartões de hack exibem **HACK ROM** e “Hack de [jogo-base] · [sistema]”, com a capa do jogo-base como referência. O catálogo guarda apenas caminho e metadados em `Settings/ImportedPokemonGames.json` e mantém os saves em pasta própria por entrada. Os controles seguem a paleta Pixel, com texto auxiliar e estados de foco acessíveis.
+
 ## Barra superior v161 — nomes longos sem colisão
 
 A ação de retomar mantém largura visual máxima de 180 px e preserva o nome completo do jogo e perfil para leitores de tela. O título da página usa reticências quando necessário e some quando sobra menos de 80 px, deixando o espaço para os controles principais. Durante o jogo, o nome completo do título continua visível quando as ações de sessão estão ocultas.

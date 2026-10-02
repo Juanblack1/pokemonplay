@@ -19,6 +19,7 @@ internal sealed class LibraryView : BufferedPanel
 	private readonly ThemeSelect systemFilter;
 	private readonly ThemeButton favoriteFilter = new("☆ Favoritos", ButtonKind.Secondary);
 	private readonly ThemeButton refreshButton = new("Atualizar", ButtonKind.Secondary);
+	private readonly ThemeButton importButton = new("Adicionar jogos", ButtonKind.Primary);
 
 	private ThemeButton clearRecentButton;
 	private HeroBanner heroBanner;
@@ -68,6 +69,15 @@ internal sealed class LibraryView : BufferedPanel
 		refreshButton.AccessibleDescription = "Redescobre jogos e capas disponíveis nas pastas locais.";
 		refreshButton.Click += (_, _) => RefreshCatalog();
 		chips.Controls.Add(refreshButton);
+		var importMenu = new ContextMenuStrip();
+		importMenu.Items.Add("Selecionar arquivo(s) de ROM…", null, (_, _) => SelectRomFiles());
+		importMenu.Items.Add("Examinar uma pasta…", null, (_, _) => SelectRomFolder());
+		importButton.ContextMenuStrip = importMenu;
+		importButton.Tag = "rom-import";
+		importButton.AccessibleName = "Adicionar jogos Pokémon de arquivos ou de uma pasta";
+		importButton.AccessibleDescription = "Adiciona ROMs GBA, Nintendo DS e Nintendo 3DS. O aplicativo não copia os arquivos.";
+		importButton.Click += (_, _) => importMenu.Show(importButton, new Point(0, importButton.Height));
+		chips.Controls.Add(importButton);
 		Controls.Add(chips);
 		Controls.Add(CreateToolbar(out search, out systemFilter));
 		heroBanner = new HeroBanner(games.Count);
@@ -251,11 +261,17 @@ internal sealed class LibraryView : BufferedPanel
 		}
 		const int spacing = 8;
 		const int refreshWidth = 120;
+		const int importWidth = 150;
 		const int minimumChipWidth = 92;
+		bool showImport = chips.ClientSize.Width >= 762;
 		bool showRefresh = chips.ClientSize.Width >= 762;
+		bool actionsOnOwnRow = chips.ClientSize.Width < 1000 && (showImport || showRefresh);
+		importButton.Visible = showImport;
 		refreshButton.Visible = showRefresh;
 		int left = 24;
-		int rightLimit = Math.Max(left + minimumChipWidth, chips.ClientSize.Width - 24 - (showRefresh ? refreshWidth + 16 : 0));
+		int reservedActions = (showImport ? importWidth + 8 : 0) + (showRefresh ? refreshWidth + 16 : 0);
+		int rightLimit = Math.Max(left + minimumChipWidth, chips.ClientSize.Width - 24 - (actionsOnOwnRow ? 0 : reservedActions));
+		int firstChipTop = actionsOnOwnRow ? 50 : 9;
 		int row = 0;
 		int rows = 1;
 		foreach (ChipButton chip in chipButtons)
@@ -267,14 +283,68 @@ internal sealed class LibraryView : BufferedPanel
 				rows++;
 				left = 24;
 			}
-			chip.SetBounds(left, 9 + row * (36 + spacing), chipWidth, 36);
+			chip.SetBounds(left, firstChipTop + row * (36 + spacing), chipWidth, 36);
 			left += chipWidth + spacing;
 		}
-		int height = rows == 1 ? 48 : 9 + rows * 36 + (rows - 1) * spacing + 3;
+		int height = firstChipTop + rows * 36 + (rows - 1) * spacing + 3;
 		if (chips.Height != height)
 			chips.Height = height;
 		if (showRefresh)
 			refreshButton.SetBounds(chips.ClientSize.Width - refreshWidth - 24, 6, refreshWidth, 36);
+		if (showImport)
+			importButton.SetBounds(chips.ClientSize.Width - 24 - (showRefresh ? refreshWidth + 8 : 0) - importWidth, 6, importWidth, 36);
+	}
+
+	private void SelectRomFiles()
+	{
+		using var dialog = new OpenFileDialog
+		{
+			Title = "Adicionar ROMs de Pokémon",
+			Filter = "ROMs Pokémon compatíveis|*.gba;*.nds;*.3ds;*.cci;*.cxi;*.3dsx;*.zcci|Game Boy Advance|*.gba|Nintendo DS|*.nds|Nintendo 3DS|*.3ds;*.cci;*.cxi;*.3dsx;*.zcci",
+			Multiselect = true,
+			CheckFileExists = true
+		};
+		if (dialog.ShowDialog(this) == DialogResult.OK) ImportSelectedRoms(dialog.FileNames);
+	}
+
+	private void SelectRomFolder()
+	{
+		using var dialog = new FolderBrowserDialog { Description = "Escolha uma pasta para examinar ROMs GBA, Nintendo DS e Nintendo 3DS. Nenhum arquivo será copiado." };
+		if (dialog.ShowDialog(this) != DialogResult.OK) return;
+		try
+		{
+			string[] files = Directory.EnumerateFiles(dialog.SelectedPath, "*.*", SearchOption.AllDirectories)
+				.Where(ImportedGameCatalog.IsSupportedRom).Take(501).ToArray();
+			if (files.Length == 0)
+			{
+				MessageBox.Show(this, "Não encontrei arquivos GBA, Nintendo DS ou Nintendo 3DS compatíveis nesta pasta.", "Examinar pasta", MessageBoxButtons.OK, MessageBoxIcon.Information);
+				return;
+			}
+			if (files.Length > 500)
+			{
+				MessageBox.Show(this, "A pasta contém mais de 500 ROMs compatíveis. Escolha uma pasta menor para revisar os arquivos com segurança.", "Limite de arquivos", MessageBoxButtons.OK, MessageBoxIcon.Information);
+				return;
+			}
+			ImportSelectedRoms(files);
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)
+		{
+			MessageBox.Show(this, "Não foi possível examinar esta pasta. Confira as permissões e tente novamente.\n\n" + ex.Message, "Examinar pasta", MessageBoxButtons.OK, MessageBoxIcon.Error);
+		}
+	}
+
+	private void ImportSelectedRoms(IEnumerable<string> files)
+	{
+		try
+		{
+			int imported = ImportedGameCatalog.ImportFiles(this, root, files);
+			if (imported > 0) RefreshCatalog();
+			else MessageBox.Show(this, "Nenhum jogo foi adicionado. ROMs sem identificação Pokémon só entram após a confirmação de que são hacks Pokémon.", "Adicionar jogos", MessageBoxButtons.OK, MessageBoxIcon.Information);
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+		{
+			MessageBox.Show(this, "Não foi possível salvar o catálogo local de jogos. Os arquivos de ROM não foram alterados.\n\n" + ex.Message, "Adicionar jogos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+		}
 	}
 
 	private void UpdateContentWidth()

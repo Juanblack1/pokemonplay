@@ -10,7 +10,7 @@ Um launcher Windows para organizar jogos Pokémon, saves, perfis, controles, ban
 
 O pacote portátil inclui um iniciador simples e o runtime do aplicativo; não exige instalação separada do .NET. As atualizações disponíveis aparecem no próprio launcher e preservam as pastas de saves. `pokemon-play-win-x64-update.zip` é destinado ao atualizador do aplicativo.
 
-O launcher não inclui jogos, ROMs, BIOS ou emuladores de terceiros. Para jogar, configure arquivos de jogos que você tenha direito de usar e os emuladores compatíveis na pasta da biblioteca. O login Google é opcional e só é necessário para usar os recursos de cópia na nuvem.
+O launcher não inclui jogos, ROMs, BIOS ou emuladores de terceiros. Para jogar títulos GBA, Nintendo DS e Nintendo 3DS, abra **Biblioteca → Adicionar jogos** e selecione ROMs ou uma pasta. O Pokemon Play guarda o caminho e os metadados no perfil local; não copia nem envia os arquivos. Cabeçalhos GBA/DS com Pokémon ajudam a preencher título e jogo-base; arquivos 3DS e títulos sem identificação pedem confirmação de que são Pokémon. Para uma hack ROM, marque **Esta é uma hack ROM de Pokémon**: o cartão mostra o nome escolhido, o selo **HACK ROM** e “Hack de [jogo-base]”, usando a capa do jogo-base como referência. A execução depende de um emulador compatível configurado na pasta da biblioteca. O login Google é opcional e só é necessário para usar os recursos de cópia na nuvem.
 
 ## Requisitos
 
