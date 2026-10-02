@@ -10,7 +10,7 @@ Referência estudada: [configuração de emuladores do Playnite](https://api.pla
 
 - Biblioteca sem ROM importada disponível e sem executável de jogo local: mostrar uma orientação com acesso ao menu de arquivos/pasta; explicar emulador e login opcional. A ação funciona por mouse e teclado.
 - Não mostrar essa orientação sobre resultados filtrados, favoritos ou histórico, nem para instalações com jogos locais disponíveis. Preservar os cartões e fluxos legados.
-- Importador GBA: três bases GBA. DS: sete bases DS. 3DS: oito bases 3DS. Manter a base reconhecida quando compatível e a validação antes de salvar.
+- Importador com bases limitadas ao sistema da ROM. O ciclo v171.3.0 tinha três bases GBA, sete DS e oito 3DS; a ampliação posterior está em `POKEMON_BASES_SPEC.md`. Manter a base reconhecida quando compatível e a validação antes de salvar.
 - Nome sugerido vem do arquivo, preservando nomes de hacks e hífens. Edição mantém o nome salvo; campo limita a 80 caracteres. A ação de edição deve dizer Salvar.
 - Confirmação de conteúdo Pokémon continua obrigatória para 3DS e arquivos não reconhecidos.
 - ROMs e saves não são copiados nem alterados por essa orientação.
