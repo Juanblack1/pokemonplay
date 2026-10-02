@@ -2,6 +2,10 @@
 
 <!-- public-release-status: ready -->
 
+## Distribuição com emuladores — v171.8.0
+
+A partir deste ciclo, a distribuição inclui RetroArch 1.22.2, mGBA 0.10.5, melonDS DS 1.4.0 e Azahar 2126.1.2 em `PokemonPlayRuntime/Emulators`, além das licenças e de um asset separado com os fontes correspondentes. Binários upstream possuem hashes fixos; os dois cores são compilados dos fontes/dependências arquivados no mesmo CI. PR #17 (`c15efd6524ee25b35b9675f13258eec4608e300d`), run `37051941873`: cores nativos carregados, inicialização dos emuladores sem ROM verificada, ProfilesCheck completo e empacotamento Windows aprovados; 79 checks Firestore aprovados. Este escopo substitui a exclusão de emuladores das distribuições anteriores descritas abaixo. Continuam excluídos ROMs, BIOS, firmware, chaves e dados/credenciais de usuário. Não houve teste de jogabilidade com ROM real. Assinatura Authenticode permanece para o futuro conforme decisão existente.
+
 **Estado da auditoria (2026-10-02): v171.2.0 publicada; repositório público e downloads anônimos verificados.** O PR #11 foi integrado como `fb273f84efcc426cf3d51d286823f7880e29d2df`; seus checks Windows e Firestore passaram (run `37039766672`). A tag v171.2.0 aponta para esse commit e seu build/publicação passou (run `37040187376`). Os dois ZIPs foram baixados sem autenticação em 2026-10-02 às 14:25 no horário de São Paulo; hashes, estrutura, runtime autocontido, versão e presença do importador foram confirmados.
 
 ## Pronto para distribuição
