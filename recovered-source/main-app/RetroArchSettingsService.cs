@@ -57,7 +57,7 @@ internal static class RetroArchSettingsService
     private static RetroArchSettings Recover(string root)
     {
         var settings = BundledEmulators.Defaults(root);
-        settings.LoadWarning = "Não foi possível ler as preferências do emulador. Usando as opções disponíveis nesta instalação. O arquivo original foi preservado; confira antes de salvar.";
+        settings.LoadWarning = "Preferências ilegíveis. Opções da instalação em uso; arquivo original preservado. Confira antes de salvar.";
         return settings;
     }
 

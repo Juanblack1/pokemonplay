@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
+using System.Drawing;
 
 internal static class EmulatorSettingsRecoveryCheck
 {
@@ -62,6 +63,14 @@ internal static class EmulatorSettingsRecoveryCheck
             var status = (Label)view.GetType().GetField("status", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
             Assert(status.Text.Contains("arquivo original", StringComparison.OrdinalIgnoreCase) && status.AccessibleDescription == status.Text, "settings view displays accessible recovery warning without rewriting original");
             Assert(File.ReadAllText(path) == "{locked original", "opening settings preserves damaged emulator preferences");
+            foreach(int width in new[]{760,1100})
+            {
+                host.Width=width; Application.DoEvents();
+                Size measured=TextRenderer.MeasureText(status.Text,status.Font,new Size(status.ClientSize.Width,int.MaxValue),TextFormatFlags.WordBreak);
+                Assert(status.Visible && measured.Height<=status.ClientSize.Height, "recovery warning remains readable at settings width " + width);
+                string preview=Environment.GetEnvironmentVariable("POKEMONPLAY_LIBRARY_PREVIEW");
+                if(!string.IsNullOrEmpty(preview)) {Directory.CreateDirectory(preview);using var image=new Bitmap(host.Width,host.Height);host.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));image.Save(Path.Combine(preview,"emulator-settings-recovery-"+width+".png"));}
+            }
             var settings = Call(app.GetType("BundledEmulators"), "Defaults", install);
             settings.GetType().GetProperty("UseForDs").SetValue(settings, false);
             Call(service, "Save", install, settings);
