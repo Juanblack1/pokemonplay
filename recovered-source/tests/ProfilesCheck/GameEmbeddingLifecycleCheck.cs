@@ -237,7 +237,7 @@ internal static class GameEmbeddingLifecycleCheck
     }
     [DllImport("user32.dll",SetLastError=true)] static extern bool GetClientRect(IntPtr window,out NativeRect rectangle);
     [DllImport("user32.dll",EntryPoint="GetWindowLongW",SetLastError=true)] static extern int LayoutWindowStyle(IntPtr window,int index);
-    [DllImport("user32.dll")] static extern IntPtr LayoutAncestor(IntPtr window,uint flags);
+    [DllImport("user32.dll",EntryPoint="GetAncestor",ExactSpelling=true)] static extern IntPtr LayoutAncestor(IntPtr window,uint flags);
     internal static void LayoutChild(string directory)
     {
         directory=Path.GetFullPath(directory);
