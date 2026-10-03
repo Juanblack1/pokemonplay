@@ -214,7 +214,7 @@ internal sealed class FrontendRun:IDisposable
                 events.Add(new{kind="actual-input-delivery",phase=current,timeMs=wall.ElapsedMilliseconds,poll=bridge.LastInputTrace,injections=bridge.RecentInjectionAttempts});
             }
             bool topLevelProbe=TopLevelProbePhaseContract.IsActive(current);
-            if(topLevelProbe){Native.GetWindowThreadProcessId(hwnd,out uint topLevelPid);if(topLevelPid!=child.Id||Native.GetParent(hwnd)!=IntPtr.Zero||(unchecked((uint)Native.GetWindowLong(hwnd,-16))&0x40000000)!=0)throw new InvalidDataException("top_level_control: sampler lost owned top-level HWND");}
+            if(topLevelProbe){Native.GetWindowThreadProcessId(hwnd,out uint topLevelPid);int style=Native.GetWindowLong(hwnd,-16);if(topLevelPid!=child.Id||Native.GetAncestor(hwnd,2)!=hwnd||(unchecked((uint)style)&0x40000000)!=0||(unchecked((uint)style)&0x80000000)==0)throw new InvalidDataException("top_level_control: sampler lost owned top-level HWND");}
             else ValidateEmbedding();
             var focus=Focus();events.Add(new{kind="focus-sample",timeMs=wall.ElapsedMilliseconds,phase=current,focus,held,raw=held>=0?pad.Actions[held]:false,supplied=held>=0?pad.VirtualActions[held]:false,capture=pad.Capture,mouseAction=Field<int>(pad,"mouseAction"),childHwnd=hwnd.ToInt64(),panelHwnd=Field<Panel>(host,"gamePanel").Handle.ToInt64(),hostHwnd=host.Handle.ToInt64(),launcherHwnd=Launcher.Handle.ToInt64(),style=Native.GetWindowLong(hwnd,-16)});
             if(held>=0){
@@ -285,7 +285,9 @@ internal sealed class FrontendRun:IDisposable
             embedTimer.Stop();Native.MouseAt(mousePoint,false);held=-1;acquisition.Release();pad.ReleaseVirtual();await Task.Delay(180);CheckFailures();
             if(pad.Actions.Any(value=>value)||pad.VirtualActions.Any(value=>value))throw new InvalidDataException("top_level_control: embedded key did not release before control");
             IntPtr oldParentResult=Native.SetParent(hwnd,IntPtr.Zero);int parentError=Marshal.GetLastPInvokeError();
-            detached=Native.GetParent(hwnd)==IntPtr.Zero;
+            int topLevelStyle=Native.GetWindowLong(hwnd,-16);
+            detached=Native.GetAncestor(hwnd,2)==hwnd&&(unchecked((uint)topLevelStyle)&0x40000000)==0&&(unchecked((uint)topLevelStyle)&0x80000000)!=0;
+            events.Add(new{kind="top-level-detach-attempt",returnedParent=oldParentResult.ToInt64(),parentError,parent=Native.GetParent(hwnd).ToInt64(),root=Native.GetAncestor(hwnd,2).ToInt64(),style=unchecked((uint)topLevelStyle),detached});
             if(parentError!=0||oldParentResult!=panel.Handle||!detached)throw new InvalidDataException("top_level_control: could not detach the verified owned HWND");
             int styleResult=Native.SetWindowLong(hwnd,-16,unchecked((int)originalStyle));int styleError=Marshal.GetLastPInvokeError();
             if(styleResult==0&&styleError!=0||unchecked((uint)Native.GetWindowLong(hwnd,-16))!=originalStyle)throw new InvalidDataException("top_level_control: original top-level style did not restore");
