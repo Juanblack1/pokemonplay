@@ -152,6 +152,8 @@ Acceptance remains pending native CI: actual owned embedded UI positive with two
 
 ## S7 vanilla source-build prerequisite
 
+Native prerequisite run37149815879 accepted the workflow and verified the upstream archive hash, but Windows tar failed on Apple MoltenVK framework symlinks before configure. The Windows build working copy now excludes only exact archive prefix RetroArch-69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576/pkg/apple/Frameworks/MoltenVK.xcframework/. This Apple-only binary framework is unused by the MINGW64 D3D11/dinput build with Vulkan disabled. Preserve full unchanged hash-verified upstream.tar.gz and COPYING; record exact exclusion/reason/hash in extraction-provenance.txt. The configured working-source archive must be identified as containing this exclusion. All other tar errors remain fatal; no symlink privilege or policy change is permitted.
+
 S6 activation candidate was rejected by native run37148319253: SetForegroundWindow returned false, foreground remained Launcher, capture remained true, and A-held counter159 froze with mask0. Its behavior/record was reverted in d0900a9. This is not successful guest delivery or an identified Windows refusal cause.
 
 Before any owned RetroArch integration patch, build unchanged source69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576 in isolated MSYS2 MINGW64 CI. Verified codeload archive SHA256 is b4bfa46ea5ce09008494099b967816de8da7a146ede2f7d1a52d5842a6aae215. The diagnostic build must reject mismatched source and missing D3D11/DINPUT/NETWORKING/NETWORK_CMD/COMMAND/DYNAMIC/SCREENSHOTS features. Configure option names are validated against pinned qb/config.params.sh; NETWORK_CMD is derived by qb/config.libs.sh, not invented as a configure switch.

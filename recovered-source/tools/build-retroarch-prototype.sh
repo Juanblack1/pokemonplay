@@ -7,7 +7,14 @@ out="$(cygpath -u "$RETROARCH_PROTOTYPE_OUTPUT")"
 mkdir -p "$out/source" "$out/runtime" "$out/evidence"
 curl --fail --location --retry 3 "https://codeload.github.com/libretro/RetroArch/tar.gz/$pin" -o "$out/upstream.tar.gz"
 printf '%s  %s\n' "$sha" "$out/upstream.tar.gz" | sha256sum -c -
-tar -xzf "$out/upstream.tar.gz" -C "$out/source" --strip-components=1
+# Windows cannot materialize the Apple framework's ordered symlink graph.
+# Exclude only this unused Apple binary framework from the build working copy;
+# the complete, hash-verified upstream archive remains an unchanged artifact.
+excluded="RetroArch-$pin/pkg/apple/Frameworks/MoltenVK.xcframework"
+printf 'upstream_sha256=%s\nexcluded_archive_prefix=%s/\nreason=Windows MINGW64 D3D11/dinput build; Vulkan disabled; Apple framework unused\n' "$sha" "$excluded" > "$out/evidence/extraction-provenance.txt"
+tar -xzf "$out/upstream.tar.gz" --exclude="$excluded" -C "$out/source" --strip-components=1
+test -f "$out/source/COPYING"
+test ! -e "$out/source/pkg/apple/Frameworks/MoltenVK.xcframework"
 cp "$0" "$out/evidence/build-retroarch-prototype.sh"
 cd "$out/source"
 # NETWORK_CMD is derived from networking in qb/config.libs.sh, not a user option.
