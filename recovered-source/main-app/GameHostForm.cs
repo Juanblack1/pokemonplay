@@ -531,8 +531,10 @@ internal sealed class GameHostForm : Form
         int outerWidth=outer.Right-outer.Left,outerHeight=outer.Bottom-outer.Top;
         int insetLeft=clientOrigin.X-outer.Left,insetTop=clientOrigin.Y-outer.Top;
         int nonClientWidth=outerWidth-clientWidth,nonClientHeight=outerHeight-clientHeight;
-        return clientWidth>0&&clientHeight>0&&nonClientWidth>=0&&nonClientHeight>=0&&
-            MoveWindow(window,bounds.Left-insetLeft,bounds.Top-insetTop,bounds.Width+nonClientWidth,bounds.Height+nonClientHeight,repaint:true);
+        if(clientWidth<=0||clientHeight<=0||nonClientWidth<0||nonClientHeight<0)return false;
+        int targetLeft=bounds.Left-insetLeft,targetTop=bounds.Top-insetTop,targetWidth=bounds.Width+nonClientWidth,targetHeight=bounds.Height+nonClientHeight;
+        if(outer.Left==targetLeft&&outer.Top==targetTop&&outerWidth==targetWidth&&outerHeight==targetHeight)return true;
+        return MoveWindow(window,targetLeft,targetTop,targetWidth,targetHeight,repaint:true);
     }
 
 	private async void CloseWithConfirmation()
