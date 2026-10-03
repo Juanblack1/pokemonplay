@@ -45,6 +45,15 @@ internal static class FirstUseCheck
             Assert(hero.AccessibleDescription == "Exibindo 1 de 10 jogos encontrados", "library banner announces the count for one matching game");
             ((Control)Field(library, "search")).Text = "";
             Assert(hero.AccessibleDescription == "10 jogos prontos para jogar · selecione uma aventura", "clearing search restores the unfiltered library summary");
+            Field(library, "generationFilter").SetValue(library, 3);
+            libraryType.GetMethod("Rebuild", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(library, null);
+            Assert(hero.AccessibleDescription == "Exibindo 3 de 10 jogos encontrados", "library banner counts a generation filter across its cards");
+            Field(library, "generationFilter").SetValue(library, 0);
+            libraryType.GetMethod("Rebuild", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(library, null);
+            ((Button)Field(library, "favoriteFilter")).PerformClick();
+            Assert(hero.AccessibleDescription == "Exibindo 0 de 10 jogos encontrados", "library banner counts an empty favorites filter");
+            ((Button)Field(library, "favoriteFilter")).PerformClick();
+            Assert(hero.AccessibleDescription == "10 jogos prontos para jogar · selecione uma aventura", "removing filters restores the unfiltered library summary");
             Assert(Descendants(library).Any(control => Equals(control.Tag, "library-getting-started")), "clearing search restores first-use guidance");
             using var host = new Form { Width = 1000, Height = 840 };
             library.Dock = DockStyle.Fill;

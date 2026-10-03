@@ -10,7 +10,7 @@ O banner da Biblioteca informa a quantidade total de jogos prontos para jogar. Q
 - P2: uma busca sem resultados informa zero; o empty state existente e as ações de limpar continuam intactos.
 - P3: sem consulta ou filtro, preservar o texto atual do banner; depois de atualizar o catálogo, preservar também o horário de atualização.
 - P4: contar jogos correspondentes, sem incluir avisos, títulos de seção ou painéis de empty state.
-- P5: cobrir estado inicial, resultado único, resultado zero, limpeza e atualização; executar ProfilesCheck em Windows CI.
+- P5: cobrir estado inicial, resultado único, resultado zero, busca, geração, favoritos e remoção de filtros; executar ProfilesCheck em Windows CI.
 
 ## Limites
 
@@ -18,7 +18,7 @@ Não alterar pesquisa, ordenação, catálogo, ROMs, saves, histórico, dados pe
 
 ## Verificação
 
-`FirstUseCheck` instancia a LibraryView em pasta temporária, lê o `AccessibleDescription` do banner, consulta “Emerald”, consulta termo inexistente, limpa a busca e valida os textos correspondentes. O check existente compila e executa no Windows CI.
+`FirstUseCheck` instancia a LibraryView em pasta temporária, lê o `AccessibleDescription` do banner, consulta “Emerald”, consulta termo inexistente, limpa a busca, filtra Geração 3, ativa Favoritos sem itens salvos e remove os filtros. O check existente compila e executa no Windows CI.
 
 ## Evidência TDD
 
