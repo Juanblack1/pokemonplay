@@ -260,12 +260,6 @@ internal static class GameEmbeddingLifecycleCheck
                 host.TopLevel=false;host.FormBorderStyle=FormBorderStyle.None;host.Dock=DockStyle.Fill;
                 var originalMinimum=host.MinimumSize;
                 var defaultMaxTrack=SystemInformation.MaxWindowTrackSize;
-                bool simulatedLargeTracking=size.Width>defaultMaxTrack.Width||size.Height>defaultMaxTrack.Height;
-                // Fixture-only simulation of a larger allowed tracking surface, not a real display.
-                // WinForms v10.0.0 Form.WmGetMinMaxInfo has no TopLevel gate: with empty
-                // MaximumSize it preserves Windows' desktop max tracking for this child Form.
-                // https://github.com/dotnet/winforms/blob/v10.0.0/src/System.Windows.Forms/System/Windows/Forms/Form.cs#L6331-L6396
-                if(simulatedLargeTracking) host.MaximumSize=size;
                 container.Controls.Add(host);
                 // Hidden native containers can own child regions larger than the physical desktop.
                 // Never Show: geometry checks must not trigger StartGame/guest/input.
@@ -296,7 +290,7 @@ internal static class GameEmbeddingLifecycleCheck
                 var client=host.RectangleToScreen(host.ClientRectangle);
                 var gameNative=NativeBounds(game);var toolbarNative=NativeBounds(toolbar);
                 System.Drawing.Rectangle? padNative=pad==null?null:NativeBounds(pad);
-                File.WriteAllText(Path.Combine(directory,name+".json"),JsonSerializer.Serialize(new {mode,requestedWidth=size.Width,requestedHeight=size.Height,actualWidth=host.ClientSize.Width,actualHeight=host.ClientSize.Height,simulatedLargeTracking,trackingOverrideScope=simulatedLargeTracking?"fixture-only larger allowed tracking surface; no physical display proof":"default Windows tracking",defaultMaxTrack,virtualScreen=SystemInformation.VirtualScreen,originalMinimum,currentMinimum=host.MinimumSize,currentMaximum=host.MaximumSize,hostTopLevel=host.TopLevel,hostBorder=host.FormBorderStyle.ToString(),hostDock=host.Dock.ToString(),hostHwnd=host.Handle.ToInt64(),containerHwnd=container.Handle.ToInt64(),containerWidth=container.ClientSize.Width,containerHeight=container.ClientSize.Height,hostNative=NativeBounds(host),containerNative=NativeBounds(container),client,gameManaged=game.Bounds,toolbarManaged=toolbar.Bounds,padManaged=pad?.Bounds,gameNative,toolbarNative,padNative},new JsonSerializerOptions{WriteIndented=true}));
+                File.WriteAllText(Path.Combine(directory,name+".json"),JsonSerializer.Serialize(new {mode,requestedWidth=size.Width,requestedHeight=size.Height,actualWidth=host.ClientSize.Width,actualHeight=host.ClientSize.Height,trackingScope="real supported CI display; no MaximumSize override",defaultMaxTrack,virtualScreen=SystemInformation.VirtualScreen,originalMinimum,currentMinimum=host.MinimumSize,currentMaximum=host.MaximumSize,hostTopLevel=host.TopLevel,hostBorder=host.FormBorderStyle.ToString(),hostDock=host.Dock.ToString(),hostHwnd=host.Handle.ToInt64(),containerHwnd=container.Handle.ToInt64(),containerWidth=container.ClientSize.Width,containerHeight=container.ClientSize.Height,hostNative=NativeBounds(host),containerNative=NativeBounds(container),client,gameManaged=game.Bounds,toolbarManaged=toolbar.Bounds,padManaged=pad?.Bounds,gameNative,toolbarNative,padNative},new JsonSerializerOptions{WriteIndented=true}));
                 Require(!host.TopLevel&&host.FormBorderStyle==FormBorderStyle.None&&host.Dock==DockStyle.Fill&&ReferenceEquals(host.Parent,container),"Layout host lost actual embedded role");
                 Require(host.MinimumSize==originalMinimum,"Layout fixture changed production minimum dimensions");
                 Require(container.ClientSize==size&&host.ClientSize==size,"Requested embedded client dimensions changed");
@@ -314,12 +308,12 @@ internal static class GameEmbeddingLifecycleCheck
                 }
                 Require(game.Height==size.Height-toolbar.Height-(pad?.Height??0),"Game panel does not reserve toolbar/pad height");
                 Require(Field(host,"emulator")==null&&Field(host,"inputBridge")==null,"NoShow layout case unexpectedly launched process or bridge");
-                Console.WriteLine("PASS synthetic managed/native dock regions "+name+(simulatedLargeTracking?" [fixture-only larger tracking surface]":" [default Windows tracking]"));
+                Console.WriteLine("PASS synthetic managed/native dock regions "+name+" [default Windows tracking]");
             } catch(Exception error) { failures.Add(name+": "+error.Message);Console.WriteLine("FAIL synthetic managed/native dock regions "+name+": "+error.Message); }
         }
-        File.WriteAllText(Path.Combine(directory,"layout-result.json"),JsonSerializer.Serialize(new {cases=8,failures,scope="synthetic noShow TopLevel=false host at exact requested client sizes; cases beyond desktop max tracking use declared fixture-only MaximumSize surface simulation; no physical display/ROM/render/input proof"}));
+        File.WriteAllText(Path.Combine(directory,"layout-result.json"),JsonSerializer.Serialize(new {cases=8,failures,scope="synthetic noShow TopLevel=false host at exact requested client sizes; real supported CI display without tracking override; no physical display/ROM/render/input proof"}));
         if(failures.Count>0) throw new Exception(string.Join("; ",failures));
-        File.WriteAllText(Path.Combine(directory,"layout-passed"),"8 exact requested mode/size cases; noShow embedded geometry; declared MaximumSize simulation beyond desktop tracking; no physical display proof");
+        File.WriteAllText(Path.Combine(directory,"layout-passed"),"8 exact requested mode/size cases; noShow embedded geometry; default Windows tracking on prepared CI display; no physical display proof");
     }
     internal static void RunLayout(string directory)
     {
