@@ -16,6 +16,7 @@ internal sealed class GameCard : BufferedPanel
 	private readonly DateTimeOffset? lastPlayedAt;
     private readonly long totalPlayTimeSeconds;
     private string playLabel;
+    private string profileProblem;
 	private readonly ThemeButton favoriteButton;
 	private readonly ThemeButton openCoverFolderButton;
 	private bool isFavorite;
@@ -41,9 +42,8 @@ internal sealed class GameCard : BufferedPanel
 		this.root = root;
 		this.lastPlayedAt = lastPlayedAt;
         this.totalPlayTimeSeconds = Math.Clamp(totalPlayTimeSeconds, 0, TimeSpan.MaxValue.Ticks / TimeSpan.TicksPerSecond);
-        var profiles = SaveProfileService.Load(root, game.SaveFolderName);
-        var active = profiles.Profiles.Find(p => p.Id == profiles.ActiveId);
-		playLabel = game.IsImported ? "Jogar · Padrão" : game.Generation <= 5 ? "Jogar · " + active.Name : "Jogar";
+        var presentation=GameProfilePresentation.Read(root,game);
+        playLabel=presentation.Label;profileProblem=presentation.Problem;
 		isFavorite = GameFavoriteService.Load(root).Contains(game.Title);
 		Width = 228;
 		Height = game.IsHackRom ? (lastPlayedAt.HasValue ? 398 : 366) : lastPlayedAt.HasValue ? 376 : 344;
@@ -54,6 +54,7 @@ internal sealed class GameCard : BufferedPanel
 		AccessibleName = game.Title + ", " + (game.IsHackRom ? "HACK ROM, " : string.Empty) + game.Subtitle + ", " + playLabel;
 		if (lastPlayedAt.HasValue)
 			AccessibleDescription = "Jogado em " + lastPlayedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") + ". Tempo total: " + FormatPlayTime(this.totalPlayTimeSeconds);
+        if(profileProblem!=null)AccessibleDescription=(AccessibleDescription+" "+profileProblem).Trim();
 		favoriteButton = new ThemeButton(isFavorite ? "★" : "☆", ButtonKind.Ghost) { Size = new Size(32, 32), Location = new Point(Width - 43, 12), Margin = Padding.Empty, TabStop = true, AccessibleName = isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos", AccessibleDescription = game.Title };
 		favoriteButton.Click += (_, _) => ToggleFavorite();
 		Controls.Add(favoriteButton);
@@ -290,16 +291,25 @@ internal sealed class GameCard : BufferedPanel
 		{
 			e.Graphics.FillRectangle(brush3, new Rectangle(14, actionTop - 11, 28, 2));
 		}
-		using (SolidBrush brush4 = new SolidBrush(hover ? Color.FromArgb(59,122,232) : AppTheme.Blue))
+		using (SolidBrush brush4 = new SolidBrush(profileProblem!=null?(hover?AppTheme.SurfaceRaised:AppTheme.Surface):hover ? Color.FromArgb(59,122,232) : AppTheme.Blue))
 		{
 			PaintTools.FillRounded(e.Graphics, brush4, new Rectangle(14, actionTop, Width - 28, 40), 8);
 		}
-		using (Pen pen2 = new Pen(hover ? AppTheme.BlueSoft : AppTheme.Border, 1f))
+		using (Pen pen2 = new Pen(profileProblem!=null?AppTheme.Red:hover ? AppTheme.BlueSoft : AppTheme.Border, 1f))
 		{
 			PaintTools.DrawRounded(e.Graphics, pen2, new Rectangle(14, actionTop, Width - 28, 40), 8);
 		}
-		TextRenderer.DrawText(e.Graphics, playLabel, AppTheme.BodyBold, new Rectangle(14, actionTop, Width - 28, 40), AppTheme.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+		TextRenderer.DrawText(e.Graphics, playLabel, AppTheme.BodyBold, new Rectangle(14, actionTop, Width - 28, 40), profileProblem==null?AppTheme.Text:AppTheme.Red, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
 	}
+    internal bool RefreshProfileStatus()
+    {
+        var presentation=GameProfilePresentation.Read(root,game);
+        if(profileProblem!=null)AccessibleDescription=(AccessibleDescription??string.Empty).Replace(profileProblem,string.Empty,StringComparison.Ordinal).Trim();
+        playLabel=presentation.Label;profileProblem=presentation.Problem;
+        AccessibleName=game.Title+", "+(game.IsHackRom?"HACK ROM, ":string.Empty)+game.Subtitle+", "+playLabel;
+        if(profileProblem!=null)AccessibleDescription=(AccessibleDescription+" "+profileProblem).Trim();
+        Invalidate();return profileProblem==null;
+    }
 
 	private void Launch()
 	{
@@ -312,6 +322,10 @@ internal sealed class GameCard : BufferedPanel
 		try
 		{
             SaveProfileService.EnsureEmulatorsClosed();
+            if(!RefreshProfileStatus()) {
+                MessageBox.Show(form,profileProblem+"\n\nO jogo não foi iniciado. Após corrigir a configuração, tente novamente.","Verificar perfis",MessageBoxButtons.OK,MessageBoxIcon.Information);
+                return;
+            }
             if (!ChooseSaveProfileDialog.ChooseForLaunch(form, root, game)) return;
 			string launchProfileName = game.IsImported ? "Padrão" : "Principal";
 			if (game.Generation <= 5 && !game.IsImported)
