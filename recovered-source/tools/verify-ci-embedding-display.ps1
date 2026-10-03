@@ -44,13 +44,20 @@ public static class CiOwnedDisplay {
   public uint dmICMMethod,dmICMIntent,dmMediaType,dmDitherType,dmReserved1,dmReserved2,dmPanningWidth,dmPanningHeight;
  }
  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left,Top,Right,Bottom; }
- [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern bool EnumDisplayDevices(string name,uint index,ref Device device,uint flags);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern bool EnumDisplayDevices(string name,uint index,ref Device device,uint flags);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern bool EnumDisplaySettings(string device,uint index,ref Mode mode);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int ChangeDisplaySettingsEx(string device,ref Mode mode,IntPtr window,uint flags,IntPtr parameter);
  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window,out Rect rectangle);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window,out Rect rectangle);
  public static Device NewDevice() => new Device {cb=(uint)Marshal.SizeOf<Device>()};
  public static Mode NewMode() => new Mode {dmSize=(ushort)Marshal.SizeOf<Mode>(),dmDriverExtra=0};
+ public static bool EnumPrimary(uint index,ref Device device,out int immediateError) {
+  // PowerShell converts $null to an empty string for .NET string arguments.
+  // Keep the Win32 NULL device name inside C#, where it remains a true NULL.
+  Marshal.SetLastPInvokeError(0);
+  bool result=EnumDisplayDevices(null,index,ref device,0);
+  immediateError=Marshal.GetLastPInvokeError();return result;
+ }
  public static Mode Candidate(Mode original,Mode available) {
   original.dmBitsPerPel=available.dmBitsPerPel;original.dmPelsWidth=available.dmPelsWidth;original.dmPelsHeight=available.dmPelsHeight;
   original.dmDisplayFrequency=available.dmDisplayFrequency;original.dmDisplayFlags=available.dmDisplayFlags;
@@ -77,12 +84,17 @@ function Same-Mode($left,$right) {
     return $true
 }
 $primary = $null
+$deviceResults = @()
 for ($index=0; $index -lt 64; $index++) {
     $device = [CiOwnedDisplay]::NewDevice()
-    if (-not [CiOwnedDisplay]::EnumDisplayDevices($null,$index,[ref]$device,0)) { break }
+    $immediateError = 0
+    $enumerated = [CiOwnedDisplay]::EnumPrimary($index,[ref]$device,[ref]$immediateError)
+    $deviceResults += @{index=$index;result=$enumerated;immediateError=$immediateError;device=$device}
+    Write-Evidence 'display-devices.json' $deviceResults
+    if (-not $enumerated) { break }
     if (($device.StateFlags -band 5) -eq 5) { $primary=$device;break }
 }
-if (-not $primary) { Write-Evidence 'preflight-failed.json' @{reason='No attached primary display';status='failed'};throw 'No owned CI primary display.' }
+if (-not $primary) { Write-Evidence 'preflight-failed.json' @{reason='Native enumeration did not yield an attached primary display; inspect display-devices.json';status='failed'};throw 'Native display enumeration preflight failed.' }
 $deviceName = $primary.DeviceName
 $original = Current-Mode $deviceName
 if ($original.dmDriverExtra -ne 0) { throw 'Unsupported private display driver data; refuse incomplete DEVMODE restoration.' }
