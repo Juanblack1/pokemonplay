@@ -19,6 +19,7 @@ internal static class SettingsResponsiveCheck
         using var view = new SettingsView(preferences);
         using var host = new Form { MaximumSize = new Size(2000, 1600), ClientSize = new Size(760, 720) };
         host.Controls.Add(view); host.Show(); Application.DoEvents();
+        int borderWidth=host.Width-host.ClientSize.Width;
         var canvas = Field(view, "canvas");
         var scroll = (Panel)canvas.Parent;
         var workbench = Field(view, "controlsCard");
@@ -28,9 +29,10 @@ internal static class SettingsResponsiveCheck
         foreach (int width in new[] { 760, 1100 })
         foreach (int inputMode in new[] { 0, 1, 2, 3 })
         {
+            host.MinimumSize=new Size(width+borderWidth,host.Height);
             host.ClientSize = new Size(width, 720); mode.SelectedIndex = inputMode;
             host.PerformLayout(); view.PerformLayout(); Application.DoEvents();
-            Assert(host.ClientSize.Width==width && view.Width==width,"native settings viewport matches requested width "+width);
+            Assert(host.ClientSize.Width==width && view.Width==width && host.Width==width+borderWidth,"native settings viewport and outer bounds match requested width "+width);
             foreach(string name in new[]{"restoreButton","saveButton"})
             {
                 var button=Field(view,name);
@@ -41,6 +43,7 @@ internal static class SettingsResponsiveCheck
             if (!string.IsNullOrEmpty(preview))
             {
                 Directory.CreateDirectory(preview); using var bitmap = new Bitmap(host.Width, host.Height);
+                Assert(bitmap.Width==width+borderWidth,"native settings capture has full requested pixel width "+width);
                 host.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
                 bitmap.Save(Path.Combine(preview, "settings-responsive-" + width + "-mode-" + inputMode + ".png"));
             }
