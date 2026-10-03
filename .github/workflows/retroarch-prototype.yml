@@ -1,0 +1,92 @@
+name: Diagnostic pinned RetroArch source build
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'recovered-source/tools/build-retroarch-prototype.sh'
+      - '.github/workflows/retroarch-prototype.yml'
+permissions:
+  contents: read
+jobs:
+  vanilla-build:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      RETROARCH_PROTOTYPE_OUTPUT: ${{ runner.temp }}/retroarch-prototype
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          lfs: false
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+        with:
+          msystem: MINGW64
+          update: true
+          install: make curl tar git pkgconf mingw-w64-x86_64-toolchain
+      - name: Build unchanged pinned frontend
+        shell: msys2 {0}
+        run: bash ./recovered-source/tools/build-retroarch-prototype.sh
+      - name: Verify version and libretro loader readiness
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          $out = $env:RETROARCH_PROTOTYPE_OUTPUT
+          $exe = Join-Path $out 'runtime/retroarch.exe'
+          & $exe --version 2>&1 | Tee-Object (Join-Path $out 'evidence/version.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Version probe failed.' }
+          if ((Get-Content (Join-Path $out 'evidence/version.log') -Raw) -notmatch '1\.22\.2') { throw 'Unexpected version.' }
+          & $exe --features 2>&1 | Tee-Object (Join-Path $out 'evidence/features.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Feature probe failed.' }
+          # Fail closed loader-negative probe, independent of positive content.
+          $missing = Join-Path $out 'missing-owned-core.dll'
+          & $exe --verbose -L $missing 2>&1 | Tee-Object (Join-Path $out 'evidence/loader-negative.log')
+          if ($LASTEXITCODE -eq 0) { throw 'Missing core unexpectedly accepted.' }
+          $log = Get-Content (Join-Path $out 'evidence/loader-negative.log') -Raw
+          if ($log -notmatch 'Failed to open libretro core') { throw 'Loader failure evidence missing.' }
+      - name: Load owned diagnostic content with the pinned public core
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $out = $env:RETROARCH_PROTOTYPE_OUTPUT
+          $bundle = Join-Path $out 'fixture'
+          New-Item -ItemType Directory $bundle | Out-Null
+          gh release download v171.10.7 --repo '${{ github.repository }}' --pattern pokemon-play-win-x64-update.zip --dir $bundle
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture download failed.' }
+          $zip = Join-Path $bundle 'pokemon-play-win-x64-update.zip'
+          if ((Get-FileHash $zip).Hash.ToLowerInvariant() -ne '6f57a01804e76671e0095368d0665c04a105fb378fde4ab837ed631bf82f7654') { throw 'Fixture hash mismatch.' }
+          Expand-Archive $zip (Join-Path $bundle 'extracted')
+          $nested = @(Get-ChildItem (Join-Path $bundle 'extracted') -Recurse -Filter emulators-runtime.zip)
+          if ($nested.Count -eq 1) { Expand-Archive $nested[0].FullName (Join-Path $bundle 'emulators') }
+          $core = @(Get-ChildItem $bundle -Recurse -Filter mgba_libretro.dll)
+          if ($core.Count -ne 1) { throw 'Core fixture ambiguous.' }
+          $rom = Join-Path $out 'diagnostic.gba'
+          python -c "import sys; sys.path.insert(0,'recovered-source/tools'); from original_gba_frontend_test import original_gba_frontend_test_rom; original_gba_frontend_test_rom(sys.argv[1])" $rom
+          if ($LASTEXITCODE -ne 0) { throw 'Owned ROM generation failed.' }
+          $cfg = Join-Path $out 'diagnostic.cfg'
+          @('video_driver = "d3d11"','input_driver = "dinput"','audio_enable = "false"','cheevos_enable = "false"','config_save_on_exit = "false"','pause_nonactive = "false"','video_fullscreen = "false"') | Set-Content $cfg
+          # Standalone build readiness only; this does not satisfy C15 gameplay.
+          $exe = Join-Path $out 'runtime/retroarch.exe'
+          $args = '--verbose --config "{0}" -L "{1}" --max-frames 60 "{2}"' -f $cfg,$core[0].FullName,$rom
+          $p = Start-Process $exe -ArgumentList $args -WorkingDirectory (Split-Path $exe) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $out 'evidence/core.stdout.log') -RedirectStandardError (Join-Path $out 'evidence/core.stderr.log')
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw 'Owned core readiness timed out.' }
+          if ($p.ExitCode -ne 0) { throw 'Owned core readiness failed.' }
+          $log = Get-Content (Join-Path $out 'evidence/core.stderr.log') -Raw
+          if ($log -notmatch 'Loading dynamic libretro core' -or $log -notmatch 'D3D11') { throw 'Core/D3D11 readiness evidence missing.' }
+          Get-FileHash $core[0].FullName,$rom,$exe | Format-List | Out-File (Join-Path $out 'evidence/readiness-hashes.txt')
+          'embedding_input=not_run; physical_devices=not_run' | Set-Content (Join-Path $out 'evidence/remaining-gates.txt')
+      - name: Retain diagnostic source and evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vanilla-retroarch-prototype-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/retroarch-prototype/evidence
+            ${{ runner.temp }}/retroarch-prototype/runtime
+            ${{ runner.temp }}/retroarch-prototype/upstream.tar.gz
+            ${{ runner.temp }}/retroarch-prototype/retroarch-configured-source.tar.gz
+            ${{ runner.temp }}/retroarch-prototype/diagnostic.cfg
+            ${{ runner.temp }}/retroarch-prototype/diagnostic.gba
+          retention-days: 7
+          if-no-files-found: error
