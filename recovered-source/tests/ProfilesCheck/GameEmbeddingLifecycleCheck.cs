@@ -92,11 +92,31 @@ internal static class GameEmbeddingLifecycleCheck
         if(callbackError!=null) throw callbackError;
         return task==null?host.IsDisposed:task.GetAwaiter().GetResult();
     }
+    static System.Collections.Generic.IEnumerable<Control> Descendants(Control root)
+        => root.Controls.Cast<Control>().SelectMany(control=>new[]{control}.Concat(Descendants(control)));
+    static void WaitForActualStartup(Form host,string directory)
+    {
+        var clock=Stopwatch.StartNew();Exception timeout=null;
+        try { PumpUntil(()=>Field(host,"emulator")!=null||(bool)Field(host,"launchFailed"),8000,"Queued Shown/default starter did not reach process or failure state"); }
+        catch(TimeoutException error) { timeout=error; }
+        finally {
+            (Field(host,"timer") as System.Windows.Forms.Timer)?.Stop();
+            var process=(Process)Field(host,"emulator");
+            File.WriteAllText(Path.Combine(directory,"startup-facts.json"),JsonSerializer.Serialize(new {
+                elapsedMs=clock.ElapsedMilliseconds,host.Visible,host.IsHandleCreated,host.IsDisposed,
+                launchFailed=(bool)Field(host,"launchFailed"),hasStartedProcess=process!=null,
+                launcher=(string)Field(host,"launcher"),processName=(string)Field(host,"processName"),
+                failureTexts=Descendants((Control)Field(host,"gamePanel")).Select(control=>control.Text).Where(text=>!string.IsNullOrWhiteSpace(text)).ToArray(),
+                timeout=timeout?.Message
+            },new JsonSerializerOptions {WriteIndented=true}));
+        }
+        if(timeout!=null) throw timeout;
+    }
     static Form NewHost(string executable,string directory,string processName=null)
     {
         var host=new GameHostForm(executable,processName??Path.GetFileNameWithoutExtension(executable),"--embedding-lifecycle-child \""+directory+"\"","Synthetic lifecycle","Fixture",null);
         host.Show();
-        (Field(host,"timer") as System.Windows.Forms.Timer)?.Stop();
+        try { WaitForActualStartup(host,directory); } catch {host.Dispose();throw;}
         return host;
     }
     static void Fail(Form host) => Invoke(host,"ShowLaunchFailure",new InvalidOperationException("Owned synthetic embedding failure"));
@@ -173,7 +193,7 @@ internal static class GameEmbeddingLifecycleCheck
         internal AttachedChild(Form host,string directory,string executable)
         {
             this.directory=directory;
-            (Field(host,"timer") as System.Windows.Forms.Timer)?.Stop();
+            WaitForActualStartup(host,directory);
             Require(!(bool)Field(host,"launchFailed"),"Synthetic active session unexpectedly failed startup");
             var launched=(Process)Field(host,"emulator");Require(launched!=null,"Synthetic session requires default started process");
             observer=Process.GetProcessById(launched.Id);
