@@ -103,8 +103,9 @@ internal sealed class FrontendRun:IDisposable
             Set("configuration","passed","pre-Shown whitelist; default starter preserved");Set("root_identity","passed","owned roots, profile and actual session agree");
             Write("launch.json",new{executable,arguments,configEvidence,profile=InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json")),keyboard=LauncherSettings.KeyboardFor(root)});
             if(scenario=="suppressed-a")pad.VirtualChanged+=(_,_)=>{
-                if(held==4){bool raw=pad.Actions[4]&&Field<int>(pad,"mouseAction")==4&&pad.Capture;rawNegative|=raw;
-                    events.Add(new{kind="negative-seam",time=wall.ElapsedMilliseconds,raw, suppliedBefore=pad.VirtualActions[4],suppliedAfter=false});pad.VirtualActions[4]=false;}
+                bool suppliedBefore=pad.VirtualActions[4];
+                bool suppressed=acquisition.SuppressA(pad.Capture,pad.Actions,Field<int>(pad,"mouseAction"),pad.VirtualActions);
+                if(suppressed){rawNegative=true;events.Add(new{kind="negative-seam",time=wall.ElapsedMilliseconds,intent=acquisition.Intent,acquired=acquisition.Acquired,raw=pad.Actions[4],suppliedBefore,suppliedAfter=pad.VirtualActions[4]});}
             };
         }catch(Exception error){callbackFailure=error;Set("configuration","failed",error.Message);throw;}
     }
