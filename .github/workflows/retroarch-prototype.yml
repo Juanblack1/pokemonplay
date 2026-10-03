@@ -106,7 +106,7 @@ jobs:
           $core = @(Get-ChildItem $bundle -Recurse -Filter mgba_libretro.dll)
           if ($core.Count -ne 1) { throw 'Core fixture ambiguous.' }
           $rom = Join-Path $out 'diagnostic.gba'
-          python -c "import sys; sys.path.insert(0,'recovered-source/tools'); from original_gba_frontend_test import original_gba_frontend_test_rom; original_gba_frontend_test_rom(sys.argv[1])" $rom
+          python -c "import sys; from pathlib import Path; sys.path.insert(0,'recovered-source/tools'); from original_gba_frontend_test import original_gba_frontend_test_rom; original_gba_frontend_test_rom(Path(sys.argv[1]))" $rom
           if ($LASTEXITCODE -ne 0) { throw 'Owned ROM generation failed.' }
           $cfg = Join-Path $out 'diagnostic.cfg'
           @('video_driver = "d3d11"','input_driver = "dinput"','audio_enable = "false"','cheevos_enable = "false"','config_save_on_exit = "false"','pause_nonactive = "false"','video_fullscreen = "false"') | Set-Content $cfg
