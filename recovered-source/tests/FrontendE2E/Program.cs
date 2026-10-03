@@ -270,6 +270,7 @@ internal sealed class FrontendRun:IDisposable
         if(topLevelMode){
             if(parent!=Native.GetDesktopWindow())invalid.Add("foreground popup parent differs from desktop");if(Native.GetAncestor(hwnd,2)!=hwnd)invalid.Add("foreground popup root differs from its HWND");
             if((style&0x40000000)!=0||(unchecked((uint)style)&0x80000000)==0)invalid.Add("foreground popup style invalid");if(Native.IsChild(panel.Handle,hwnd))invalid.Add("foreground popup unexpectedly parented to gamePanel");
+            if(boundsError==null&&childBounds!=panelBounds)invalid.Add("foreground popup client rectangle does not exactly match game viewport");
         }else{
             if(parent!=panel.Handle)invalid.Add("parent differs from gamePanel");if((style&0x40000000)==0)invalid.Add("WS_CHILD missing");if((unchecked((uint)style)&0x80000000)!=0)invalid.Add("WS_POPUP present");if(!Native.IsChild(panel.Handle,hwnd))invalid.Add("IsChild(panel) false");if(!reached)invalid.Add("native ancestry does not reach Launcher");
         }

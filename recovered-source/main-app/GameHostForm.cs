@@ -67,6 +67,11 @@ internal sealed class GameHostForm : Form
 
     [DllImport("user32.dll",SetLastError=true)]
     private static extern bool SetWindowPos(IntPtr window,IntPtr insertAfter,int x,int y,int width,int height,uint flags);
+    [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left,Top,Right,Bottom; }
+    [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X,Y; }
+    [DllImport("user32.dll",SetLastError=true)] private static extern bool GetWindowRect(IntPtr window,out NativeRect rect);
+    [DllImport("user32.dll",SetLastError=true)] private static extern bool GetClientRect(IntPtr window,out NativeRect rect);
+    [DllImport("user32.dll",SetLastError=true)] private static extern bool ClientToScreen(IntPtr window,ref NativePoint point);
 
 	[DllImport("user32.dll", SetLastError = true)]
 	private static extern int SetWindowLong(IntPtr handle, int index, int value);
@@ -520,7 +525,14 @@ internal sealed class GameHostForm : Form
     private bool MoveTopLevelToGamePanel(IntPtr window)
     {
         Rectangle bounds=gamePanel.RectangleToScreen(gamePanel.ClientRectangle);
-        return bounds.Width>0&&bounds.Height>0&&MoveWindow(window,bounds.Left,bounds.Top,bounds.Width,bounds.Height,repaint:true);
+        if(bounds.Width<=0||bounds.Height<=0||!GetWindowRect(window,out NativeRect outer)||!GetClientRect(window,out NativeRect client))return false;
+        NativePoint clientOrigin=default;if(!ClientToScreen(window,ref clientOrigin))return false;
+        int clientWidth=client.Right-client.Left,clientHeight=client.Bottom-client.Top;
+        int outerWidth=outer.Right-outer.Left,outerHeight=outer.Bottom-outer.Top;
+        int insetLeft=clientOrigin.X-outer.Left,insetTop=clientOrigin.Y-outer.Top;
+        int nonClientWidth=outerWidth-clientWidth,nonClientHeight=outerHeight-clientHeight;
+        return clientWidth>0&&clientHeight>0&&nonClientWidth>=0&&nonClientHeight>=0&&
+            MoveWindow(window,bounds.Left-insetLeft,bounds.Top-insetTop,bounds.Width+nonClientWidth,bounds.Height+nonClientHeight,repaint:true);
     }
 
 	private async void CloseWithConfirmation()
