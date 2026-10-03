@@ -180,7 +180,9 @@ internal sealed class GameHostForm : Form
         if(InputDeviceProfile.Load(Path.Combine(AppPaths.Root,"Settings","input-device.json")).Mode==3)
         {
             virtualPad=new ControllerVisualizer {Dock=DockStyle.Bottom,Height=260,VirtualInput=true,Testing=true,ConsoleModel=configuredConsoleModel is >= 0 and <= 2 ? configuredConsoleModel : processName=="visualboyadvance-m"?0:processName=="azahar"?2:1};
-            Controls.Add(virtualPad);virtualPad.BringToFront();
+            // Dock layout reserves Bottom controls before sizing the Fill viewport.
+            // Keeping this z-order prevents the virtual pad from covering the game.
+            Controls.Add(virtualPad);
             Deactivate+=(_,_)=>virtualPad.ReleaseVirtual();
         }
 		if (canPauseToMenu)
