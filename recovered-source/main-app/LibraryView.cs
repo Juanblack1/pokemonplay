@@ -321,11 +321,12 @@ internal sealed class LibraryView : BufferedPanel
 		if (dialog.ShowDialog(this) != DialogResult.OK) return;
 		try
 		{
-			string[] files = Directory.EnumerateFiles(dialog.SelectedPath, "*.*", SearchOption.AllDirectories)
-				.Where(ImportedGameCatalog.IsSupportedRom).Take(501).ToArray();
+			var discovered = RomFileDiscovery.Scan(dialog.SelectedPath, ImportedGameCatalog.IsSupportedRom, 501);
+			string[] files = discovered.Files.ToArray();
 			if (files.Length == 0)
 			{
-				MessageBox.Show(this, "Não encontrei arquivos GBA, Nintendo DS ou Nintendo 3DS compatíveis nesta pasta.", "Examinar pasta", MessageBoxButtons.OK, MessageBoxIcon.Information);
+				string detail=discovered.SkippedLocations>0||discovered.LimitReached ? " O exame foi parcial: há locais inacessíveis, links ou limites de leitura. Escolha a pasta da ROM diretamente ou selecione seus arquivos." : string.Empty;
+				MessageBox.Show(this, "Não encontrei arquivos GBA, Nintendo DS ou Nintendo 3DS compatíveis nesta pasta."+detail, "Examinar pasta", MessageBoxButtons.OK, MessageBoxIcon.Information);
 				return;
 			}
 			if (files.Length > 500)
@@ -333,6 +334,8 @@ internal sealed class LibraryView : BufferedPanel
 				MessageBox.Show(this, "A pasta contém mais de 500 ROMs compatíveis. Escolha uma pasta menor para revisar os arquivos com segurança.", "Limite de arquivos", MessageBoxButtons.OK, MessageBoxIcon.Information);
 				return;
 			}
+			if(discovered.SkippedLocations>0||discovered.LimitReached)
+				MessageBox.Show(this,"O exame encontrou "+files.Length+" ROM(s), mas foi parcial: há locais inacessíveis, links ou limites de leitura. Você pode adicionar os arquivos encontrados; para os demais, selecione a pasta ou o arquivo diretamente.","Exame parcial",MessageBoxButtons.OK,MessageBoxIcon.Information);
 			ImportSelectedRoms(files);
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)

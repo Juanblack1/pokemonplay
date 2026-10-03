@@ -1,0 +1,30 @@
+name: Verificar ciclo de melhorias
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  application-checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Compilar e testar aplicação e atualizador
+        shell: pwsh
+        env:
+          POKEMONPLAY_CONTROLS_PREVIEW: ${{ runner.temp }}/controls-preview
+        run: |
+          dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj 2>&1 | Tee-Object -FilePath '${{ runner.temp }}/checks.log'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Guardar resultado do ciclo
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: engineering-cycle-evidence
+          path: |
+            ${{ runner.temp }}/checks.log
+            ${{ runner.temp }}/controls-preview/*.png
