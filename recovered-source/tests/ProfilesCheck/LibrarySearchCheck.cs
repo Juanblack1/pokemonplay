@@ -36,12 +36,13 @@ internal static class LibrarySearchCheck
         Control EmptyState()=>Children(library).Single(control=>control.GetType().Name=="EmptyStatePanel");
         string[] EmptyLabels()=>EmptyState().Controls.OfType<Label>().Select(label=>label.Text).ToArray();
         Button favoriteFilter=(Button)typeof(LibraryView).GetField("favoriteFilter",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(library);
+        Button recentFilter=Children(library).OfType<Button>().Single(button=>button.Text=="Recentes");
         void PumpUntil(Func<bool> condition,string failure){var wait=Stopwatch.StartNew();while(!condition()&&wait.ElapsedMilliseconds<2000){Application.DoEvents();Thread.Sleep(10);}Assert(condition(),failure);}
         SetFavorite("Ruby",true);byte[] favoriteBytes=File.ReadAllBytes(favoritePath);
-        favoriteFilter.PerformClick();search.Text="no matching favorite";
+        recentFilter.PerformClick();favoriteFilter.PerformClick();search.Text="no matching favorite";
         PumpUntil(()=>Children(library).Any(control=>control.GetType().Name=="EmptyStatePanel"),"filtered favorites settle to their empty state");
         Assert(!Children(library).OfType<GameCard>().Any(),"nonmatching query hides all saved favorites");
-        Assert(EmptyLabels()[0]=="Nenhum favorito encontrado"&&EmptyLabels()[1].Contains("busca",StringComparison.OrdinalIgnoreCase),"empty search in Favorites explains that saved favorites did not match");
+        Assert(EmptyLabels()[0]=="Nenhum favorito encontrado"&&EmptyLabels()[1].Contains("busca",StringComparison.OrdinalIgnoreCase),"empty search in Favorites and Recentes explains that saved favorites did not match");
         Assert(File.ReadAllBytes(favoritePath).SequenceEqual(favoriteBytes),"searching Favorites leaves persisted favorites byte-for-byte unchanged");
         EmptyState().Controls.OfType<Button>().Single().PerformClick();PumpUntil(()=>search.Text.Length==0&&Children(library).OfType<GameCard>().Any(card=>card.AccessibleName.StartsWith("Ruby,")),"MOSTRAR TODOS restores the saved favorite card");
         Assert(File.ReadAllBytes(favoritePath).SequenceEqual(favoriteBytes),"MOSTRAR TODOS leaves persisted favorites byte-for-byte unchanged");
