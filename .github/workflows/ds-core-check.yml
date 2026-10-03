@@ -4,6 +4,8 @@ on:
     paths:
       - 'recovered-source/tools/probe-libretro.py'
       - 'recovered-source/tools/original_ds_test.py'
+      - 'recovered-source/tools/verify-ds-negative.ps1'
+      - 'recovered-source/tests/DsKeypadCheck/**'
       - '.github/workflows/ds-core-check.yml'
   workflow_dispatch:
 permissions:
@@ -16,6 +18,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           lfs: false
+      - name: Verificar oráculo e limites do programa original
+        run: python -B -m unittest discover -s ./recovered-source/tests/DsKeypadCheck -v
+      - name: Rejeitar evidência antiga e DLL ausente
+        shell: pwsh
+        run: ./recovered-source/tests/DsKeypadCheck/verify-evidence-guard.ps1
       - name: Obter o core da release verificada
         shell: pwsh
         env:
@@ -30,22 +37,17 @@ jobs:
           Expand-Archive -LiteralPath $zip -DestinationPath $fixture
           Expand-Archive -LiteralPath (Join-Path $fixture 'PokemonPlayRuntime/emulators-runtime.zip') -DestinationPath $fixture
           "DS_CORE=$fixture/Emulators/RetroArch/cores/melondsds_libretro.dll" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Comprovar resposta visual solto-A-solto
+      - name: Comprovar os 12 botões e suas liberações
         shell: pwsh
         timeout-minutes: 3
         run: |
           python ./recovered-source/tools/probe-libretro.py --system ds --core $env:DS_CORE --output '${{ runner.temp }}/ds-positive' --frames 30
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Comprovar falha quando a entrada não chega ao guest
+      - name: Comprovar negativos de entrada, mapeamento, liberação e X/Y
         shell: pwsh
         timeout-minutes: 3
         run: |
-          python ./recovered-source/tools/probe-libretro.py --system ds --suppress-input --core $env:DS_CORE --output '${{ runner.temp }}/ds-negative' --frames 30
-          if ($LASTEXITCODE -eq 0) { throw 'O oráculo aprovou input ausente.' }
-          $failure = Get-Content -Raw '${{ runner.temp }}/ds-negative/native-failure.json' | ConvertFrom-Json
-          if ($failure.error -ne 'DS guest framebuffer did not follow released/A/released input' -or $failure.guest_input.Count -ne 3 -or $failure.guest_input[1].passed) { throw 'O controle negativo falhou por outra razão.' }
-          Write-Output 'PASS guest oracle rejects absent input.'
-          exit 0
+          ./recovered-source/tools/verify-ds-negative.ps1 -Core $env:DS_CORE -OutputDirectory '${{ runner.temp }}/ds-negative'
       - name: Guardar evidências DS originais
         if: always()
         uses: actions/upload-artifact@v6
@@ -54,5 +56,5 @@ jobs:
           path: |
             ${{ runner.temp }}/ds-positive/*.json
             ${{ runner.temp }}/ds-positive/*.png
-            ${{ runner.temp }}/ds-negative/*.json
-            ${{ runner.temp }}/ds-negative/*.png
+            ${{ runner.temp }}/ds-negative/**/*.json
+            ${{ runner.temp }}/ds-negative/**/*.png

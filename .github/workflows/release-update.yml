@@ -44,6 +44,10 @@ jobs:
         shell: pwsh
         timeout-minutes: 3
         run: python ./recovered-source/tools/probe-libretro.py --system ds --core '${{ runner.temp }}/pokemonplay-emulators/Emulators/RetroArch/cores/melondsds_libretro.dll' --output '${{ runner.temp }}/pokemonplay-ds-probe' --frames 30
+      - name: Verificar negativos do keypad no core DS novo
+        shell: pwsh
+        timeout-minutes: 3
+        run: ./recovered-source/tools/verify-ds-negative.ps1 -Core '${{ runner.temp }}/pokemonplay-emulators/Emulators/RetroArch/cores/melondsds_libretro.dll' -OutputDirectory '${{ runner.temp }}/pokemonplay-ds-negative'
       - name: Guardar evidências dos cores originais
         if: always()
         uses: actions/upload-artifact@v6
@@ -53,6 +57,8 @@ jobs:
             ${{ runner.temp }}/pokemonplay-gba-probe/*.json
             ${{ runner.temp }}/pokemonplay-ds-probe/*.json
             ${{ runner.temp }}/pokemonplay-ds-probe/*.png
+            ${{ runner.temp }}/pokemonplay-ds-negative/**/*.json
+            ${{ runner.temp }}/pokemonplay-ds-negative/**/*.png
       - name: Verificar a aplicação e o atualizador
         shell: pwsh
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
