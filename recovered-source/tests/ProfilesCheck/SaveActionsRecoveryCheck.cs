@@ -30,6 +30,12 @@ internal static class SaveActionsRecoveryCheck
             // A released lock already permits selection to rebuild the valid detail.
             if(retry!=null)retry.PerformClick();
             Assert(Children(view).OfType<Button>().Any(button=>button.Text=="Backup ZIP"),action+" allows recovery after the fixture is explicitly corrected");
+            if(action=="Backup ZIP"&&locked) {
+                Children(view).OfType<Button>().Single(button=>button.Text=="Backup ZIP").PerformClick();
+                string created=Directory.GetFiles(Path.GetDirectoryName(backup)).Single(file=>file!=backup);
+                using var archive=System.IO.Compression.ZipFile.OpenRead(created);using var reader=new StreamReader(archive.GetEntry("progress.sav").Open());
+                Assert(reader.ReadToEnd()=="save sentinel"&&File.ReadAllText(save)=="save sentinel"&&File.ReadAllBytes(backup).SequenceEqual(new byte[]{1,2,3,4}),"recovered backup action creates a verified archive and preserves source data and older backups");
+            }
         }
     }
 }

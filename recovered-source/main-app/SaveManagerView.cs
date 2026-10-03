@@ -415,6 +415,21 @@ internal sealed class SaveManagerView : BufferedPanel
 	}
 
 	private void OpenSelected()
+		=> RunLocalSaveAction(OpenSelectedCore);
+
+	private void RunLocalSaveAction(Action action)
+	{
+		try { action(); }
+		catch(Exception error) when(error is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException or System.Security.SecurityException or System.ComponentModel.Win32Exception)
+		{
+			BuildDetail();
+			status.ForeColor=AppTheme.Red;
+			status.Text="Ação interrompida. Confira o acesso aos arquivos e tente novamente.";
+			status.AccessibleDescription=status.Text;
+		}
+	}
+
+	private void OpenSelectedCore()
 	{
 		ProcessStartInfo processStartInfo = new ProcessStartInfo();
 		processStartInfo.FileName = SelectedFolder();
@@ -432,6 +447,9 @@ internal sealed class SaveManagerView : BufferedPanel
 	}
 
 	private void BackupSelected()
+		=> RunLocalSaveAction(BackupSelectedCore);
+
+	private void BackupSelectedCore()
 	{
 		string text = SelectedFolder();
 		string[] files = Directory.GetFiles(text, "*", SearchOption.AllDirectories);
@@ -467,6 +485,9 @@ internal sealed class SaveManagerView : BufferedPanel
 	}
 
 	private void RestoreSelected()
+		=> RunLocalSaveAction(RestoreSelectedCore);
+
+	private void RestoreSelectedCore()
 	{
 		string processName = selected.EmulatorProcess;
 		if (string.IsNullOrWhiteSpace(processName))
