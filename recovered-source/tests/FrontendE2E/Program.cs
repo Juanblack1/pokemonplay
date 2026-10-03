@@ -11,7 +11,7 @@ internal static class Program
     {
         string root=null;
         try{
-            if(args.Length==1&&args[0]=="--verify-evidence-contract"){EmbeddingEvidence.VerifyContract();Console.WriteLine("Evidence serialization contract passed");return 0;}
+            if(args.Length==1&&args[0]=="--verify-evidence-contract"){EmbeddingEvidence.VerifyContract();HoldAcquisition.VerifyContract();Console.WriteLine("Evidence serialization and hold acquisition contracts passed");return 0;}
             var options=new Dictionary<string,string>();if(args.Length!=8)throw new ArgumentException("Expected --root --scenario --port --commit");
             for(int i=0;i<args.Length;i+=2)options.Add(args[i],args[i+1]);
             root=Path.TrimEndingDirectorySeparator(Path.GetFullPath(options["--root"]));
@@ -52,6 +52,7 @@ internal sealed class FrontendRun:IDisposable
     readonly System.Windows.Forms.Timer sampler=new(){Interval=100};
     GameHostForm host;ControllerVisualizer pad;Process child;IntPtr hwnd;string childPath;DateTime childStart;
     Exception callbackFailure,sampleFailure;int held=-1;bool rawNegative;Point mousePoint;long lastRequest=-2000;
+    readonly HoldAcquisition acquisition=new();long mouseEventSequence;
     uint? internalCounter,desktopCounter;object configEvidence,identity;string current="startup";bool keyReleaseProved;long phaseStarted,lastEvidencePersist,lastObservedInjection;int desktopDecodeAttempts,desktopDecodeFailures;string lastDesktopDecodeError;
     static readonly JsonSerializerOptions JsonOptions=new(){WriteIndented=true};
     internal FrontendRun(string root,string scenario,int port,string commit)
@@ -90,6 +91,8 @@ internal sealed class FrontendRun:IDisposable
             if(host.Visible||host.TopLevel)throw new InvalidDataException("configuration: pre-Shown seam absent");
             if(!Field<string>(host,"historyRoot").Equals(root,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("root_identity: session root differs");
             pad=Field<ControllerVisualizer>(host,"virtualPad");if(pad.ConsoleModel!=0)throw new InvalidDataException("root_identity: expected GBA pad");
+            pad.MouseDown+=(_,e)=>{if(e.Button==MouseButtons.Left)acquisition.ObserveDown();ObservePadMouse("mouse-down");};
+            pad.MouseCaptureChanged+=(_,_)=>ObservePadMouse("capture-changed");
             string cfg=Field<string>(host,"temporaryConfigPath"),arguments=Field<string>(host,"arguments");
             if(!arguments.Contains('"'+cfg+'"',StringComparison.Ordinal)||!arguments.Contains('"'+Path.Combine(root,"roms","diagnostic.gba")+'"',StringComparison.Ordinal))throw new InvalidDataException("configuration: unexpected config/ROM arguments");
             string expectedCore=Path.Combine(root,"PokemonPlayRuntime","Emulators","RetroArch","cores","mgba_libretro.dll");
@@ -264,12 +267,18 @@ internal sealed class FrontendRun:IDisposable
     }
     async Task Hold(int action)
     {
-        keyReleaseProved=false;held=action;float scale=Math.Min(pad.Width/520f,(pad.Height-26)/300f);float x=action==4?426:390,y=action==4?128:156;
+        keyReleaseProved=false;acquisition.Begin(action);float scale=Math.Min(pad.Width/520f,(pad.Height-26)/300f);float x=action==4?426:390,y=action==4?128:156;
         var point=new Point((int)((pad.Width-520*scale)/2+x*scale),(int)((pad.Height-26-300*scale)/2+y*scale));
         int hit=(int)typeof(ControllerVisualizer).GetMethod("Hit",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(pad,new object[]{point});if(hit!=action)throw new InvalidDataException("focus: virtual hit transform differs");
-        mousePoint=pad.PointToScreen(point);events.Add(new{kind="pad-ui-down",action,point=mousePoint});Native.MouseAt(mousePoint,true);await Task.Delay(150);CheckFailures();
+        mousePoint=pad.PointToScreen(point);IntPtr hitHwnd=Native.WindowFromPoint(mousePoint);
+        events.Add(new{kind="pad-ui-down",action,point=mousePoint,hitHwnd=hitHwnd.ToInt64(),expectedPadHwnd=pad.Handle.ToInt64(),padBounds=pad.RectangleToScreen(pad.ClientRectangle)});
+        if(hitHwnd!=pad.Handle)throw new InvalidDataException("focus: virtual pad point hits another native window");
+        Native.MouseAt(mousePoint,true);
+        await Until(()=>acquisition.TryAcquire(pad.Capture,pad.Actions[action],Field<int>(pad,"mouseAction")),750,"focus: virtual hold acquisition");
+        held=action;ObservePadMouse("hold-acquired");await Task.Delay(150);CheckFailures();
     }
-    async Task Release(){Native.MouseAt(mousePoint,false);held=-1;await Task.Delay(150);CheckFailures();if(pad.VirtualActions.Any(x=>x)||pad.Actions.Any(x=>x))throw new InvalidDataException("guest_release_color: virtual release absent");}
+    void ObservePadMouse(string transition)=>events.Add(new{kind="pad-mouse-transition",sequence=++mouseEventSequence,timeMs=wall.ElapsedMilliseconds,phase=current,transition,intent=acquisition.Intent,acquired=acquisition.Acquired,held,capture=pad.Capture,mouseAction=Field<int>(pad,"mouseAction"),raw=acquisition.Intent>=0&&pad.Actions[acquisition.Intent],focus=Focus()});
+    async Task Release(){Native.MouseAt(mousePoint,false);held=-1;acquisition.Release();await Task.Delay(150);CheckFailures();if(pad.VirtualActions.Any(x=>x)||pad.Actions.Any(x=>x))throw new InvalidDataException("guest_release_color: virtual release absent");}
     async Task Phase(string name,int expected,int timeout)
     {
         Progress(name);phaseStarted=wall.ElapsedMilliseconds;long deadline=wall.ElapsedMilliseconds+timeout;int accepted=0;GuestMaskMismatch mismatch=null;bool rawGuard=true;
