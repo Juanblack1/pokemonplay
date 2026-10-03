@@ -5,6 +5,7 @@ on:
       - 'recovered-source/tools/probe-libretro.py'
       - 'recovered-source/tools/original_ds_test.py'
       - 'recovered-source/tools/verify-ds-negative.ps1'
+      - 'recovered-source/tests/DsKeypadCheck/**'
       - '.github/workflows/ds-core-check.yml'
   workflow_dispatch:
 permissions:
@@ -17,6 +18,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           lfs: false
+      - name: Verificar oráculo e limites do programa original
+        run: python -B -m unittest discover -s ./recovered-source/tests/DsKeypadCheck -v
       - name: Obter o core da release verificada
         shell: pwsh
         env:

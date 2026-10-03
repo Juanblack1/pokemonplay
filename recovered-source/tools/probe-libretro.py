@@ -57,7 +57,7 @@ def ds_frame_regions(frame, expected_mask):
 
 
 def ds_frame_sample(frames, output, phase, expected_mask):
-    if len(frames) != 2 or frames[0]["serial"] >= frames[1]["serial"]:
+    if len(frames) != 2 or frames[0]["serial"] + 1 != frames[1]["serial"]:
         raise RuntimeError("DS phase requires two fresh consecutive software frames")
     checks = [ds_frame_regions(frame, expected_mask) for frame in frames]
     frame = frames[-1]
@@ -147,7 +147,7 @@ def probe(args):
             directory_handles.append(os.add_dll_directory(str(directory)))
     core = C.CDLL(str(core_path))
     options, buffers, native_logs, configuration_errors = {}, {}, [], []
-    stats = {"video_calls": 0, "input_queries": 0, "positive_input_queries": 0, "audio_frames": 0}
+    stats = {"video_calls": 0, "video_callbacks": 0, "input_queries": 0, "positive_input_queries": 0, "audio_frames": 0}
     frame = {"bytes": None, "width": 0, "height": 0, "pitch": 0, "format": 0, "serial": 0}
     recent_frames = []
     pressed = set()
@@ -230,10 +230,11 @@ def probe(args):
     video_type = C.CFUNCTYPE(None, C.c_void_p, C.c_uint, C.c_uint, C.c_size_t)
     @video_type
     def video(data, width, height, pitch):
+        stats["video_callbacks"] += 1
         if data and data != C.c_void_p(-1).value and pitch * height <= 16 * 1024 * 1024:
             frame.update(bytes=C.string_at(data, pitch * height), width=width, height=height, pitch=pitch)
             stats["video_calls"] += 1
-            frame["serial"] = stats["video_calls"]
+            frame["serial"] = stats["video_callbacks"]
             recent_frames.append(dict(frame))
             if len(recent_frames) > 2:
                 del recent_frames[0]

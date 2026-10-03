@@ -1,5 +1,9 @@
 # Próximo ciclo — prova dos 12 botões DS
 
+Reprodução: CI37099265795 no commit d64737b reprovou a ROM antiga em a-held: expected_mask1, observed_mask4095. Ela pintava a tela inteira ao pressionar A e não distingue as outras regiões. A falha comprova insuficiência da prova anterior, não defeito dos 12 botões do produto. O FULL red37099265792 foi cancelado após essa prova nativa para evitar recompilação inútil.
+
+Implementação em andamento: ARM9 desenha a matriz e espera ready; ARM7 publica EXTKEYIN em RAM compartilhada. Quatro testes locais do oráculo/bounds passaram (incluem12alvos, botão extra indevido, dois frames/estabilidade, callback duplicado, formato/stride e segmentos determinísticos/limitados). Ainda depende da execução nativa e do CI completo; não afirmar X/Y validados antes disso.
+
 Objetivo: ampliar a verificação no núcleo real para A, B, Select, Start, Right, Left, Up, Down, R, L, X e Y, com programa ARM9/ARM7 próprio sem conteúdo comercial. Não alterar bindings de produto sem defeito reproduzido.
 
 R1: um boot mostra 12 regiões independentes. Cada botão pressionado acende somente sua região vermelha; as outras ficam azuis. Soltar deixa todas azuis.

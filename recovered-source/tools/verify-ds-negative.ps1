@@ -1,5 +1,6 @@
 param([Parameter(Mandatory)][string]$Core,[Parameter(Mandatory)][string]$OutputDirectory)
 $ErrorActionPreference='Stop'
+$PSNativeCommandUseErrorActionPreference=$false
 $cases=@(
     @{name='suppressed';flag='--suppress-input';phase='a-held';count=2;expected=1;observed=0},
     @{name='swapped-ab';flag='--swap-ds-ab';phase='a-held';count=2;expected=1;observed=2},
