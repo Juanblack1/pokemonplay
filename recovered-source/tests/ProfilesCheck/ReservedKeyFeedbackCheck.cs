@@ -1,12 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 internal static class ReservedKeyFeedbackCheck
 {
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool IsWindowVisible(IntPtr window);
+    [StructLayout(LayoutKind.Sequential)] struct NativeRect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll", SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool GetClientRect(IntPtr window, out NativeRect rectangle);
     record State(int Preset, string[] Custom, string[] Extra, string[] Effective);
     static T Field<T>(object value, string name) => (T)value.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(value);
     static void Invoke(object value, string name, params object[] args) => value.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(value, args);
@@ -54,6 +61,19 @@ internal static class ReservedKeyFeedbackCheck
                 Feedback(instruction.Text,actionName,"visible instruction");
                 string accessible=(instruction.AccessibilityObject.Name??"")+" "+(instruction.AccessibilityObject.Description??"");
                 Feedback(accessible,actionName,"actual label accessible object");
+                Expect(instruction.IsHandleCreated && IsWindowVisible(instruction.Handle),"feedback label is a visible owned native control");
+                Expect(GetClientRect(instruction.Handle,out NativeRect client),"owned feedback label native client bounds are available");
+                Size nativeSize=new(client.Right-client.Left,client.Bottom-client.Top);
+                Expect(nativeSize.Width>0 && nativeSize.Height>0 && dialog.ClientRectangle.Contains(instruction.Bounds),"native feedback label has usable bounds inside dialog");
+                Size required=TextRenderer.MeasureText(instruction.Text,instruction.Font,new Size(nativeSize.Width,int.MaxValue),TextFormatFlags.WordBreak|TextFormatFlags.TextBoxControl);
+                Expect(required.Height<=nativeSize.Height,"wrapped feedback fits native label height with actual font");
+                string firstText=instruction.Text;
+                Invoke(dialog,"OnKeyDown",new KeyEventArgs(Keys.F12));
+                string repeatedAccessible=(instruction.AccessibilityObject.Name??"")+" "+(instruction.AccessibilityObject.Description??"");
+                Expect(instruction.Text==firstText && repeatedAccessible==accessible,"repeated F12 preserves current visual and accessible feedback");
+                Expect(dialog.Visible&&!dialog.IsDisposed&&dialog.DialogResult==DialogResult.None&&dialog.CapturedKey==null,"repeated F12 still leaves capture pending");
+                Unchanged(before,Read(view));
+                Expect(File.ReadAllBytes(file).SequenceEqual(settingsBytes)&&File.ReadAllBytes(device).SequenceEqual(deviceBytes),"repeated reserved key preserves settings bytes");
                 Invoke(dialog,"OnKeyDown",new KeyEventArgs(completion));
                 result=dialog.DialogResult;captured=dialog.CapturedKey;
             } catch(Exception error){failure=error;dialog?.Close();}
