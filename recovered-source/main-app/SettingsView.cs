@@ -212,12 +212,21 @@ internal sealed class SettingsView : BufferedPanel
 
  private void LoadRetroArchSettings()
  {
+  string previousWarning=retroArchSettings?.LoadWarning;
   retroArchSettings=RetroArchSettingsService.Load(root);
   retroArchGba.Checked=retroArchSettings.UseForGba;retroArchDs.Checked=retroArchSettings.UseForDs;
   SetPathLabel(retroArchExecutablePath,retroArchSettings.ExecutablePath,"Executável ainda não selecionado");
   SetPathLabel(retroArchGbaCorePath,retroArchSettings.GbaCorePath,"Core GBA ainda não selecionado");
   SetPathLabel(retroArchDsCorePath,retroArchSettings.DsCorePath,"Core DS ainda não selecionado");
   UpdateRetroArchAccountButton();
+  if(!string.IsNullOrEmpty(retroArchSettings.LoadWarning))
+  {
+   status.ForeColor=AppTheme.Red;status.Text=retroArchSettings.LoadWarning;status.AccessibleDescription=retroArchSettings.LoadWarning;
+  }
+  else if(!string.IsNullOrEmpty(previousWarning)&&status.Text==previousWarning)
+  {
+   status.ForeColor=AppTheme.TextMuted;status.Text="Preferências do emulador carregadas.";status.AccessibleDescription=status.Text;
+  }
  }
 
  private void UpdateRetroArchAccountButton()=>retroArchAccountButton.Enabled=File.Exists(retroArchSettings?.ExecutablePath);
@@ -323,6 +332,7 @@ internal sealed class SettingsView : BufferedPanel
 			if(retroArchError==null)RetroArchSettingsService.Save(root,retroArchSettings);
 			status.ForeColor = AppTheme.Green;
 			status.Text = retroArchError==null?"Configurações salvas. Válidas no próximo jogo.":"Controles salvos. Para ativar RetroArch: "+retroArchError;
+			status.AccessibleDescription=status.Text;
 			if(retroArchError!=null)status.ForeColor=AppTheme.Red;
             UpdateRetroArchAccountButton();
 		}
@@ -330,6 +340,7 @@ internal sealed class SettingsView : BufferedPanel
 		{
 			status.ForeColor = AppTheme.Red;
 			status.Text = "Não foi possível salvar: " + ex.Message;
+			status.AccessibleDescription=status.Text;
 		}
 	}
 

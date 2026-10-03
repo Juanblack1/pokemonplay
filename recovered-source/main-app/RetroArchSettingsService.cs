@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows.Forms;
 
 internal sealed class RetroArchSettings
@@ -11,6 +12,8 @@ internal sealed class RetroArchSettings
     public string ExecutablePath { get; set; } = string.Empty;
     public string GbaCorePath { get; set; } = string.Empty;
     public string DsCorePath { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string LoadWarning { get; set; } = string.Empty;
 }
 
 internal static class RetroArchSettingsService
@@ -33,7 +36,8 @@ internal static class RetroArchSettingsService
         if (!File.Exists(path)) return BundledEmulators.Defaults(root);
         try
         {
-            var settings = JsonSerializer.Deserialize<RetroArchSettings>(File.ReadAllText(path)) ?? new RetroArchSettings();
+            var settings = JsonSerializer.Deserialize<RetroArchSettings>(File.ReadAllText(path));
+            if (settings == null) return Recover(root);
             // Stored bundle paths are derived again when the portable folder moves.
             if (settings.ExecutablePath?.Replace('\\', '/').Contains("/PokemonPlayRuntime/Emulators/RetroArch/", StringComparison.OrdinalIgnoreCase)==true)
             {
@@ -44,10 +48,17 @@ internal static class RetroArchSettingsService
             }
             return settings;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or System.Security.SecurityException)
         {
-            return new RetroArchSettings();
+            return Recover(root);
         }
+    }
+
+    private static RetroArchSettings Recover(string root)
+    {
+        var settings = BundledEmulators.Defaults(root);
+        settings.LoadWarning = "Preferências ilegíveis. Opções da instalação em uso; arquivo original preservado. Confira antes de salvar.";
+        return settings;
     }
 
     internal static void Save(string root, RetroArchSettings settings)
@@ -60,6 +71,7 @@ internal static class RetroArchSettingsService
         {
             File.WriteAllText(temporary, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
             File.Move(temporary, path, true);
+            settings.LoadWarning = string.Empty;
         }
         finally
         {
