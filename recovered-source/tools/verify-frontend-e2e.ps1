@@ -216,7 +216,7 @@ if($Mode -in @('Run','All')) {
             $result=Get-Content -LiteralPath (Join-Path $evidence 'result.json') -Raw | ConvertFrom-Json
             if($timedOut -or $emergency.Count -gt 0 -or $process.ExitCode -ne 0 -or $result.schema -ne 1 -or $result.commit -ne $Commit -or $result.scenario -ne $run.scenario -or !$result.passed){throw 'Frontend run did not provide valid successful current evidence.'}
             Assert-RunIdentity $result $run $root $Commit $actualHashes
-            foreach($name in @('boot','process_identity','root_identity','embedding','focus','cadence','neutral','A-release','cleanup','default_driver','configuration','capture_identity')){Require-Status $result $name 'passed'}
+            foreach($name in @('boot','process_identity','root_identity','embedding','focus','guest_ready','cadence','neutral','A-release','cleanup','default_driver','configuration','capture_identity')){Require-Status $result $name 'passed'}
             if($run.scenario -eq 'positive') {
                 foreach($name in @('A-held','B-held','B-release')){Require-Status $result $name 'passed'}
             } else {

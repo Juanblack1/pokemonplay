@@ -31,7 +31,7 @@ internal static class Program
             Console.Error.WriteLine(error);
             if(root!=null&&Directory.Exists(Path.Combine(root,"evidence"))){
                 File.WriteAllText(Path.Combine(root,"evidence","startup-failed.json"),JsonSerializer.Serialize(new{schema=1,passed=false,error=error.ToString()}));
-                var failedChecks=new Dictionary<string,object>();foreach(string key in new[]{"boot","process_identity","root_identity","embedding","focus","cadence","neutral","A-held","A-release","B-held","B-release","negative_validity","cleanup","default_driver","configuration","capture_identity","guest_hold_color","top_level_control"})failedChecks[key]=new{status="not_run",reason="startup failed before observation"};
+                var failedChecks=new Dictionary<string,object>();foreach(string key in new[]{"boot","process_identity","root_identity","embedding","focus","guest_ready","cadence","neutral","A-held","A-release","B-held","B-release","negative_validity","cleanup","default_driver","configuration","capture_identity","guest_hold_color","top_level_control"})failedChecks[key]=new{status="not_run",reason="startup failed before observation"};
                 string startupPrefix=error.Message.Split(':')[0];
                 failedChecks[failedChecks.ContainsKey(startupPrefix)?startupPrefix:"boot"]=new{status="failed",reason=error.Message};
                 string scenarioIndex=Array.IndexOf(args,"--scenario") is int index&&index>=0&&index+1<args.Length?args[index+1]:"unknown";
@@ -64,7 +64,7 @@ internal sealed class FrontendRun:IDisposable
         string runtime=Path.Combine(root,"PokemonPlayRuntime"),retroarch=Path.Combine(runtime,"Emulators","RetroArch");
         hashes=new{harnessExe=SessionConfig.Hash(Path.Combine(runtime,"Check.exe")),harnessDll=SessionConfig.Hash(Path.Combine(runtime,"Check.dll")),app=SessionConfig.Hash(Path.Combine(runtime,"Pokemons Play.dll")),retroarch=SessionConfig.Hash(Path.Combine(retroarch,"retroarch.exe")),core=SessionConfig.Hash(Path.Combine(retroarch,"cores","mgba_libretro.dll")),rom=SessionConfig.Hash(Path.Combine(root,"roms","diagnostic.gba"))};
         identity=new{root,runId=Path.GetFileName(root),hashes};
-        foreach(string key in new[]{"boot","process_identity","root_identity","embedding","focus","cadence","neutral","A-held","A-release","B-held","B-release","negative_validity","cleanup","default_driver","configuration","capture_identity","guest_hold_color","top_level_control"})Set(key,"not_run","not reached");
+        foreach(string key in new[]{"boot","process_identity","root_identity","embedding","focus","guest_ready","cadence","neutral","A-held","A-release","B-held","B-release","negative_validity","cleanup","default_driver","configuration","capture_identity","guest_hold_color","top_level_control"})Set(key,"not_run","not reached");
         var existing=Process.GetProcessesByName("retroarch");bool conflict=existing.Length!=0;foreach(var item in existing)item.Dispose();if(conflict)throw new InvalidDataException("process_identity: existing RetroArch; no third-party process killed");
         if(!AppPaths.Root.Equals(root,StringComparison.OrdinalIgnoreCase)||InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json")).Mode!=3)throw new InvalidDataException("root_identity: wrong root/profile");
         SessionConfig.Owned(root,Path.Combine(root,"roms","diagnostic.gba"));
@@ -125,6 +125,9 @@ internal sealed class FrontendRun:IDisposable
             // Normal UI focus, never private focus method invocation or fake guard.
             var bounds=Native.Bounds(hwnd);mousePoint=new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2);
             Native.MouseAt(mousePoint,true);await Task.Delay(80);Native.MouseAt(mousePoint,false);await Task.Delay(200);
+            await Until(()=>ring.Count>=2&&wall.ElapsedMilliseconds-ring[^1].Time<=250&&GuestDecoder.Advances(ring[^2].Frame.Counter,ring[^1].Frame.Counter),10000,"guest_ready");
+            Set("guest_ready","passed","two consecutive valid composed desktop frames with advancing guest counter before the first SCREENSHOT request");
+            events.Add(new{kind="guest-ready",timeMs=wall.ElapsedMilliseconds,frames=ring.TakeLast(2).Select(item=>new{item.Time,item.Frame.Counter,item.Frame.Mask}).ToArray()});
             await Phase("neutral",0,15000);
             await Hold(4);
             GuestMaskMismatch negativeMismatch=null,embeddedMismatch=null;
@@ -429,7 +432,7 @@ internal sealed class FrontendRun:IDisposable
         if(scenario=="positive"&&(!IsPassed("A-held")||!IsPassed("B-held")||!IsPassed("A-release")||!IsPassed("B-release")))throw new InvalidDataException("default_driver: actual default-input guest press/release phases did not all pass");
         Set("default_driver","passed",scenario=="positive"?"default dinput/d3d11 selected without driver override; owned logs show successful D3D11 creation and this run delivered and released A/B in advancing guest frames":"default dinput/d3d11 selected without driver override; owned logs show successful D3D11 creation while the guest continued rendering through the valid suppression scenario");
     }
-    bool IsPassed(string key)=>checks.TryGetValue(key,out var value)&&JsonDocument.Parse(JsonSerializer.Serialize(value)).RootElement.GetProperty("status").GetString()=="passed";
+    bool IsPassed(string key){if(!checks.TryGetValue(key,out var value))return false;using var document=JsonDocument.Parse(JsonSerializer.Serialize(value));return document.RootElement.GetProperty("status").GetString()=="passed";}
     async Task Cleanup()
     {
         current="cleanup";
