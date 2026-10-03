@@ -31,6 +31,8 @@ internal sealed class SaveManagerView : BufferedPanel
 	private GameInfo selected;
 
 	private bool cloudBusy;
+    private bool saveListingComplete=true;
+    private ThemeButton saveListRefresh;
 
 	private Label cloudMessage;
 
@@ -64,8 +66,10 @@ internal sealed class SaveManagerView : BufferedPanel
    if((string)control.Tag=="cloud-actions")control.Width=detailCard.Width-48;
    if((string)control.Tag=="cloud-message")control.Width=detailCard.Width-48;
 			if((string)control.Tag=="backup-info")control.Width=detailCard.Width-48;
+   if((string)control.Tag=="files-heading")control.Width=saveListingComplete?detailCard.Width-48:Math.Max(120,detailCard.Width-220);
   }
   if(profileSummary!=null&&!profileSummary.IsDisposed)profileSummary.Width=detailCard.Width-56;
+  if(saveListRefresh!=null&&!saveListRefresh.IsDisposed)saveListRefresh.Left=detailCard.Width-saveListRefresh.Width-24;
  }
 
 
@@ -120,7 +124,7 @@ internal sealed class SaveManagerView : BufferedPanel
  {
   try { BuildDetailCore(); }
   catch(Exception error) when(error is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException or System.Security.SecurityException) {
-   ClearDetail();profileControls=null;profileSummary=null;cloudLogin=null;cloudUpload=null;cloudDownload=null;cloudMessage=null;
+   ClearDetail();profileControls=null;profileSummary=null;cloudLogin=null;cloudUpload=null;cloudDownload=null;cloudMessage=null;saveListRefresh=null;saveListingComplete=false;
    status.Text="Leitura interrompida. Os arquivos existentes foram preservados.";
    var title=new Label {Text=selected.Title,Font=AppTheme.Section,ForeColor=AppTheme.Text,Location=new Point(24,88),Size=new Size(detailCard.Width-48,48),Tag="cloud-message"};
    string guidance="Não foi possível conferir os saves de "+selected.Title+". Verifique o acesso à pasta Saves e ao arquivo Settings/SaveProfiles/"+selected.SaveFolderName+".json. Depois, tente novamente. Você pode selecionar outro jogo. Nenhum perfil foi redefinido.";
@@ -134,6 +138,7 @@ internal sealed class SaveManagerView : BufferedPanel
  private void BuildDetailCore()
  {
   ClearDetail();if(selected==null)return;
+  var listing=SaveFileListing.Read(SelectedFolder());saveListingComplete=listing.Complete;saveListRefresh=null;
   var cover=new PictureBox{Location=new Point(24,88),Size=new Size(108,148),SizeMode=PictureBoxSizeMode.Zoom,BackColor=AppTheme.Surface};
   cover.Image=GameCoverService.Load(root,selected.Cover);
   Label LabelAt(string text,Font font,Color color,int x,int y,int height,string tag="detail-text")=>new Label{Text=text,Font=font,ForeColor=color,BackColor=AppTheme.Surface,Location=new Point(x,y),Size=new Size(Math.Max(180,detailCard.Width-x-24),height),AutoEllipsis=true,Tag=tag};
@@ -141,19 +146,25 @@ internal sealed class SaveManagerView : BufferedPanel
   var subtitle=LabelAt(selected.Subtitle,AppTheme.Body,AppTheme.TextMuted,152,126,24);
   var folder=LabelAt("Pasta: "+selected.SaveFolderName,AppTheme.Caption,AppTheme.TextMuted,152,156,24);
   var actions=new FlowLayoutPanel{Location=new Point(152,188),Width=detailCard.Width-176,Height=104,BackColor=AppTheme.Surface,Tag="detail-actions"};
-  ThemeButton Action(string text,ButtonKind kind,EventHandler click){var b=new ThemeButton(text,kind){AutoSize=true,Margin=new Padding(0,0,8,8)};b.Click+=click;return b;}
+  ThemeButton Action(string text,ButtonKind kind,EventHandler click){var b=new ThemeButton(text,kind){AutoSize=true,Margin=new Padding(0,0,8,8),Enabled=saveListingComplete||text is "Abrir pasta" or "Todos os saves"};b.Click+=click;return b;}
   actions.Controls.Add(Action("Abrir pasta",ButtonKind.Secondary,(_,_)=>OpenSelected()));actions.Controls.Add(Action("Backup ZIP",ButtonKind.Primary,(_,_)=>BackupSelected()));actions.Controls.Add(Action("Restaurar backup",ButtonKind.Secondary,(_,_)=>RestoreSelected()));actions.Controls.Add(Action("Todos os saves",ButtonKind.Ghost,(_,_)=>OpenAll()));
   string latestBackup=SaveBackupService.LatestAutomaticBackup(root,selected.SaveFolderName);
   string backupText=latestBackup==null?"Backup automático deste perfil ainda não criado · será feito ao iniciar o jogo.":"Último backup automático · "+File.GetLastWriteTime(latestBackup).ToString("dd/MM/yyyy HH:mm");
   var backupInfo=LabelAt(backupText,AppTheme.Caption,latestBackup==null?AppTheme.TextMuted:AppTheme.Green,24,384,22,"backup-info");
-  var filesTitle=LabelAt("Arquivos de save",AppTheme.BodyBold,AppTheme.Text,24,412,24,"files-heading");
+  var filesTitle=LabelAt(listing.Complete?"Arquivos de save":"Lista parcial de saves",AppTheme.BodyBold,listing.Complete?AppTheme.Text:AppTheme.Red,24,412,24,"files-heading");
+  if(!listing.Complete)filesTitle.AccessibleDescription="Algumas pastas não foram lidas ou o limite foi atingido. Atualize a lista após corrigir as pastas ou reduzir a quantidade de arquivos.";
   detailCard.Controls.AddRange(new Control[]{cover,title,subtitle,folder,actions,backupInfo,filesTitle,fileList,status});
-  BuildProfileControls();
-  string[] files=Directory.GetFiles(SelectedFolder(),"*",SearchOption.AllDirectories);
-  if(files.Length==0)fileList.Controls.Add(new Label{Text="Nenhum save nesta pasta. Seu progresso aparecerá aqui depois de salvar dentro do jogo.",Font=AppTheme.Body,ForeColor=AppTheme.TextMuted,AutoSize=false,Size=new Size(400,64),Padding=new Padding(0,12,0,0)});
+  BuildProfileControls(listing);
+  string[] files=listing.Files;
+  if(files.Length==0)fileList.Controls.Add(new Label{Text=listing.Complete?"Nenhum save nesta pasta. Seu progresso aparecerá aqui depois de salvar dentro do jogo.":"A leitura está incompleta. Confira o acesso às pastas e atualize a lista.",Font=AppTheme.Body,ForeColor=AppTheme.TextMuted,AutoSize=false,Size=new Size(400,64),Padding=new Padding(0,12,0,0)});
   else {Array.Sort(files,StringComparer.OrdinalIgnoreCase);foreach(string file in files)fileList.Controls.Add(new SaveFileRow(new FileInfo(file)));}
-  status.ForeColor=AppTheme.TextMuted;
-  status.Text=files.Length==0?"Pasta pronta para receber seu progresso.":files.Length+" arquivo(s) nesta pasta.";
+  status.ForeColor=listing.Complete?AppTheme.TextMuted:AppTheme.Red;
+  status.Text=listing.Complete?(files.Length==0?"Pasta pronta para receber seu progresso.":files.Length+" arquivo(s) nesta pasta."):"Lista parcial · "+files.Length+" arquivo(s) exibidos · pastas ignoradas ou limite atingido.";
+  status.AccessibleDescription=listing.Complete?null:status.Text;
+  if(!listing.Complete) {
+   saveListRefresh=new ThemeButton("Atualizar lista",ButtonKind.Secondary){AutoSize=true,Location=new Point(detailCard.Width-180,404),AccessibleDescription="Verificar novamente a lista de saves depois de corrigir as pastas ou reduzir a quantidade de arquivos."};
+   saveListRefresh.Click+=(_,_)=>BuildDetail();detailCard.Controls.Add(saveListRefresh);detailCard.Controls.SetChildIndex(saveListRefresh,0);
+  }
   BuildCloudControls();LayoutCanvas(detailCard.Parent?.ClientSize.Width??1000);
  }
  private void BuildCloudControls()
@@ -162,8 +173,8 @@ internal sealed class SaveManagerView : BufferedPanel
   cloudMessage=new Label{Text=cloud.IsSignedIn?SignedInCloudMessage(cloud.GoogleEmail,selected.Title,ActiveProfileName()):"Conecte sua conta Google para acessar seus saves em outro computador.",Font=AppTheme.Body,ForeColor=AppTheme.TextMuted,Location=new Point(24,622),Size=new Size(detailCard.Width-48,42),Tag="cloud-message"};
   var actions=new FlowLayoutPanel{Location=new Point(24,678),Size=new Size(detailCard.Width-48,88),BackColor=AppTheme.Surface,Tag="cloud-actions"};
   cloudLogin=new ThemeButton(cloud.IsSignedIn?"Sair da conta":"Entrar com Google",ButtonKind.Secondary){AutoSize=true,Margin=new Padding(0,0,8,8)};
-  cloudUpload=new ThemeButton("Enviar save",ButtonKind.Primary){AutoSize=true,Margin=new Padding(0,0,8,8),Enabled=cloud.IsSignedIn};
-  cloudDownload=new ThemeButton("Restaurar save",ButtonKind.Secondary){AutoSize=true,Margin=new Padding(0,0,8,8),Enabled=cloud.IsSignedIn};
+  cloudUpload=new ThemeButton("Enviar save",ButtonKind.Primary){AutoSize=true,Margin=new Padding(0,0,8,8),Enabled=cloud.IsSignedIn&&saveListingComplete};
+  cloudDownload=new ThemeButton("Restaurar save",ButtonKind.Secondary){AutoSize=true,Margin=new Padding(0,0,8,8),Enabled=cloud.IsSignedIn&&saveListingComplete};
   cloudLogin.Click+=async(_,_)=>await RunCloudAction("login");
   cloudUpload.Click+=async(_,_)=>await RunCloudAction("upload");
   cloudDownload.Click+=async(_,_)=>await RunCloudAction("download");
@@ -216,6 +227,7 @@ internal sealed class SaveManagerView : BufferedPanel
 
 	private async Task RunCloudAction(string action)
 	{
+        if(action!="login"&&!saveListingComplete){if(cloudMessage!=null){cloudMessage.Text="A lista de saves está incompleta. Atualize a leitura antes de usar o backup na nuvem.";cloudMessage.ForeColor=AppTheme.Red;}return;}
 		if (cloudBusy)
 		{
 			return;
@@ -320,7 +332,7 @@ internal sealed class SaveManagerView : BufferedPanel
 				cloudLogin.Enabled = true;
 				cloudLogin.Text = (cloud.IsSignedIn ? "SAIR DA CONTA" : "ENTRAR COM GOOGLE");
 				ThemeButton themeButton3 = cloudUpload;
-				flag = (cloudDownload.Enabled = cloud.IsSignedIn);
+				flag = (cloudDownload.Enabled = cloud.IsSignedIn&&saveListingComplete);
 				themeButton3.Enabled = flag;
 			}
 		}
@@ -328,7 +340,7 @@ internal sealed class SaveManagerView : BufferedPanel
 
     private FlowLayoutPanel profileControls;
     private Label profileSummary;
-    private void BuildProfileControls()
+    private void BuildProfileControls(SaveFileListing listing)
     {
         profileSummary = null;
         profileControls = new FlowLayoutPanel { Location = new Point(24, 300), Width = detailCard.Width - 48, Height = 82, Tag = "cloud-actions" };
@@ -347,11 +359,10 @@ internal sealed class SaveManagerView : BufferedPanel
         {
             if (picker.SelectedIndex < 0) return;
             SaveProfile profile = state.Profiles[picker.SelectedIndex];
-            profileSummary.Text = BuildProfileSummary(root, selected, profile.Id);
             try { SaveProfileService.Activate(root, selected.SaveFolderName, profile.Id); BuildDetail(); }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Trocar perfil"); BuildDetail(); }
         };
-        var create = new ThemeButton("Novo perfil", ButtonKind.Primary) { AutoSize = true };
+        var create = new ThemeButton("Novo perfil", ButtonKind.Primary) { AutoSize = true,Enabled=listing.Complete };
         create.Click += (_, _) =>
         {
             try
@@ -388,15 +399,22 @@ internal sealed class SaveManagerView : BufferedPanel
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Renomear perfil"); }
         };
         profileSummary = new Label { AutoSize = false, AutoEllipsis = true, Width = detailCard.Width - 56, Height = 24, ForeColor = AppTheme.TextMuted, Font = AppTheme.Caption };
-        profileSummary.Text = BuildProfileSummary(root, selected, state.Profiles[picker.SelectedIndex].Id);
+        profileSummary.Text = BuildProfileSummaryFromListing(root,selected,listing);
         profileControls.Controls.AddRange(new Control[] { label, picker, create, rename, profileSummary });
     }
 
     internal static string BuildProfileSummary(string root, GameInfo game, string profileId)
     {
+        try {return BuildProfileSummaryFromListing(root,game,SaveFileListing.Read(SaveProfileService.Folder(root,game.SaveFolderName,profileId)));}
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidDataException){return "Não foi possível conferir os saves deste perfil.";}
+    }
+
+    private static string BuildProfileSummaryFromListing(string root,GameInfo game,SaveFileListing listing)
+    {
+        if(!listing.Complete)return "Verificação incompleta dos saves deste perfil.";
         try
         {
-            List<ProfileSaveChoice> saves = ProfileSaveLocator.Find(root, game, profileId);
+            List<ProfileSaveChoice> saves = ProfileSaveLocator.FindInFiles(root,game,listing.Files);
             if (saves.Count == 0) return "Sem save compatível neste perfil.";
             DateTime latest = saves.Max(save => File.GetLastWriteTimeUtc(save.Path)).ToLocalTime();
             string count = saves.Count == 1 ? "1 save compatível" : $"{saves.Count} saves compatíveis";

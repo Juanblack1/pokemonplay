@@ -15,9 +15,14 @@ internal static class ProfileSaveLocator
     public static List<ProfileSaveChoice> Find(string root, GameInfo game, string profileId)
     {
         string folder = SaveProfileService.Folder(root, game.SaveFolderName, profileId);
+        if (!Directory.Exists(folder)) return new List<ProfileSaveChoice>();
+        return FindInFiles(root,game,Directory.GetFiles(folder,"*",SearchOption.AllDirectories));
+    }
+
+    internal static List<ProfileSaveChoice> FindInFiles(string root,GameInfo game,IEnumerable<string> files)
+    {
         var choices = new List<ProfileSaveChoice>();
-        if (!Directory.Exists(folder)) return choices;
-        foreach (string file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
+        foreach (string file in files)
         {
             string extension = System.IO.Path.GetExtension(file).ToLowerInvariant();
             if (extension is not (".sav" or ".srm" or ".dsv" or ".dat" or ".bin")) continue;

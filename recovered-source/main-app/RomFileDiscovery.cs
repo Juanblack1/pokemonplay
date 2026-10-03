@@ -12,7 +12,7 @@ internal sealed class RomDiscoveryResult
 internal static class RomFileDiscovery
 {
     internal static RomDiscoveryResult Scan(string root, Func<string,bool> supported, int maximumFiles=int.MaxValue,
-        Func<string,IEnumerable<FileSystemInfo>> enumerate=null)
+        Func<string,IEnumerable<FileSystemInfo>> enumerate=null, bool skipReparseFiles=true)
     {
         if(maximumFiles<1)throw new ArgumentOutOfRangeException(nameof(maximumFiles));
         enumerate ??= path=>new DirectoryInfo(path).EnumerateFileSystemInfos("*",new EnumerationOptions {
@@ -29,7 +29,7 @@ internal static class RomFileDiscovery
                     if(++entries>100000){result.LimitReached=true;pending.Clear();break;}
                     try {
                     var attributes=entry.Attributes;
-                    if((attributes&FileAttributes.ReparsePoint)!=0){result.SkippedLocations++;continue;}
+                    if((attributes&FileAttributes.ReparsePoint)!=0&&((attributes&FileAttributes.Directory)!=0||skipReparseFiles)){result.SkippedLocations++;continue;}
                     if((attributes&FileAttributes.Directory)!=0) {
                         if(current.Depth>=64){result.SkippedLocations++;continue;}
                         if(directories+pending.Count>=10000){result.LimitReached=true;continue;}
