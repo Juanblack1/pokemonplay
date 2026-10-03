@@ -54,7 +54,6 @@ internal sealed class GameHostForm : Form
     private ControllerVisualizer virtualPad;
     [DllImport("user32.dll",SetLastError=true)] private static extern IntPtr SetFocus(IntPtr hwnd);
     [DllImport("user32.dll",SetLastError=true)] private static extern bool AttachThreadInput(uint from,uint to,bool attach);
-    [DllImport("user32.dll",SetLastError=true)] private static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
 
 	[DllImport("user32.dll", SetLastError = true)]
@@ -578,38 +577,10 @@ internal sealed class GameHostForm : Form
     }
     private void FocusEmulator()
     {
-        IntPtr hwnd=embeddedWindowHandle,before=InputReader.GetForegroundWindow();
-        InputReader.GetWindowThreadProcessId(before,out uint beforePid);
-        int pid=GetEmulatorProcessId();bool captureBefore=virtualPad?.Capture==true;
-        bool attempted=false,foregroundResult=false,attachAttempted=false,attached=false,detachResult=false;
-        int foregroundError=0,attachError=0,focusError=0,detachError=0;IntPtr focusReturn=IntPtr.Zero;
-        uint target=0,current=GetCurrentThreadId(),windowPid=0;string reason=null;
-        try{
-            if(!Visible||closing||launchFailed||pid<=0){reason="Session not live/visible";return;}
-            if(hwnd==IntPtr.Zero&&!TryGetMainWindowHandle(emulator,out hwnd)){reason="Owned window unavailable";return;}
-            target=InputReader.GetWindowThreadProcessId(hwnd,out windowPid);
-            if(windowPid!=pid||target==0){reason="Window does not belong to live emulator";return;}
-            before=InputReader.GetForegroundWindow();InputReader.GetWindowThreadProcessId(before,out beforePid);
-            captureBefore=virtualPad?.Capture==true;
-            if(beforePid!=Environment.ProcessId&&beforePid!=pid){reason="Foreground belongs to another process; no activation attempted";return;}
-            // One real-input activation attempt. Denial is recorded, never retried or overridden.
-            attempted=true;foregroundResult=SetForegroundWindow(hwnd);foregroundError=Marshal.GetLastPInvokeError();
-            InputReader.GetWindowThreadProcessId(InputReader.GetForegroundWindow(),out uint currentForegroundPid);
-            if(currentForegroundPid!=Environment.ProcessId&&currentForegroundPid!=pid){reason="Foreground changed to another process; keyboard focus not requested";return;}
-            if(!Visible||closing||launchFailed||GetEmulatorProcessId()!=pid){reason="Session ceased to be eligible; keyboard focus not requested";return;}
-            attachAttempted=target!=current;
-            if(attachAttempted){attached=AttachThreadInput(current,target,true);attachError=Marshal.GetLastPInvokeError();}
-            focusReturn=SetFocus(hwnd);focusError=Marshal.GetLastPInvokeError();
-            reason=foregroundResult?"Foreground request accepted; actual outcome requires measured HWND/capture and guest frames":"Foreground request denied; existing guarded keyboard focus attempted";
-        }finally{
-            if(attached){detachResult=AttachThreadInput(current,target,false);detachError=Marshal.GetLastPInvokeError();}
-            IntPtr after=InputReader.GetForegroundWindow();InputReader.GetWindowThreadProcessId(after,out uint afterPid);
-            LastForegroundAttempt=new(DateTimeOffset.UtcNow,hwnd.ToInt64(),pid,windowPid,before.ToInt64(),beforePid,after.ToInt64(),afterPid,captureBefore,virtualPad?.Capture==true,attempted,foregroundResult,foregroundError,attachAttempted,attached,attachError,focusReturn.ToInt64(),focusError,detachResult,detachError,reason);
-        }
+        IntPtr hwnd=embeddedWindowHandle;
+        if(hwnd==IntPtr.Zero&&!TryGetMainWindowHandle(emulator,out hwnd))return;
+        uint target=InputReader.GetWindowThreadProcessId(hwnd,out _),current=GetCurrentThreadId();
+        bool attached=target!=current&&AttachThreadInput(current,target,true);
+        try{SetFocus(hwnd);}finally{if(attached)AttachThreadInput(current,target,false);}
     }
-    internal sealed record ForegroundAttemptTrace(DateTimeOffset AtUtc,long ChildHwnd,int ExpectedPid,uint WindowPid,
-        long BeforeHwnd,uint BeforePid,long AfterHwnd,uint AfterPid,bool CaptureBefore,bool CaptureAfter,
-        bool Attempted,bool ForegroundResult,int ForegroundError,bool AttachAttempted,bool Attached,int AttachError,
-        long SetFocusReturn,int SetFocusError,bool DetachResult,int DetachError,string Reason);
-    internal ForegroundAttemptTrace LastForegroundAttempt {get;private set;}
 }
