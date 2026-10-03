@@ -13,7 +13,7 @@ internal static class Program
     {
         string root=null;
         try{
-            if(args.Length==1&&args[0]=="--verify-evidence-contract"){EmbeddingEvidence.VerifyContract();HoldAcquisition.VerifyContract();Console.WriteLine("Evidence serialization and hold acquisition contracts passed");return 0;}
+            if(args.Length==1&&args[0]=="--verify-evidence-contract"){EmbeddingEvidence.VerifyContract();HoldAcquisition.VerifyContract();TopLevelProbePhaseContract.Verify();Console.WriteLine("Evidence serialization, hold acquisition and phase contracts passed");return 0;}
             var options=new Dictionary<string,string>();if(args.Length!=8)throw new ArgumentException("Expected --root --scenario --port --commit");
             for(int i=0;i<args.Length;i+=2)options.Add(args[i],args[i+1]);
             root=Path.TrimEndingDirectorySeparator(Path.GetFullPath(options["--root"]));
@@ -213,7 +213,7 @@ internal sealed class FrontendRun:IDisposable
                 lastObservedInjection=bridge.LastInjectionTrace.Sequence;
                 events.Add(new{kind="actual-input-delivery",phase=current,timeMs=wall.ElapsedMilliseconds,poll=bridge.LastInputTrace,injections=bridge.RecentInjectionAttempts});
             }
-            bool topLevelProbe=current.StartsWith("top-level-control",StringComparison.Ordinal);
+            bool topLevelProbe=TopLevelProbePhaseContract.IsActive(current);
             if(topLevelProbe){Native.GetWindowThreadProcessId(hwnd,out uint topLevelPid);if(topLevelPid!=child.Id||Native.GetParent(hwnd)!=IntPtr.Zero||(unchecked((uint)Native.GetWindowLong(hwnd,-16))&0x40000000)!=0)throw new InvalidDataException("top_level_control: sampler lost owned top-level HWND");}
             else ValidateEmbedding();
             var focus=Focus();events.Add(new{kind="focus-sample",timeMs=wall.ElapsedMilliseconds,phase=current,focus,held,raw=held>=0?pad.Actions[held]:false,supplied=held>=0?pad.VirtualActions[held]:false,capture=pad.Capture,mouseAction=Field<int>(pad,"mouseAction"),childHwnd=hwnd.ToInt64(),panelHwnd=Field<Panel>(host,"gamePanel").Handle.ToInt64(),hostHwnd=host.Handle.ToInt64(),launcherHwnd=Launcher.Handle.ToInt64(),style=Native.GetWindowLong(hwnd,-16)});
@@ -442,6 +442,12 @@ internal sealed class FrontendRun:IDisposable
     object Result()=>new{schema=1,scenario,commit,passed=Passed,checks,identity,config=configEvidence,evidence=Directory.GetFiles(evidence,"*",SearchOption.AllDirectories).Where(path=>!path.EndsWith(".tmp",StringComparison.OrdinalIgnoreCase)&&Path.GetFileName(path) is not ("result.json" or "progress.json")).Select(path=>Path.GetRelativePath(evidence,path)).OrderBy(path=>path,StringComparer.Ordinal).ToArray()};
     void Write(string name,object value){string path=Path.Combine(evidence,name);File.WriteAllText(path+".tmp",JsonSerializer.Serialize(value,JsonOptions));File.Move(path+".tmp",path,true);}
     public void Dispose(){sampler.Dispose();foreach(var item in ring)item.Image.Dispose();}
+}
+
+internal static class TopLevelProbePhaseContract
+{
+    internal static bool IsActive(string phase)=>phase is "top-level-control" or "top-level-control-held" or "top-level-control-release";
+    internal static void Verify(){if(IsActive("top-level-control-prep")||!IsActive("top-level-control")||!IsActive("top-level-control-held")||!IsActive("top-level-control-release"))throw new InvalidDataException("top-level probe phase classification contract failed");}
 }
 
 internal sealed class GuestMaskMismatch:Exception
