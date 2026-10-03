@@ -1,0 +1,7 @@
+# Ciclo 9 — execução e entrada DS verificáveis
+
+Lacuna: o teste nativo existente comprova somente GBA; compilar o core DS não comprova boot nem que a entrada chega ao programa emulado. Pesquisa primária em ds-validation-research.md.
+
+Critérios: R1 gerar deterministicamente um ROM DS original, sem logo Nintendo, BIOS/firmware extraídos, runtime/ROM comercial ou dados pessoais; R2 executar a DLL melonDS DS efetiva com system/save isolados, opções DS/builtin/direct/software explícitas e rede desabilitada; R3 receber framebuffer 256x384, usando pitch/formato negociado; R4 região da tela superior azul sem entrada, vermelha com A e novamente azul ao soltar, demonstrando entrega ao guest em vez de mera contagem de callbacks/hash variável; R5 registrar SHA256 do core, gerador e ROM, versão, opções declaradas/efetivas e resultado de cada fase; R6 timeout do processo no CI, falha fecha o gate, evidências preservadas e teste GBA anterior mantido; R7 integrar/publicar atualização somente após verificação. Não afirmar ROM comercial, controle físico, touch, áudio audível ou embedding do launcher.
+
+Plano: payload ARM9 próprio por instruções ARM, framebuffer LCDC/KEYINPUT, ARM7 em loop, header e CRC gerados; ampliar probe com --system ds sem modificar sua prova GBA; acrescentar prova DS aos workflows completos de verificação e release. Validar primeiro o core da release publicada com digest confirmado no CI isolado; depois o core recém-compilado do workflow completo. Não executar DLL bloqueada localmente.

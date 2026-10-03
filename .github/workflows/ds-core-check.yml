@@ -1,0 +1,57 @@
+name: Verificar execução e entrada DS
+on:
+  pull_request:
+    paths:
+      - 'recovered-source/tools/probe-libretro.py'
+      - 'recovered-source/tools/original_ds_test.py'
+      - '.github/workflows/ds-core-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-ds-program:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: false
+      - name: Obter o core da release verificada
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'ds-core-fixture'
+          New-Item -ItemType Directory -Path $fixture | Out-Null
+          gh release download v171.10.0 --repo '${{ github.repository }}' --pattern pokemon-play-win-x64-update.zip --dir $fixture
+          if ($LASTEXITCODE -ne 0) { throw 'Download do pacote falhou.' }
+          $zip = Join-Path $fixture 'pokemon-play-win-x64-update.zip'
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '6f9e3b95439dcf0fb303304f457ab585f3d8ba895753e7c18d62ecb27198bb1e') { throw 'Digest da fixture incorreto.' }
+          Expand-Archive -LiteralPath $zip -DestinationPath $fixture
+          Expand-Archive -LiteralPath (Join-Path $fixture 'PokemonPlayRuntime/emulators-runtime.zip') -DestinationPath $fixture
+          "DS_CORE=$fixture/Emulators/RetroArch/cores/melondsds_libretro.dll" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Comprovar resposta visual solto-A-solto
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python ./recovered-source/tools/probe-libretro.py --system ds --core $env:DS_CORE --output '${{ runner.temp }}/ds-positive' --frames 30
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Comprovar falha quando a entrada não chega ao guest
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          python ./recovered-source/tools/probe-libretro.py --system ds --suppress-input --core $env:DS_CORE --output '${{ runner.temp }}/ds-negative' --frames 30
+          if ($LASTEXITCODE -eq 0) { throw 'O oráculo aprovou input ausente.' }
+          $failure = Get-Content -Raw '${{ runner.temp }}/ds-negative/native-failure.json' | ConvertFrom-Json
+          if ($failure.error -ne 'DS guest framebuffer did not follow released/A/released input' -or $failure.guest_input.Count -ne 3 -or $failure.guest_input[1].passed) { throw 'O controle negativo falhou por outra razão.' }
+          Write-Output 'PASS guest oracle rejects absent input.'
+      - name: Guardar evidências DS originais
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: original-ds-evidence
+          path: |
+            ${{ runner.temp }}/ds-positive/*.json
+            ${{ runner.temp }}/ds-positive/*.png
+            ${{ runner.temp }}/ds-negative/*.json
+            ${{ runner.temp }}/ds-negative/*.png

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Windowless libretro ROM/input smoke check with an isolated save/system directory.
 
-No ROM is downloaded. Omit --rom to generate an original GBA input-test program.
+No ROM is downloaded. Omit --rom to generate an original GBA or DS input-test program.
 This checks core input callbacks and rendering, not physical gamepad delivery.
 """
 import argparse
@@ -12,6 +12,39 @@ import os
 from pathlib import Path
 import struct
 import time
+import zlib
+from original_ds_test import original_ds_test_rom
+
+
+DS_OPTIONS = {
+    "melonds_console_mode": b"ds", "melonds_sysfile_mode": b"builtin",
+    "melonds_boot_mode": b"direct", "melonds_render_mode": b"software",
+    "melonds_network_mode": b"disabled", "melonds_firmware_username": b"melonDS DS",
+    "melonds_screen_layout1": b"top-bottom", "melonds_screen_gap": b"0",
+    "melonds_secondary_screen_scale": b"100", "melonds_number_of_screen_layouts": b"1",
+    "melonds_show_cursor": b"disabled",
+}
+
+
+def ds_frame_sample(frame, output, phase, expected):
+    if frame["format"] != 1 or (frame["width"], frame["height"]) != (256, 384):
+        raise RuntimeError("DS oracle requires the declared XRGB8888 256x384 layout")
+    pitch, data = frame["pitch"], frame["bytes"]
+    if pitch < 256 * 4 or pitch % 4 or len(data) != pitch * 384:
+        raise RuntimeError("Invalid DS framebuffer stride")
+    def rgb(x, y):
+        value = struct.unpack_from("<I", data, y * pitch + x * 4)[0]
+        return [(value >> 16) & 255, (value >> 8) & 255, value & 255]
+    samples = [rgb(x, y) for x in (64, 128, 192) for y in (64, 96, 128)]
+    active = 0 if expected == "red" else 2
+    passed = all(pixel[active] >= 240 and all(pixel[channel] <= 16 for channel in range(3) if channel != active) for pixel in samples)
+    # Save original synthetic frames without requiring Pillow/numpy on the runner.
+    scanlines = b"".join(b"\0" + bytes(channel for x in range(256) for channel in rgb(x, y)) for y in range(384))
+    def chunk(kind, body):
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">2I5B", 256, 384, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b"")
+    (output / (phase + ".png")).write_bytes(png)
+    return {"phase": phase, "expected": expected, "samples_rgb": samples, "passed": passed}
 
 
 class Variable(C.Structure):
@@ -74,9 +107,9 @@ def probe(args):
     output.mkdir(parents=True, exist_ok=True)
     isolated = output / "isolated-core-data"
     isolated.mkdir(exist_ok=True)
-    rom = Path(args.rom).resolve() if args.rom else output / "original-input-test.gba"
+    rom = Path(args.rom).resolve() if args.rom else output / ("original-input-test." + ("nds" if args.system == "ds" else "gba"))
     if not args.rom:
-        original_test_rom(rom)
+        (original_ds_test_rom if args.system == "ds" else original_test_rom)(rom)
     if not rom.is_file():
         raise FileNotFoundError(rom)
     core_path = Path(args.core).resolve()
@@ -85,7 +118,7 @@ def probe(args):
         for directory in (core_path.parent, core_path.parent.parent):
             directory_handles.append(os.add_dll_directory(str(directory)))
     core = C.CDLL(str(core_path))
-    options, buffers, native_logs = {}, {}, []
+    options, buffers, native_logs, configuration_errors = {}, {}, [], []
     stats = {"video_calls": 0, "input_queries": 0, "positive_input_queries": 0, "audio_frames": 0}
     frame = {"bytes": None, "width": 0, "height": 0, "pitch": 0, "format": 0}
     pressed = set()
@@ -97,6 +130,10 @@ def probe(args):
             value = next((v for v in choices if v.lower() == b"software"), default)
         if key in ("mgba_use_bios", "mgba_skip_bios"):
             value = b"OFF" if key == "mgba_use_bios" else b"ON"
+        if args.system == "ds" and key in DS_OPTIONS:
+            value = DS_OPTIONS[key]
+            if value not in choices:
+                configuration_errors.append("Unsupported DS option value: " + key)
         options[key] = value
         buffers[key] = C.create_string_buffer(value or b"")
 
@@ -188,7 +225,7 @@ def probe(args):
     def input_state(port, device, index, button):
         stats["input_queries"] += 1
         value = 0
-        if port == 0 and device == 1:
+        if port == 0 and device == 1 and not args.suppress_input:
             value = sum(1 << b for b in pressed) if button == 256 else int(button in pressed)
         if value:
             stats["positive_input_queries"] += 1
@@ -218,6 +255,10 @@ def probe(args):
     loaded = False
     core.retro_init()
     try:
+        if args.system == "ds":
+            missing = [key for key in DS_OPTIONS if key not in options]
+            if missing or configuration_errors:
+                raise RuntimeError("DS configuration rejected: " + "; ".join(missing + configuration_errors))
         loaded = core.retro_load_game(C.byref(game))
         if not loaded:
             raise RuntimeError("Core rejected ROM; see native log formats in evidence.")
@@ -234,9 +275,18 @@ def probe(args):
             return hashlib.sha256(frame["bytes"]).hexdigest()
 
         seed_hash = run(args.frames, [])
-        size = core.retro_serialize_size()
         comparison = {"supported": False}
-        if 0 < size <= 128 * 1024 * 1024:
+        guest_input = []
+        size = core.retro_serialize_size() if args.system == "gba" else 0
+        if args.system == "ds":
+            guest_input.append(ds_frame_sample(frame, output, "released-before", "blue"))
+            run(args.frames, [8])
+            guest_input.append(ds_frame_sample(frame, output, "a-held", "red"))
+            run(args.frames, [])
+            guest_input.append(ds_frame_sample(frame, output, "released-after", "blue"))
+            if not all(phase["passed"] for phase in guest_input):
+                raise RuntimeError("DS guest framebuffer did not follow released/A/released input")
+        elif 0 < size <= 128 * 1024 * 1024:
             saved = C.create_string_buffer(size)
             if core.retro_serialize(saved, size):
                 first = run(180, [])
@@ -253,7 +303,7 @@ def probe(args):
             run(180, [3, 8])
         if not stats["video_calls"] or not stats["positive_input_queries"]:
             raise RuntimeError("Core did not deliver rendering and consume supplied controller input.")
-        if not args.rom and not comparison.get("input_changes_frame"):
+        if args.system == "gba" and not args.rom and not comparison.get("input_changes_frame"):
             raise RuntimeError("Original input-test ROM did not respond to controller input.")
         try:
             import numpy as np
@@ -273,13 +323,18 @@ def probe(args):
         return {"result": "passed", "core": info.name.decode(), "core_version": info.version.decode(),
                 "rom_name": rom.name, "original_diagnostic_rom": not bool(args.rom),
                 "rom_sha256": hashlib.sha256(rom.read_bytes()).hexdigest(), "seed_frame_hash": seed_hash,
+                "core_sha256": hashlib.sha256(core_path.read_bytes()).hexdigest(),
+                "generator_sha256": hashlib.sha256(Path(__file__).with_name("original_ds_test.py").read_bytes()).hexdigest() if args.system == "ds" else None,
                 "width": frame["width"], "height": frame["height"], "frames": args.frames,
                 "seconds": time.monotonic() - started, "stats": stats, "state_comparison": comparison,
+                "guest_input": guest_input,
                 "options": {key: (value or b"").decode() for key, value in options.items()}, "native_log_formats": native_logs,
                 "scope": "Core loading, software rendering and supplied input; physical controller and launcher embedding were not exercised."}
     except Exception as error:
         (output / "native-failure.json").write_text(json.dumps({
             "result": "failed", "error": str(error), "stats": stats,
+            "guest_input": locals().get("guest_input", []),
+            "options": {key: (value or b"").decode() for key, value in options.items()},
             "native_log_formats": native_logs}, indent=2), encoding="utf-8")
         raise
     finally:
@@ -292,9 +347,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", required=True)
     parser.add_argument("--rom")
+    parser.add_argument("--system", choices=("gba", "ds"), default="gba")
+    parser.add_argument("--suppress-input", action="store_true", help="Negative control: withhold all guest input")
     parser.add_argument("--output", required=True)
     parser.add_argument("--frames", type=int, default=1800)
     args = parser.parse_args()
+    if args.system == "ds" and args.rom:
+        parser.error("DS guest input verification uses only the original generated diagnostic ROM")
     if not 1 <= args.frames <= 10000:
         parser.error("--frames must be between 1 and 10000")
     try:
