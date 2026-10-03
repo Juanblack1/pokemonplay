@@ -3,10 +3,13 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 internal static class KeyBindingAccessibilityCheck
 {
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool IsWindowVisible(IntPtr window);
     static T Field<T>(object target, string name) => (T)target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(target);
     static void Assert(bool condition, string message) { if (!condition) throw new Exception(message); Console.WriteLine("PASS accessibility " + message); }
     static void Invoke(object target, string name, params object[] args) => target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(target, args);
@@ -90,10 +93,23 @@ internal static class KeyBindingAccessibilityCheck
         void CheckRows(string[] keys) {
             for (int i = 0; i < 12; i++) {
                 var row = workbench.Rows[i];
+                // Hidden X/Y never received an HWND in the initial GBA layout.
+                // MSAA State falls back to the standard HWND accessible object;
+                // Description/Name alone do not initialize that native fallback.
+                // Source: dotnet/winforms v10.0.0 Accessibility/
+                // Control.ControlAccessibleObject.cs (Handle setter) and
+                // AccessibleObject.cs (State -> SystemIAccessible.TryGetState).
+                IntPtr rowHandle = row.Handle;
+                Assert(row.IsHandleCreated && rowHandle != IntPtr.Zero, "native row exists for MSAA visibility measurement: " + actions[i]);
                 Mapping(row, actions[i], keys[i], true);
                 Assert(row.TabStop && row.Visible == (i < 10 || model.SelectedIndex > 0), "model visibility and tab eligibility preserved: " + actions[i]);
-                if (i >= 10 && model.SelectedIndex == 0) Assert((row.AccessibilityObject.State & AccessibleStates.Invisible) != 0, "hidden GBA extra action is accessible as invisible");
+                if (i >= 10 && model.SelectedIndex == 0) {
+                    Assert(!IsWindowVisible(rowHandle), "hidden GBA extra action has no visible native window");
+                    Assert((row.AccessibilityObject.State & AccessibleStates.Invisible) != 0, "native-backed MSAA marks hidden GBA extra action invisible");
+                }
             }
+            int expectedVisible = model.SelectedIndex == 0 ? 10 : 12;
+            Assert(workbench.Rows.Count(row => row.Visible && row.Enabled && row.TabStop) == expectedVisible, "exact visible enabled tab-stop count for selected model: " + expectedVisible);
         }
         foreach (int selectedModel in new[] { 0, 1, 2 }) {
             model.SelectedIndex = selectedModel;
