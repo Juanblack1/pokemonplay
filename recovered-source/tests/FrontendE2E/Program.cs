@@ -289,6 +289,8 @@ internal sealed class FrontendRun:IDisposable
             if(wall.ElapsedMilliseconds-lastRequest<1100)await Task.Delay((int)(1100-(wall.ElapsedMilliseconds-lastRequest)));
             if(!Focus().guard)throw new InvalidDataException("focus: exact bridge guard false");
             var pair=await Capture(name,deadline);int observed=pair.Internal.Mask;
+            int actionIndex=name.StartsWith("A-",StringComparison.Ordinal)?4:name.StartsWith("B-",StringComparison.Ordinal)?5:-1;
+            if(actionIndex>=0){var trace=Field<GameInputBridge>(host,"inputBridge").LastInputTrace;string[] keyMap=trace.KeyMap.Split(',');if(actionIndex>=keyMap.Length||!int.TryParse(keyMap[actionIndex],out int virtualKey))throw new InvalidDataException("input_delivery: keyboard map unavailable for phase");events.Add(new{kind="host-key-state-sample",phase=name,timeMs=wall.ElapsedMilliseconds,expectedHeld=name.EndsWith("held",StringComparison.Ordinal),state=Native.KeyboardStateEvidence(hwnd,virtualKey)});}
             if(pair.Desktop.Mask!=observed)throw new InvalidDataException("guest_hold_color: internal/desktop disagreement");
             events.Add(new{kind="guest-mask-comparison",phase=name,expected,observed,status=observed==expected?"passed":"failed"});
             if(observed!=expected){

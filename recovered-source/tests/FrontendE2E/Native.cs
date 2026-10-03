@@ -14,6 +14,9 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool IsChild(IntPtr parent,IntPtr child);
     [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr hwnd,out uint pid);
+    [DllImport("user32.dll")] static extern short GetAsyncKeyState(int virtualKey);
+    [DllImport("user32.dll")] static extern IntPtr GetKeyboardLayout(uint threadId);
+    internal static object KeyboardStateEvidence(IntPtr hwnd,int virtualKey){uint thread=GetWindowThreadProcessId(hwnd,out uint pid);short state=GetAsyncKeyState(virtualKey);return new{hwnd=hwnd.ToInt64(),pid,thread,virtualKey,asyncKeyDown=(state&0x8000)!=0,keyboardLayout=GetKeyboardLayout(thread).ToInt64()};}
     [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] internal static extern bool IsWindow(IntPtr hwnd);
     [DllImport("user32.dll")] internal static extern bool GetClientRect(IntPtr hwnd,out Rect rect);
