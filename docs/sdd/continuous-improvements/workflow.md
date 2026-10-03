@@ -19,3 +19,7 @@ Ciclo 3: busca combinada. Critérios: C3.1 combinar palavras do título e da pla
 Reprodução corrigida: Ruby não faz parte do catálogo padrão; a fixture agora cria explicitamente um jogo importado Ruby. Com a lógica anterior de frase inteira, `ruby advance` falhou. Com combinação de palavras, os 6 testes focados passaram (`output/library-search-red.log` e `output/library-search-green.log`). A avaliação inicial sem essa fixture não é usada como prova do bug.
 
 Ciclo 2: CI incremental 37089557969 success. Acrescentados cenários de falha no meio da enumeração e teto de 100.000 entradas mesmo sem ROMs. Próxima verificação: suíte completa com busca combinada.
+
+Ciclo 4: ROM importada indisponível e catálogo inválido. Problema: jogos importados movidos somem da biblioteca; catálogo malformado era ocultado e caminho ROM nulo podia causar NullReferenceException. Critérios: C4.1 aviso visível e acessível para ROM indisponível com acesso ao gerenciador existente; C4.2 catálogo inválido gera aviso, sem sobrescrever o arquivo; C4.3 reconectar arquivo o torna disponível novamente ao atualizar; C4.4 caminho nulo é dado inválido, não crash; C4.5 preservar associação de saves. Usar o painel existente e seus textos de recuperação, sem redesenhar biblioteca ou copiar ROMs.
+
+Ciclo 3 confirmado: suíte completa local com 509 PASS e ALL CHECKS PASSED; CI 37089837333 success. Ciclo 4: compilação Release zero erros; execução local bloqueada por App Control (0x800711C7), sem alterar política. Verificação da nova versão e prévias será feita no CI da PR.

@@ -12,6 +12,7 @@ internal sealed class LibraryView : BufferedPanel
 	private readonly LauncherForm host;
 
 	private readonly List<GameInfo> games;
+    private ImportedGameAvailability importedAvailability;
 
 	private readonly ThemeInput search;
 
@@ -46,6 +47,7 @@ internal sealed class LibraryView : BufferedPanel
 		this.host = host;
 		this.root = root;
 		games = GameCatalog.Build(root);
+        importedAvailability=ImportedGameAvailability.Inspect(root);
 		Dock = DockStyle.Fill;
 		BackColor = Color.Transparent;
 		Controls.Add(CreateContentArea());
@@ -413,6 +415,7 @@ internal sealed class LibraryView : BufferedPanel
 			List<GameInfo> refreshedGames = GameCatalog.Build(root);
 			games.Clear();
 			games.AddRange(refreshedGames);
+            importedAvailability=ImportedGameAvailability.Inspect(root);
 			heroBanner.UpdateGameCount(games.Count, DateTimeOffset.Now);
 			Rebuild();
 			if (refreshButton.Visible)
@@ -450,6 +453,12 @@ internal sealed class LibraryView : BufferedPanel
 		content.SuspendLayout();
 		foreach (Control old in new List<Control>(GetChildren(content))) old.Dispose();
 		content.Controls.Clear();
+        if(importedAvailability.CatalogUnreadable||importedAvailability.UnavailableCount>0) {
+            string title=importedAvailability.CatalogUnreadable?"Não foi possível ler os jogos importados":importedAvailability.UnavailableCount==1?"Uma ROM importada não está acessível":$"{importedAvailability.UnavailableCount} ROMs importadas não estão acessíveis";
+            string description=importedAvailability.CatalogUnreadable?"O catálogo local precisa ser verificado. Seus arquivos de ROM e saves foram preservados. Abra o gerenciador para ver o problema.":"Reconecte a unidade ou localize o arquivo no gerenciador. A associação do jogo com seus saves será mantida.";
+            var notice=new EmptyStatePanel(title,description,"GERENCIAR JOGOS",(_,_)=>ManageImportedGames()) {Tag="imported-rom-notice",AccessibleName=title,AccessibleDescription=description};
+            content.Controls.Add(notice);
+        }
 		if (generationFilter == 0 && !favoritesOnly && !recentOnly && !alphabeticalOnly && !mostPlayedOnly && num == 0 && text.Length == 0 &&
 			!games.Any(game => game.IsImported ? File.Exists(game.RomPath) : !string.IsNullOrEmpty(game.Launcher) && File.Exists(Path.Combine(root, game.Launcher))))
 		{

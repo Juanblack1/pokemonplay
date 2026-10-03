@@ -77,6 +77,7 @@ internal static class ImportedGameCatalog
 
 	internal static bool IsSupportedRom(string path)
 	{
+		if (string.IsNullOrWhiteSpace(path)) return false;
 		string extension = Path.GetExtension(path);
 		return extension.Equals(".gba", StringComparison.OrdinalIgnoreCase) || extension.Equals(".nds", StringComparison.OrdinalIgnoreCase) ||
 			extension.Equals(".3ds", StringComparison.OrdinalIgnoreCase) || extension.Equals(".cci", StringComparison.OrdinalIgnoreCase) ||
