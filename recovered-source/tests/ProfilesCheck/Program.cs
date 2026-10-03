@@ -19,6 +19,12 @@ class Check {
   if(args.Length>0&&args[0]=="--embedding-layout") { GameEmbeddingLifecycleCheck.RunLayout(args.Length==2?args[1]:Path.Combine(Path.GetTempPath(),"pokemonplay-embedding-layout-"+Guid.NewGuid().ToString("N")));return; }
   if(args.Length==2&&args[0]=="--embedding-lifecycle-child") { GameEmbeddingLifecycleCheck.Child(args[1]);return; }
   if(args.Length>0&&args[0]=="--embedding-lifecycle") { string fixture=args.Length==2?args[1]:Path.Combine(Path.GetTempPath(),"pokemonplay-embedding-lifecycle-"+Guid.NewGuid().ToString("N"));GameEmbeddingLifecycleCheck.Run(fixture);return; }
+  if(args.Length>0&&args[0]=="--keybinding-accessibility") {
+   Application.EnableVisualStyles();
+   string accessibilityRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-keybinding-accessibility-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(accessibilityRoot);
+   try{KeyBindingAccessibilityCheck.Run(accessibilityRoot);}finally{DeleteTemporaryFixture(accessibilityRoot);}
+   return;
+  }
   if(args.Length>0&&args[0]=="--keybinding-cancel") {
    string captureRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-keybinding-capture-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(captureRoot);
    try{KeyBindingCaptureCheck.Run(captureRoot);}finally{DeleteTemporaryFixture(captureRoot);}
@@ -101,7 +107,7 @@ class Check {
   LibrarySearchCheck.Run(root);
   ImportedAvailabilityCheck.Run(root);
   ProfileLibraryRecoveryCheck.Run(root);SaveManagerRecoveryCheck.Run(root);SaveActionsRecoveryCheck.Run(root);SaveListBoundsCheck.Run(root);SaveRowRecoveryCheck.Run(root);
-  AtomicArchiveCheck.Run(root,app);BankFiltersCheck.Run(root,app);AppUpdatesCheck.Run(root);GameLaunchHistoryCheck.Run(root,app);RetroAchievementsCheck.Run(root,app);FirstUseCheck.Run(root,app);AzaharSessionCheck.Run(app,root);ImportedRomRecoveryCheck.Run(root,app);PokemonBasesCheck.Run(root,app);SpriteResilienceCheck.Run(root,app);BundledEmulatorsCheck.Run(root,app);EmulatorSettingsRecoveryCheck.Run(root,app);SettingsResponsiveCheck.Run(root);KeyBindingCaptureCheck.Run(root);
+  AtomicArchiveCheck.Run(root,app);BankFiltersCheck.Run(root,app);AppUpdatesCheck.Run(root);GameLaunchHistoryCheck.Run(root,app);RetroAchievementsCheck.Run(root,app);FirstUseCheck.Run(root,app);AzaharSessionCheck.Run(app,root);ImportedRomRecoveryCheck.Run(root,app);PokemonBasesCheck.Run(root,app);SpriteResilienceCheck.Run(root,app);BundledEmulatorsCheck.Run(root,app);EmulatorSettingsRecoveryCheck.Run(root,app);SettingsResponsiveCheck.Run(root);KeyBindingCaptureCheck.Run(root);KeyBindingAccessibilityCheck.Run(root);
   byte[] gen3=new byte[0x20000];for(int group=0;group<2;group++)for(int sector=0;sector<14;sector++){int p=(group*14+sector)*0x1000;BinaryPrimitives.WriteUInt16LittleEndian(gen3.AsSpan(p+0xFF4), (ushort)sector);BinaryPrimitives.WriteUInt32LittleEndian(gen3.AsSpan(p+0xFF8),0x08012025);}
   byte[] gen4=new byte[0x80000];foreach(int start in new[]{0,0x40000}){int length=53036;BinaryPrimitives.WriteUInt32LittleEndian(gen4.AsSpan(start+length-12),(uint)length);BinaryPrimitives.WriteUInt32LittleEndian(gen4.AsSpan(start+length-8),537265699);}
   SaveFile[] saves={new SAV3E(gen3),new SAV4Pt(gen4),new SAV5BW(new byte[0x80000])};

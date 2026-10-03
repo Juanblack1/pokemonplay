@@ -29,6 +29,21 @@ jobs:
           $fixture = Join-Path '${{ runner.temp }}' 'embedding-lifecycle'
           $check = (Resolve-Path './recovered-source/tests/ProfilesCheck/bin/Release/net10.0-windows/Check.exe').Path
           ./recovered-source/tools/verify-ci-embedding-display.ps1 -CheckPath $check -FixtureRoot $fixture -OwnedCiDesktop
+      - name: Verificar atribuições acessíveis nas configurações
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $check = (Resolve-Path './recovered-source/tests/ProfilesCheck/bin/Release/net10.0-windows/Check.exe').Path
+          $stdout = Join-Path '${{ runner.temp }}' 'accessibility.stdout.log'
+          $stderr = Join-Path '${{ runner.temp }}' 'accessibility.stderr.log'
+          $process = Start-Process -FilePath $check -ArgumentList '--keybinding-accessibility' -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (-not $process.WaitForExit(120000)) {
+            if (-not $process.HasExited) { $process.Kill(); $null = $process.WaitForExit(5000) }
+            throw 'Owned accessibility check exceeded its deadline.'
+          }
+          Get-Content -LiteralPath $stdout
+          Get-Content -LiteralPath $stderr
+          if ($process.ExitCode -ne 0) { throw 'Accessibility checks failed.' }
       - name: Compilar e testar aplicação e atualizador
         shell: pwsh
         env:
@@ -50,3 +65,5 @@ jobs:
             ${{ runner.temp }}/embedding-lifecycle.stderr.log
             ${{ runner.temp }}/embedding-lifecycle/**
             ${{ runner.temp }}/embedding-lifecycle-display/**
+            ${{ runner.temp }}/accessibility.stdout.log
+            ${{ runner.temp }}/accessibility.stderr.log

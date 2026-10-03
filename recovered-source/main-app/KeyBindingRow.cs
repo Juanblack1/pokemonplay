@@ -8,7 +8,17 @@ internal sealed class KeyBindingRow : BufferedPanel
 
 	private string key;
 
-	public bool Editable { get; set; }
+	private bool editable;
+	public bool Editable
+	{
+		get => editable;
+		set
+		{
+			if (editable == value) return;
+			editable = value;
+			UpdateAccessibleDescription();
+		}
+	}
 
     private bool active;
     public bool Active { get => active; set { if(active != value){active=value;Invalidate();} } }
@@ -25,13 +35,22 @@ internal sealed class KeyBindingRow : BufferedPanel
         TabStop = true;
         AccessibleRole = AccessibleRole.PushButton;
         AccessibleName = action;
+        UpdateAccessibleDescription();
 	}
 
 	public void SetKey(string value)
 	{
 		key = value;
+        UpdateAccessibleDescription();
 		Invalidate();
 	}
+
+    private void UpdateAccessibleDescription()
+    {
+        string assignment = string.IsNullOrWhiteSpace(key) ? "não atribuído" : key;
+        AccessibleDescription = $"Atribuição atual: {assignment}." +
+            (Editable ? " Pressione Enter ou Espaço para alterar." : string.Empty);
+    }
 
 	protected override void OnClick(EventArgs e)
 	{
