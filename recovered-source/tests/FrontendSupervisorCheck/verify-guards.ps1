@@ -5,10 +5,33 @@ $taskAst=[Management.Automation.Language.Parser]::ParseFile($taskSource,[ref]$ta
 if($taskErrors.Count){throw 'Supervisor syntax errors.'}
 # Load only these pure production functions. Never evaluate provisioning,
 # Process.Start/kill or a native frontend while checking false-positive guards.
-$taskNames=@('Assert-RunPlan','Assert-RunIdentity','Require-Status','Test-FinalRunPass')
+$taskNames=@('Assert-RunPlan','Assert-RunIdentity','Require-Status','Test-FinalRunPass','Write-AtomicJson')
 $taskFunctions=$taskAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst]},$false)
 foreach($name in $taskNames){$function=$taskFunctions|Where-Object Name -eq $name;if(@($function).Count -ne 1){throw 'Required guard missing.'};. ([scriptblock]::Create($function.Extent.Text))}
 $taskCount=0
+# Exercise the actual fixture writer: a one-game catalog must remain an array.
+$taskJsonRoot=Join-Path ([IO.Path]::GetTempPath()) ('frontend-json-guard-'+[guid]::NewGuid().ToString('N'))
+$null=[IO.Directory]::CreateDirectory($taskJsonRoot)
+$taskJsonPath=Join-Path $taskJsonRoot 'fixture.json'
+try {
+    foreach($case in @(
+        @{value=@(@{Id='one';RomPath='diagnostic.gba'});kind='Array';length=1},
+        @{value=@(@{Id='one'},@{Id='two'});kind='Array';length=2},
+        @{value=@();kind='Array';length=0},
+        @{value=@{schema=1;runs=@(@{scenario='positive'})};kind='Object';length=-1}
+    )) {
+        Write-AtomicJson $case.value $taskJsonPath
+        $document=[System.Text.Json.JsonDocument]::Parse([IO.File]::ReadAllText($taskJsonPath))
+        try {
+            if($document.RootElement.ValueKind.ToString() -ne $case.kind){throw 'Fixture JSON root shape changed during serialization.'}
+            if($case.length -ge 0 -and $document.RootElement.GetArrayLength() -ne $case.length){throw 'Fixture JSON array length changed.'}
+            $taskCount++
+        } finally {$document.Dispose()}
+    }
+} finally {
+    foreach($ownedFile in @($taskJsonPath,($taskJsonPath+'.tmp'))){if(Test-Path -LiteralPath $ownedFile){Remove-Item -LiteralPath $ownedFile}}
+    [IO.Directory]::Delete($taskJsonRoot,$false)
+}
 function Must-Fail([scriptblock]$Action,[string]$Label) {
     $rejected=$false
     try{& $Action}catch{$rejected=$true}

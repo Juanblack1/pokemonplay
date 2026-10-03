@@ -13,7 +13,7 @@ $taskPlanPath=Join-Path $taskOutput 'plan.json'
 $taskEnvironmentNames=@('LIBRETRO_VIDEO_SHADER_DIRECTORY','LIBRETRO_VIDEO_FILTER_DIRECTORY','LIBRETRO_ASSETS_DIRECTORY','LIBRETRO_AUTOCONFIG_DIRECTORY','LIBRETRO_CHEATS_DIRECTORY','LIBRETRO_DATABASE_DIRECTORY','LIBRETRO_SYSTEM_DIRECTORY','LIBRETRO_DIRECTORY')
 
 function Write-AtomicJson($Value,[string]$Path) {
-    $Value | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath ($Path+'.tmp') -Encoding utf8
+    ConvertTo-Json -InputObject $Value -Depth 30 | Set-Content -LiteralPath ($Path+'.tmp') -Encoding utf8
     [IO.File]::Move($Path+'.tmp',$Path,$true)
 }
 function Assert-ChildPath([string]$Path,[string]$Parent) {
