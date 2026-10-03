@@ -46,7 +46,8 @@ internal sealed class BackupRestoreDialog : Form
     internal static string BuildRestoreConfirmation(string profileName, BackupArchiveChoice choice)
     {
         if (choice == null) throw new ArgumentNullException(nameof(choice));
-        return $"Restaurar {choice} no perfil {profileName}? Isso substituirá os arquivos locais. O estado atual será guardado em Backups/Automaticos antes da troca. Deseja continuar?";
+        string completeFileName = System.IO.Path.GetFileName(choice.Path);
+        return $"Restaurar {choice} (arquivo completo: {completeFileName}) no perfil {profileName}? Isso substituirá os arquivos locais. O estado atual será guardado em Backups/Automaticos antes da troca. Deseja continuar?";
     }
 
     public BackupRestoreDialog(string profileName, IReadOnlyList<BackupArchiveChoice> choices)
