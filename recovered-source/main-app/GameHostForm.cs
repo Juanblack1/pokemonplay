@@ -40,6 +40,7 @@ internal sealed class GameHostForm : Form
 	private bool closing;
 	private bool closeInProgress;
 	private bool emulatorEmbedded;
+	private bool emulatorTopLevel;
 	private IntPtr embeddedWindowHandle;
 	private bool launchFailed;
 	private bool azaharPausedForMenu;
@@ -54,6 +55,8 @@ internal sealed class GameHostForm : Form
     private ControllerVisualizer virtualPad;
     [DllImport("user32.dll",SetLastError=true)] private static extern IntPtr SetFocus(IntPtr hwnd);
     [DllImport("user32.dll",SetLastError=true)] private static extern bool AttachThreadInput(uint from,uint to,bool attach);
+    [DllImport("user32.dll",SetLastError=true)] private static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd,int command);
     [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
 
 	[DllImport("user32.dll", SetLastError = true)]
@@ -61,6 +64,9 @@ internal sealed class GameHostForm : Form
 
 	[DllImport("user32.dll")]
 	private static extern bool MoveWindow(IntPtr handle, int x, int y, int width, int height, bool repaint);
+
+    [DllImport("user32.dll",SetLastError=true)]
+    private static extern bool SetWindowPos(IntPtr window,IntPtr insertAfter,int x,int y,int width,int height,uint flags);
 
 	[DllImport("user32.dll", SetLastError = true)]
 	private static extern int SetWindowLong(IntPtr handle, int index, int value);
@@ -183,7 +189,7 @@ internal sealed class GameHostForm : Form
             // Dock layout reserves Bottom controls before sizing the Fill viewport.
             // Keeping this z-order prevents the virtual pad from covering the game.
             Controls.Add(virtualPad);
-            Deactivate+=(_,_)=>virtualPad.ReleaseVirtual();
+            Deactivate+=(_,_)=>{if(!IsEmulatorForeground())virtualPad.ReleaseVirtual();};
         }
 		if (canPauseToMenu)
 		{
@@ -289,6 +295,7 @@ internal sealed class GameHostForm : Form
 		Show();
 		WindowState = FormWindowState.Normal;
 		Activate();
+		if(emulatorTopLevel)BeginInvoke((Action)FocusEmulator);
 		sessionClock?.Start();
 	}
 
@@ -337,6 +344,7 @@ internal sealed class GameHostForm : Form
 	}
 
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetDesktopWindow();
     [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
     [DllImport("user32.dll")] private static extern IntPtr GetWindowDpiAwarenessContext(IntPtr window);
@@ -360,13 +368,45 @@ internal sealed class GameHostForm : Form
         if (emulatorEmbedded){ResizeEmbedded();return;}
         if(emulator==null){timer?.Stop();ShowLaunchFailure(new InvalidOperationException("O processo iniciado não forneceu uma identidade para incorporar a janela."));return;}
         if(!TryGetMainWindowHandle(emulator,out IntPtr mainWindowHandle))return;
-        if(!TryEmbedOwnedWindow(mainWindowHandle,out Exception failure)){
+        bool keepForegroundWindow=string.Equals(processName,"retroarch",StringComparison.OrdinalIgnoreCase);
+        bool prepared=keepForegroundWindow
+            ?TryPrepareForegroundWindow(mainWindowHandle,out Exception failure)
+            :TryEmbedOwnedWindow(mainWindowHandle,out failure);
+        if(!prepared){
             timer?.Stop();embeddedWindowHandle=IntPtr.Zero;emulatorEmbedded=false;ShowLaunchFailure(failure);return;
         }
         embeddedWindowHandle=mainWindowHandle;
+        emulatorTopLevel=keepForegroundWindow;
         inputBridge=new GameInputBridge(AppPaths.Root,GetEmulatorProcessId,()=>IsInputHostFocused,
             ()=>virtualPad?.VirtualActions??new bool[12],FocusEmulator);
-        emulatorEmbedded=true;ResizeEmbedded();Resize+=(_,_)=>ResizeEmbedded();
+        if(emulatorTopLevel&&virtualPad!=null)virtualPad.MouseDown+=(_,eventArgs)=>{if(eventArgs.Button==MouseButtons.Left)FocusEmulator();};
+        emulatorEmbedded=true;ResizeEmbedded();Resize+=(_,_)=>ResizeEmbedded();Move+=(_,_)=>ResizeEmbedded();VisibleChanged+=(_,_)=>ResizeEmbedded();
+        if(emulatorTopLevel&&Visible&&WindowState!=FormWindowState.Minimized)SetForegroundWindow(mainWindowHandle);
+    }
+    private bool TryPrepareForegroundWindow(IntPtr window,out Exception failure)
+    {
+        const int WS_CHILD_STYLE=0x40000000,WS_POPUP_STYLE=unchecked((int)0x80000000),WS_CAPTION_STYLE=0x00C00000,
+            WS_THICKFRAME_STYLE=0x00040000,WS_SYSMENU_STYLE=0x00080000,WS_MINIMIZEBOX_STYLE=0x00020000,WS_MAXIMIZEBOX_STYLE=0x00010000;
+        GetWindowThreadProcessId(window,out uint pid);int expectedPid=GetEmulatorProcessId();failure=null;int original=0;bool styleChanged=false;
+        try{
+            if(expectedPid<=0||pid!=expectedPid)throw new InvalidOperationException("A identidade da janela não corresponde ao processo iniciado.");
+            if(GetAncestor(window,1)!=GetDesktopWindow())throw new InvalidOperationException("A janela do RetroArch não tem a área de trabalho como parent antes do posicionamento.");
+            original=GetWindowLong(window,GWL_STYLE);int readError=Marshal.GetLastPInvokeError();
+            if(original==0&&readError!=0)throw new System.ComponentModel.Win32Exception(readError,"Não foi possível ler o estilo da janela do RetroArch.");
+            int requested=(original&~(WS_CHILD_STYLE|WS_CAPTION_STYLE|WS_THICKFRAME_STYLE|WS_SYSMENU_STYLE|WS_MINIMIZEBOX_STYLE|WS_MAXIMIZEBOX_STYLE))|WS_POPUP_STYLE;
+            int styleReturn=SetWindowLong(window,GWL_STYLE,requested);int styleError=Marshal.GetLastPInvokeError();
+            if(styleReturn==0&&styleError!=0)throw new System.ComponentModel.Win32Exception(styleError,"Não foi possível preparar a janela sem borda do RetroArch.");
+            styleChanged=true;
+            if(GetWindowLong(window,GWL_STYLE)!=requested)throw new InvalidOperationException("O estilo superior sem borda não foi confirmado.");
+            if(!SetWindowPos(window,IntPtr.Zero,0,0,0,0,0x27))throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError(),"Não foi possível atualizar os limites sem borda do RetroArch.");
+            if(!MoveTopLevelToGamePanel(window))throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError(),"Não foi possível posicionar o RetroArch na área do jogo.");
+            return true;
+        }catch(Exception error) when(error is InvalidOperationException or System.ComponentModel.Win32Exception or EntryPointNotFoundException){
+            failure=error;
+            GetWindowThreadProcessId(window,out uint currentPid);
+            if(styleChanged&&currentPid==expectedPid&&GetEmulatorProcessId()==expectedPid)SetWindowLong(window,GWL_STYLE,original);
+            return false;
+        }
     }
     private bool TryEmbedOwnedWindow(IntPtr window,out Exception failure)
     {
@@ -467,9 +507,21 @@ internal sealed class GameHostForm : Form
 
 	private void ResizeEmbedded()
 	{
-		if (embeddedWindowHandle != IntPtr.Zero && !IsProcessExited(emulator))
-			MoveWindow(embeddedWindowHandle, 0, 0, gamePanel.ClientSize.Width, gamePanel.ClientSize.Height, repaint: true);
+		if (embeddedWindowHandle == IntPtr.Zero || IsProcessExited(emulator))return;
+		if(emulatorTopLevel){
+			bool shouldShow=Visible&&WindowState!=FormWindowState.Minimized;
+			if(!shouldShow){ShowWindow(embeddedWindowHandle,0);return;}
+            if(!MoveTopLevelToGamePanel(embeddedWindowHandle))return;
+			ShowWindow(embeddedWindowHandle,8);
+			return;
+		}
+		MoveWindow(embeddedWindowHandle,0,0,gamePanel.ClientSize.Width,gamePanel.ClientSize.Height,repaint:true);
 	}
+    private bool MoveTopLevelToGamePanel(IntPtr window)
+    {
+        Rectangle bounds=gamePanel.RectangleToScreen(gamePanel.ClientRectangle);
+        return bounds.Width>0&&bounds.Height>0&&MoveWindow(window,bounds.Left,bounds.Top,bounds.Width,bounds.Height,repaint:true);
+    }
 
 	private async void CloseWithConfirmation()
 	{
@@ -579,8 +631,15 @@ internal sealed class GameHostForm : Form
     {
         IntPtr hwnd=embeddedWindowHandle;
         if(hwnd==IntPtr.Zero&&!TryGetMainWindowHandle(emulator,out hwnd))return;
+        if(emulatorTopLevel)SetForegroundWindow(hwnd);
         uint target=InputReader.GetWindowThreadProcessId(hwnd,out _),current=GetCurrentThreadId();
         bool attached=target!=current&&AttachThreadInput(current,target,true);
         try{SetFocus(hwnd);}finally{if(attached)AttachThreadInput(current,target,false);}
+    }
+    private bool IsEmulatorForeground()
+    {
+        if(!emulatorTopLevel||embeddedWindowHandle==IntPtr.Zero)return false;
+        InputReader.GetWindowThreadProcessId(InputReader.GetForegroundWindow(),out uint foregroundPid);
+        return foregroundPid==(uint)GetEmulatorProcessId();
     }
 }

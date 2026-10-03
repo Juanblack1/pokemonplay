@@ -121,7 +121,7 @@ internal sealed class FrontendRun:IDisposable
             events.Add(new{kind="play-ui",point=mousePoint,card=card.AccessibleName});
             Native.MouseAt(mousePoint,true);await Task.Delay(80);Native.MouseAt(mousePoint,false);
             sampler.Start();await Until(()=>host!=null&&child!=null&&hwnd!=IntPtr.Zero,30000,"boot");
-            ValidateEmbedding();Set("boot","passed","real visible Library Play started bundled frontend");Set("embedding","passed","owned child ancestry/styles/geometry");
+            ValidateEmbedding();Set("boot","passed","real visible Library Play started bundled frontend");Set("embedding","passed",Field<bool>(host,"emulatorTopLevel")?"owned foreground popup aligned to viewport, controls clear":"owned child ancestry/styles/geometry");
             // Normal UI focus, never private focus method invocation or fake guard.
             var bounds=Native.Bounds(hwnd);mousePoint=new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2);
             Native.MouseAt(mousePoint,true);await Task.Delay(80);Native.MouseAt(mousePoint,false);await Task.Delay(200);
@@ -130,7 +130,7 @@ internal sealed class FrontendRun:IDisposable
             GuestMaskMismatch negativeMismatch=null,embeddedMismatch=null;
             try{await Phase("A-held",1,10000);}
             catch(GuestMaskMismatch error) when(scenario=="suppressed-a"&&error.Expected==1&&error.Observed==0&&error.ValidatedPairs==2&&error.RawGuardValidated){negativeMismatch=error;}
-            catch(GuestMaskMismatch error) when(scenario=="positive"&&error.Expected==1&&error.Observed==0){embeddedMismatch=error;await ProbeTopLevelControl();}
+            catch(GuestMaskMismatch error) when(scenario=="positive"&&error.Expected==1&&error.Observed==0&&!Field<bool>(host,"emulatorTopLevel")){embeddedMismatch=error;await ProbeTopLevelControl();}
             if(embeddedMismatch!=null)throw embeddedMismatch;
             if(scenario=="suppressed-a"&&negativeMismatch==null)throw new InvalidDataException("negative_validity: actual expected mask mismatch absent");
             await Release();await Phase("A-release",0,10000);keyReleaseProved=true;
@@ -243,7 +243,7 @@ internal sealed class FrontendRun:IDisposable
     }
     void ValidateEmbedding()
     {
-        var panel=Field<Panel>(host,"gamePanel");bool declaredEmbedded=Field<bool>(host,"emulatorEmbedded");
+        var panel=Field<Panel>(host,"gamePanel");bool declaredEmbedded=Field<bool>(host,"emulatorEmbedded");bool topLevelMode=Field<bool>(host,"emulatorTopLevel");
         uint thread=Native.GetWindowThreadProcessId(hwnd,out uint pid);IntPtr parent=Native.GetAncestor(hwnd,1);int style=Native.GetWindowLong(hwnd,-16);
         bool windowExists=Native.IsWindow(hwnd),visible=Native.IsWindowVisible(hwnd),managedContains=Descendants(Launcher).Contains(host);
         Form found=host.FindForm();var ancestry=new List<object>();IntPtr ancestor=hwnd;bool reached=false;var seen=new HashSet<IntPtr>();
@@ -254,20 +254,27 @@ internal sealed class FrontendRun:IDisposable
         Rectangle childBounds=Rectangle.Empty,panelBounds=panel.RectangleToScreen(panel.ClientRectangle);string boundsError=null;
         try{childBounds=Native.Bounds(hwnd);}catch(Exception error){boundsError=error.Message;}
         var facts=EmbeddingEvidence.Create(new Dictionary<string,object>{
-            ["timeMs"]=wall.ElapsedMilliseconds,["phase"]=current,["state"]=hwnd==IntPtr.Zero||!declaredEmbedded?"not_ready":"declared_embedded",
+            ["timeMs"]=wall.ElapsedMilliseconds,["phase"]=current,["state"]=hwnd==IntPtr.Zero||!declaredEmbedded?"not_ready":topLevelMode?"declared_top_level":"declared_embedded",
             ["childHwnd"]=hwnd.ToInt64(),["windowExists"]=windowExists,["thread"]=thread,["pid"]=pid,["expectedPid"]=child.Id,["parent"]=parent.ToInt64(),["expectedPanel"]=panel.Handle.ToInt64(),
             ["style"]=style,["styleUnsigned"]=unchecked((uint)style),["styleHex"]=unchecked((uint)style).ToString("X8"),["hasPopupStyle"]=(unchecked((uint)style)&0x80000000)!=0,["getParent"]=Native.GetParent(hwnd).ToInt64(),["owner"]=Native.GetWindow(hwnd,4).ToInt64(),["root"]=Native.GetAncestor(hwnd,2).ToInt64(),["rootOwner"]=Native.GetAncestor(hwnd,3).ToInt64(),["isPanelChild"]=Native.IsChild(panel.Handle,hwnd),["childDpi"]=Native.DpiEvidence(hwnd),["panelDpi"]=Native.DpiEvidence(panel.Handle),["hostDpi"]=Native.DpiEvidence(host.Handle),["launcherDpi"]=Native.DpiEvidence(Launcher.Handle),["productionAttempt"]=host.LastEmbeddingAttempt,["hasChildStyle"]=(style&0x40000000)!=0,["nativeVisible"]=visible,["declaredEmbedded"]=declaredEmbedded,["topLevel"]=host.TopLevel,["hostVisible"]=host.Visible,
+            ["emulatorTopLevel"]=topLevelMode,
             ["hostHwnd"]=host.Handle.ToInt64(),["findFormType"]=found?.GetType().FullName,["findFormHwnd"]=found?.Handle.ToInt64(),["findFormIsHost"]=found==host,
             ["managedContains"]=managedContains,["launcherHwnd"]=Launcher.Handle.ToInt64(),["ancestry"]=ancestry,["reachedLauncher"]=reached,["ancestryTruncated"]=ancestor!=IntPtr.Zero,
             ["childBounds"]=childBounds,["panelBounds"]=panelBounds,["boundsError"]=boundsError,["geometryContained"]=boundsError==null&&panelBounds.Contains(childBounds),["launcherState"]=Launcher.WindowState.ToString(),
-            ["sourceTiming"]="TryEmbed normalizes CHILD without POPUP before SetParent; verifies parent/identity before bridge/flag synchronously on UI timer",
+            ["sourceTiming"]=topLevelMode?"RetroArch remains an owned-process top-level popup aligned to the game panel; focus transfers to it before synthetic key injection":"TryEmbed normalizes CHILD without POPUP before SetParent; verifies parent/identity before bridge/flag synchronously on UI timer",
             ["findFormContract"]="WinForms v10.0.0 Control.FindForm starts this and stops first Form"
         });
         events.Add(new{kind="embedding-facts",facts});Write("embedding-current.json",facts);Write("observations.json",events);
         var invalid=new List<string>();
-        if(!windowExists)invalid.Add("HWND does not exist");if(pid!=child.Id)invalid.Add("PID mismatch");if(parent!=panel.Handle)invalid.Add("parent differs from gamePanel");
-        if((style&0x40000000)==0)invalid.Add("WS_CHILD missing");if((unchecked((uint)style)&0x80000000)!=0)invalid.Add("WS_POPUP present");if(!Native.IsChild(panel.Handle,hwnd))invalid.Add("IsChild(panel) false");if(!visible)invalid.Add("native window invisible");if(host.TopLevel)invalid.Add("host is TopLevel");
-        if(found!=host)invalid.Add("FindForm not host");if(!managedContains)invalid.Add("host absent from Launcher descendants");if(!reached)invalid.Add("native ancestry does not reach Launcher");
+        if(!windowExists)invalid.Add("HWND does not exist");if(pid!=child.Id)invalid.Add("PID mismatch");
+        if(topLevelMode){
+            if(parent!=Native.GetDesktopWindow())invalid.Add("foreground popup parent differs from desktop");if(Native.GetAncestor(hwnd,2)!=hwnd)invalid.Add("foreground popup root differs from its HWND");
+            if((style&0x40000000)!=0||(unchecked((uint)style)&0x80000000)==0)invalid.Add("foreground popup style invalid");if(Native.IsChild(panel.Handle,hwnd))invalid.Add("foreground popup unexpectedly parented to gamePanel");
+        }else{
+            if(parent!=panel.Handle)invalid.Add("parent differs from gamePanel");if((style&0x40000000)==0)invalid.Add("WS_CHILD missing");if((unchecked((uint)style)&0x80000000)!=0)invalid.Add("WS_POPUP present");if(!Native.IsChild(panel.Handle,hwnd))invalid.Add("IsChild(panel) false");if(!reached)invalid.Add("native ancestry does not reach Launcher");
+        }
+        if(!visible)invalid.Add("native window invisible");if(host.TopLevel)invalid.Add("host is TopLevel");
+        if(found!=host)invalid.Add("FindForm not host");if(!managedContains)invalid.Add("host absent from Launcher descendants");
         if(!declaredEmbedded)invalid.Add("production has not declared embedding complete");
         if(boundsError!=null)invalid.Add("bounds unavailable: "+boundsError);else if(childBounds.Width<=0||childBounds.Height<=0||!panelBounds.Contains(childBounds))invalid.Add("child client bounds empty/outside panel");
         if(Launcher.WindowState==FormWindowState.Minimized)invalid.Add("Launcher minimized");
