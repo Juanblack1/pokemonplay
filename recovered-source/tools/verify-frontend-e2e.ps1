@@ -16,6 +16,11 @@ function Write-AtomicJson($Value,[string]$Path) {
     ConvertTo-Json -InputObject $Value -Depth 30 | Set-Content -LiteralPath ($Path+'.tmp') -Encoding utf8
     [IO.File]::Move($Path+'.tmp',$Path,$true)
 }
+function New-DiagnosticCatalog([string]$RomPath) {
+    # ImportedGameCatalog.Load requires a GUID in N format, a supported extension,
+    # matching generation and nonempty bounded title/base-game metadata.
+    return ,@(@{Id=[guid]::NewGuid().ToString('N');RomPath=$RomPath;Title='Original GBA diagnostic';BaseGame='Original';Generation=3;IsHackRom=$false})
+}
 function Assert-ChildPath([string]$Path,[string]$Parent) {
     $full=[IO.Path]::GetFullPath($Path)
     $prefix=[IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetFullPath($Parent))+[IO.Path]::DirectorySeparatorChar
@@ -139,7 +144,7 @@ if($Mode -in @('Prepare','All')) {
         $profile=@{Mode=3;TestConsole=0;ControllerSlot=0;DeadZone=24;ExtraKeys=@('C','V');Bindings=@('PadUp','PadDown','PadLeft','PadRight','PadA','PadB','PadLB','PadRB','PadStart','PadBack','PadX','PadY')}
         Write-AtomicJson $profile (Join-Path $root 'Settings/input-device.json')
         Set-Content -LiteralPath (Join-Path $root 'Settings/input-presets.txt') -Value '1' -Encoding utf8
-        $import=@(@{Id='frontend-diagnostic';RomPath=$rom;Title='Original GBA diagnostic';BaseGame='Original';Generation=3;IsHackRom=$false})
+        $import=New-DiagnosticCatalog $rom
         Write-AtomicJson $import (Join-Path $root 'Settings/ImportedPokemonGames.json')
         $socket=[Net.Sockets.UdpClient]::new([Net.IPEndPoint]::new([Net.IPAddress]::Loopback,0))
         try{$port=$socket.Client.LocalEndPoint.Port}finally{$socket.Dispose()}

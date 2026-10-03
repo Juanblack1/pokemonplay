@@ -5,7 +5,7 @@ $taskAst=[Management.Automation.Language.Parser]::ParseFile($taskSource,[ref]$ta
 if($taskErrors.Count){throw 'Supervisor syntax errors.'}
 # Load only these pure production functions. Never evaluate provisioning,
 # Process.Start/kill or a native frontend while checking false-positive guards.
-$taskNames=@('Assert-RunPlan','Assert-RunIdentity','Require-Status','Test-FinalRunPass','Write-AtomicJson')
+$taskNames=@('Assert-RunPlan','Assert-RunIdentity','Require-Status','Test-FinalRunPass','Write-AtomicJson','New-DiagnosticCatalog')
 $taskFunctions=$taskAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst]},$false)
 foreach($name in $taskNames){$function=$taskFunctions|Where-Object Name -eq $name;if(@($function).Count -ne 1){throw 'Required guard missing.'};. ([scriptblock]::Create($function.Extent.Text))}
 $taskCount=0
@@ -28,6 +28,13 @@ try {
             $taskCount++
         } finally {$document.Dispose()}
     }
+    $catalog=New-DiagnosticCatalog (Join-Path $taskJsonRoot 'diagnostic.gba')
+    Write-AtomicJson $catalog $taskJsonPath
+    $loaded=ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($taskJsonPath)) -NoEnumerate
+    $catalogId=[guid]::Empty
+    if($loaded -isnot [array] -or $loaded.Count -ne 1 -or ![guid]::TryParseExact($loaded[0].Id,'N',[ref]$catalogId)){throw 'Diagnostic catalog does not satisfy the production GUID/list contract.'}
+    if($loaded[0].RomPath -ne (Join-Path $taskJsonRoot 'diagnostic.gba') -or $loaded[0].Generation -ne 3 -or $loaded[0].IsHackRom -ne $false -or [string]::IsNullOrWhiteSpace($loaded[0].Title) -or $loaded[0].Title.Length -gt 80 -or [string]::IsNullOrWhiteSpace($loaded[0].BaseGame)){throw 'Diagnostic catalog metadata differs from the owned GBA fixture.'}
+    $taskCount++
 } finally {
     foreach($ownedFile in @($taskJsonPath,($taskJsonPath+'.tmp'))){if(Test-Path -LiteralPath $ownedFile){Remove-Item -LiteralPath $ownedFile}}
     [IO.Directory]::Delete($taskJsonRoot,$false)

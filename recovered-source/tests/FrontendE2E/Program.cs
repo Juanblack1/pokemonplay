@@ -63,6 +63,14 @@ internal sealed class FrontendRun:IDisposable
         var existing=Process.GetProcessesByName("retroarch");bool conflict=existing.Length!=0;foreach(var item in existing)item.Dispose();if(conflict)throw new InvalidDataException("process_identity: existing RetroArch; no third-party process killed");
         if(!AppPaths.Root.Equals(root,StringComparison.OrdinalIgnoreCase)||InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json")).Mode!=3)throw new InvalidDataException("root_identity: wrong root/profile");
         SessionConfig.Owned(root,Path.Combine(root,"roms","diagnostic.gba"));
+        try{
+            string diagnostic=Path.GetFullPath(Path.Combine(root,"roms","diagnostic.gba"));
+            var entries=ImportedGameCatalog.Entries(root);var games=ImportedGameCatalog.Build(root);
+            if(entries.Count!=1||entries[0].Generation!=3||!File.Exists(diagnostic)||
+                !Path.GetFullPath(entries[0].RomPath).Equals(diagnostic,StringComparison.OrdinalIgnoreCase)||
+                games.Count!=1||!games[0].IsImported||!Path.GetFullPath(games[0].RomPath).Equals(diagnostic,StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("expected exactly one existing generation3 diagnostic ROM in actual catalog Entries/Build");
+        }catch(Exception error){throw new InvalidDataException("configuration: diagnostic catalog preflight failed before UI: "+error.Message,error);}
         Launcher=new LauncherForm(root){UpdatesEnabled=false,Width=1280,Height=900,StartPosition=FormStartPosition.CenterScreen};
         if(!Field<string>(Launcher,"root").Equals(root,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("root_identity: launcher root differs");
         foreach(Control control in Descendants(Launcher))control.ControlAdded+=OnAdded;
