@@ -151,7 +151,8 @@ internal sealed class SaveManagerView : BufferedPanel
   string latestBackup=SaveBackupService.LatestAutomaticBackup(root,selected.SaveFolderName);
   string backupText=latestBackup==null?"Backup automático deste perfil ainda não criado · será feito ao iniciar o jogo.":"Último backup automático · "+File.GetLastWriteTime(latestBackup).ToString("dd/MM/yyyy HH:mm");
   var backupInfo=LabelAt(backupText,AppTheme.Caption,latestBackup==null?AppTheme.TextMuted:AppTheme.Green,24,384,22,"backup-info");
-  var filesTitle=LabelAt("Arquivos de save",AppTheme.BodyBold,AppTheme.Text,24,412,24,"files-heading");
+  var filesTitle=LabelAt(listing.Complete?"Arquivos de save":"Lista parcial de saves",AppTheme.BodyBold,listing.Complete?AppTheme.Text:AppTheme.Red,24,412,24,"files-heading");
+  if(!listing.Complete)filesTitle.AccessibleDescription="Algumas pastas não foram lidas ou o limite foi atingido. Atualize a lista após corrigir as pastas ou reduzir a quantidade de arquivos.";
   detailCard.Controls.AddRange(new Control[]{cover,title,subtitle,folder,actions,backupInfo,filesTitle,fileList,status});
   BuildProfileControls(listing);
   string[] files=listing.Files;

@@ -32,6 +32,7 @@ internal static class SaveListBoundsCheck
                     var refresh=Children(view).OfType<Button>().Single(button=>button.Text=="Atualizar lista");
                     var heading=Children(view).Single(control=>(string)control.Tag=="files-heading");
                     Assert(heading.Right<=refresh.Left&&refresh.Right<=refresh.Parent.ClientSize.Width,"partial save list heading and refresh button fit at width "+width);
+                    Assert(heading.Text.StartsWith("Lista parcial")&&heading.ForeColor==AppTheme.Red&&heading.AccessibleDescription.Contains("limite"),"partial warning is shown beside the displayed files at width "+width);
                     using var bitmap=new System.Drawing.Bitmap(view.Width,view.Height);view.DrawToBitmap(bitmap,view.ClientRectangle);bitmap.Save(Path.Combine(preview,"save-list-partial-"+width+".png"));
                 }
                 host.Controls.Remove(view);
