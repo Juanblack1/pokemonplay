@@ -15,6 +15,7 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr hwnd,out uint pid);
     [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] internal static extern bool IsWindow(IntPtr hwnd);
     [DllImport("user32.dll")] internal static extern bool GetClientRect(IntPtr hwnd,out Rect rect);
     [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr hwnd,ref Point point);
     [DllImport("user32.dll")] internal static extern int GetWindowLong(IntPtr hwnd,int index);

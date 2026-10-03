@@ -209,13 +209,35 @@ internal sealed class FrontendRun:IDisposable
     }
     void ValidateEmbedding()
     {
-        Native.GetWindowThreadProcessId(hwnd,out uint pid);
-        var panel=Field<Panel>(host,"gamePanel");
-        if(pid!=child.Id||Native.GetParent(hwnd)!=panel.Handle||(Native.GetWindowLong(hwnd,-16)&0x40000000)==0||!Native.IsWindowVisible(hwnd)||host.TopLevel||host.FindForm()!=host||!Descendants(Launcher).Contains(host))throw new InvalidDataException("embedding: identity/ancestry/style invalid");
-        IntPtr ancestor=panel.Handle;bool reached=false;for(int depth=0;depth<20&&ancestor!=IntPtr.Zero;depth++){if(ancestor==Launcher.Handle){reached=true;break;}ancestor=Native.GetParent(ancestor);}
-        if(!reached)throw new InvalidDataException("embedding: native HWND ancestry does not reach real launcher");
-        var childBounds=Native.Bounds(hwnd);var panelBounds=panel.RectangleToScreen(panel.ClientRectangle);
-        if(childBounds.Width<=0||childBounds.Height<=0||!panelBounds.Contains(childBounds)||Launcher.WindowState==FormWindowState.Minimized)throw new InvalidDataException("embedding: geometry/visibility invalid");
+        var panel=Field<Panel>(host,"gamePanel");bool declaredEmbedded=Field<bool>(host,"emulatorEmbedded");
+        uint thread=Native.GetWindowThreadProcessId(hwnd,out uint pid);IntPtr parent=Native.GetParent(hwnd);int style=Native.GetWindowLong(hwnd,-16);
+        bool windowExists=Native.IsWindow(hwnd),visible=Native.IsWindowVisible(hwnd),managedContains=Descendants(Launcher).Contains(host);
+        Form found=host.FindForm();var ancestry=new List<object>();IntPtr ancestor=hwnd;bool reached=false;var seen=new HashSet<IntPtr>();
+        for(int depth=0;depth<32&&ancestor!=IntPtr.Zero&&seen.Add(ancestor);depth++){
+            Native.GetWindowThreadProcessId(ancestor,out uint ancestorPid);IntPtr next=Native.GetParent(ancestor);
+            ancestry.Add(new{depth,hwnd=ancestor.ToInt64(),pid=ancestorPid,parent=next.ToInt64()});if(ancestor==Launcher.Handle)reached=true;ancestor=next;
+        }
+        Rectangle childBounds=Rectangle.Empty,panelBounds=panel.RectangleToScreen(panel.ClientRectangle);string boundsError=null;
+        try{childBounds=Native.Bounds(hwnd);}catch(Exception error){boundsError=error.Message;}
+        var facts=new{
+            timeMs=wall.ElapsedMilliseconds,phase=current,state=hwnd==IntPtr.Zero||!declaredEmbedded?"not_ready":"declared_embedded",
+            childHwnd=hwnd.ToInt64(),windowExists,thread,pid,expectedPid=child.Id,parent=parent.ToInt64(),expectedPanel=panel.Handle.ToInt64(),
+            style,hasChildStyle=(style&0x40000000)!=0,visible,declaredEmbedded,host.TopLevel,host.Visible,
+            hostHwnd=host.Handle.ToInt64(),findFormType=found?.GetType().FullName,findFormHwnd=found?.Handle.ToInt64(),findFormIsHost=found==host,
+            managedContains,launcherHwnd=Launcher.Handle.ToInt64(),ancestry,reachedLauncher=reached,ancestryTruncated=ancestor!=IntPtr.Zero,
+            childBounds,panelBounds,boundsError,geometryContained=boundsError==null&&panelBounds.Contains(childBounds),launcherState=Launcher.WindowState.ToString(),
+            sourceTiming="TryEmbed assigns HWND then SetParent/style/emulatorEmbedded/ResizeEmbedded synchronously on UI timer; no readiness wait justified by that assignment alone",
+            findFormContract="dotnet/winforms v10.0.0 Control.FindForm starts with this and stops at first Form; embedded GameHostForm returns itself"
+        };
+        events.Add(new{kind="embedding-facts",facts});Write("embedding-current.json",facts);Write("observations.json",events);
+        var invalid=new List<string>();
+        if(!windowExists)invalid.Add("HWND does not exist");if(pid!=child.Id)invalid.Add("PID mismatch");if(parent!=panel.Handle)invalid.Add("parent differs from gamePanel");
+        if((style&0x40000000)==0)invalid.Add("WS_CHILD missing");if(!visible)invalid.Add("native window invisible");if(host.TopLevel)invalid.Add("host is TopLevel");
+        if(found!=host)invalid.Add("FindForm not host");if(!managedContains)invalid.Add("host absent from Launcher descendants");if(!reached)invalid.Add("native ancestry does not reach Launcher");
+        if(!declaredEmbedded)invalid.Add("production has not declared embedding complete");
+        if(boundsError!=null)invalid.Add("bounds unavailable: "+boundsError);else if(childBounds.Width<=0||childBounds.Height<=0||!panelBounds.Contains(childBounds))invalid.Add("child client bounds empty/outside panel");
+        if(Launcher.WindowState==FormWindowState.Minimized)invalid.Add("Launcher minimized");
+        if(invalid.Count!=0)throw new InvalidDataException("embedding: "+(hwnd==IntPtr.Zero||!declaredEmbedded?"not_ready: ":"invalid: ")+string.Join("; ",invalid));
     }
     async Task Hold(int action)
     {
