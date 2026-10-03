@@ -364,7 +364,9 @@ internal sealed class GameHostForm : Form
             timer?.Stop();embeddedWindowHandle=IntPtr.Zero;emulatorEmbedded=false;ShowLaunchFailure(failure);return;
         }
         embeddedWindowHandle=mainWindowHandle;
-        inputBridge=new GameInputBridge(AppPaths.Root,GetEmulatorProcessId,()=>Form.ActiveForm==this&&ContainsFocus,()=>virtualPad?.VirtualActions??new bool[12],FocusEmulator);
+        inputBridge=new GameInputBridge(AppPaths.Root,GetEmulatorProcessId,()=>
+            (Form.ActiveForm==this&&ContainsFocus)||(virtualPad?.Capture==true),
+            ()=>virtualPad?.VirtualActions??new bool[12],FocusEmulator);
         emulatorEmbedded=true;ResizeEmbedded();Resize+=(_,_)=>ResizeEmbedded();
     }
     private bool TryEmbedOwnedWindow(IntPtr window,out Exception failure)

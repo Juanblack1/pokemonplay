@@ -222,7 +222,7 @@ internal sealed class FrontendRun:IDisposable
     FocusState Focus()
     {
         Native.GetWindowThreadProcessId(Native.GetForegroundWindow(),out uint pid);
-        bool active=Form.ActiveForm==host,contains=host.ContainsFocus;return new(pid,active,contains,pid==child.Id||(active&&contains),Form.ActiveForm?.GetType().Name??"none",Native.GetForegroundWindow().ToInt64(),Native.FocusEvidence(Native.GetForegroundWindow()));
+        bool active=Form.ActiveForm==host,contains=host.ContainsFocus,captured=pad?.Capture==true;return new(pid,active,contains,pid==child.Id||(active&&contains)||captured,Form.ActiveForm?.GetType().Name??"none",Native.GetForegroundWindow().ToInt64(),Native.FocusEvidence(Native.GetForegroundWindow()));
     }
     void ValidateEmbedding()
     {
