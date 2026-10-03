@@ -55,7 +55,7 @@ internal sealed class FrontendRun:IDisposable
     GameHostForm host;ControllerVisualizer pad;Process child;IntPtr hwnd;string childPath;DateTime childStart;
     Exception callbackFailure,sampleFailure;int held=-1;bool rawNegative;Point mousePoint;long lastRequest=-2000;
     readonly HoldAcquisition acquisition=new();long mouseEventSequence;
-    uint? internalCounter,desktopCounter;object configEvidence,identity;string current="startup";bool keyReleaseProved;long phaseStarted,lastEvidencePersist,lastObservedInjection;int desktopDecodeAttempts,desktopDecodeFailures;string lastDesktopDecodeError;
+    uint? internalCounter,desktopCounter;object configEvidence,identity;string current="startup";bool keyReleaseProved,ownedProcessExited;long phaseStarted,lastEvidencePersist,lastObservedInjection;int desktopDecodeAttempts,desktopDecodeFailures;string lastDesktopDecodeError;
     static readonly JsonSerializerOptions JsonOptions=new(){WriteIndented=true};
     internal FrontendRun(string root,string scenario,int port,string commit)
     {
@@ -418,7 +418,7 @@ internal sealed class FrontendRun:IDisposable
     }
     void ValidateDriverLogs()
     {
-        if(child==null||!child.HasExited)throw new InvalidDataException("default_driver: defer log validation until the owned RetroArch process exits");
+        if(child==null||!ownedProcessExited)throw new InvalidDataException("default_driver: defer log validation until the owned RetroArch process exits");
         var paths=Directory.GetFiles(Path.Combine(evidence,"retroarch-log"),"*",SearchOption.AllDirectories);
         if(paths.Length==0)throw new InvalidDataException("default_driver: no owned RetroArch log was captured");
         string log=string.Join("\n",paths.Select(File.ReadAllText));var lines=log.Split('\n');
@@ -450,8 +450,9 @@ internal sealed class FrontendRun:IDisposable
                 bool closed=await completion.Task.WaitAsync(TimeSpan.FromSeconds(7));
                 if(!closed)throw new IOException("cleanup: host declined bounded close");
             }
-            await exitObservation.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2));
+            await exitObservation.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2));ownedProcessExited=exitObservation.HasExited;
         }
+        else if(child!=null)ownedProcessExited=true;
         if(child==null&&host!=null)throw new InvalidDataException("cleanup: child identity unavailable, supervisor must reconcile");
         if(!keyReleaseProved&&child!=null){Set("cleanup","failed","owned process exited; guest key-up not proven");Passed=false;}
         else Set("cleanup","passed",child==null?"no owned process started":"owned process exited; release observed before close");

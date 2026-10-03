@@ -100,6 +100,8 @@ The correction runs log validation only after the exact owned process exits. The
 
 At `9d3406d4ab4d8fc225d47305735cab5d37baf8c3`, the first desktop sample after process startup contained the calibration border and magic colors before the button/counter regions were drawn, so the strict decoder rejected it and the supervisor skipped the negative fixture. A later capture showed the complete guest frame. The readiness gate now requires two consecutive valid desktop samples with advancing guest counters before sending the single neutral SCREENSHOT request. It preserves the no-retry rule and does not count readiness samples as phase acceptance. The next exact-head run must verify both positive and valid-negative fixtures and post-shutdown log validation.
 
+Run `37163114119` passed `guest_ready`, sustained cadence, neutral, A held/released, B held/released, foreground, configuration and capture attribution. The app's normal close disposed the harness-owned `Process` object, so querying `child.HasExited` during post-exit log validation threw even though cleanup had used a separate `Process` observer to confirm exit. The harness now preserves that observer's confirmed state and uses it as the post-shutdown log-read gate; it does not infer exit from the disposed object. The negative fixture did not run because cleanup was not yet fully verified.
+
 S1 evidence: root reran Python -B unittest discover for test_original_gba_frontend.py:10 tests passed. Mode4 double-buffer payload3300bytes in deterministic32KiB original ROM; ten input regions, four-color magic/yellow border and32 uint32counter blocks. SHA25641be7710d767c385f5d8dc7a05b37ebde060ccc74c7b59e61455eb31b157d812. ARM execution, renderer timing and every-VBlank publication remain not_run until CI.
 
 
