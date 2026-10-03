@@ -13,6 +13,7 @@ class Check {
  static object Get(object obj,string name)=>obj.GetType().GetField(name,BindingFlags.NonPublic|BindingFlags.Instance).GetValue(obj); static System.Collections.Generic.IEnumerable<Control> Descendants(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(Descendants(c)));
  static string Id(object obj)=>(string)obj.GetType().GetProperty("Id").GetValue(obj);
  static void Assert(bool value,string name){if(!value)throw new Exception(name);Console.WriteLine("PASS "+name);}
+ static void DeleteTemporaryFixture(string path){string resolved=Path.GetFullPath(path);string temporary=Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);if(!string.Equals(Path.GetDirectoryName(resolved),temporary,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Fixture cleanup must remain inside the temporary directory.");if(Directory.Exists(resolved))Directory.Delete(resolved,true);}
  [STAThread] static void Main(string[] args){
   if(args.Length>0 && args[0]=="--emulator-lock") { System.Threading.Thread.Sleep(20000); return; }
   Application.EnableVisualStyles();
@@ -47,19 +48,24 @@ class Check {
    finally {if(Directory.Exists(achievementsRoot)&&Path.GetDirectoryName(Path.GetFullPath(achievementsRoot))==Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar))Directory.Delete(achievementsRoot,true);}
    return;
   }
+  if(args.Length>0&&args[0]=="--profile-library-recovery") {
+   string recoveryRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-profile-library-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(recoveryRoot);
+   try{ProfileLibraryRecoveryCheck.Run(recoveryRoot);}finally{DeleteTemporaryFixture(recoveryRoot);}
+   return;
+  }
   if(args.Length>0&&args[0]=="--library-search") {
    string searchRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-library-search-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(searchRoot);
-   try{LibrarySearchCheck.Run(searchRoot);}finally{Directory.Delete(searchRoot,true);}
+   try{LibrarySearchCheck.Run(searchRoot);}finally{DeleteTemporaryFixture(searchRoot);}
    return;
   }
   if(args.Length>0&&args[0]=="--rom-discovery") {
    string discoveryRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-rom-discovery-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(discoveryRoot);
-   try{RomDiscoveryCheck.Run(discoveryRoot);}finally{Directory.Delete(discoveryRoot,true);}
+   try{RomDiscoveryCheck.Run(discoveryRoot);}finally{DeleteTemporaryFixture(discoveryRoot);}
    return;
   }
   if(args.Length>0&&args[0]=="--game-controls") {
    string controlsRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-controls-check-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(controlsRoot);
-   try{GameControlsCheck.Run(controlsRoot);}finally{Directory.Delete(controlsRoot,true);}
+   try{GameControlsCheck.Run(controlsRoot);}finally{DeleteTemporaryFixture(controlsRoot);}
    return;
   }
   string root=Path.Combine(Path.GetTempPath(),"pokemonplay-profiles-check-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
@@ -70,6 +76,7 @@ class Check {
   RomDiscoveryCheck.Run(root);
   LibrarySearchCheck.Run(root);
   ImportedAvailabilityCheck.Run(root);
+  ProfileLibraryRecoveryCheck.Run(root);
   AtomicArchiveCheck.Run(root,app);BankFiltersCheck.Run(root,app);AppUpdatesCheck.Run(root);GameLaunchHistoryCheck.Run(root,app);RetroAchievementsCheck.Run(root,app);FirstUseCheck.Run(root,app);AzaharSessionCheck.Run(app,root);ImportedRomRecoveryCheck.Run(root,app);PokemonBasesCheck.Run(root,app);SpriteResilienceCheck.Run(root,app);BundledEmulatorsCheck.Run(root,app);
   byte[] gen3=new byte[0x20000];for(int group=0;group<2;group++)for(int sector=0;sector<14;sector++){int p=(group*14+sector)*0x1000;BinaryPrimitives.WriteUInt16LittleEndian(gen3.AsSpan(p+0xFF4), (ushort)sector);BinaryPrimitives.WriteUInt32LittleEndian(gen3.AsSpan(p+0xFF8),0x08012025);}
   byte[] gen4=new byte[0x80000];foreach(int start in new[]{0,0x40000}){int length=53036;BinaryPrimitives.WriteUInt32LittleEndian(gen4.AsSpan(start+length-12),(uint)length);BinaryPrimitives.WriteUInt32LittleEndian(gen4.AsSpan(start+length-8),537265699);}
