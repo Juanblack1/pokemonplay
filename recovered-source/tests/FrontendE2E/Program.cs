@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -29,7 +31,7 @@ internal static class Program
             Console.Error.WriteLine(error);
             if(root!=null&&Directory.Exists(Path.Combine(root,"evidence"))){
                 File.WriteAllText(Path.Combine(root,"evidence","startup-failed.json"),JsonSerializer.Serialize(new{schema=1,passed=false,error=error.ToString()}));
-                var failedChecks=new Dictionary<string,object>();foreach(string key in new[]{"boot","process_identity","root_identity","embedding","focus","cadence","neutral","A-held","A-release","B-held","B-release","negative_validity","cleanup","default_driver","configuration","capture_identity","guest_hold_color"})failedChecks[key]=new{status="not_run",reason="startup failed before observation"};
+                var failedChecks=new Dictionary<string,object>();foreach(string key in new[]{"boot","process_identity","root_identity","embedding","focus","cadence","neutral","A-held","A-release","B-held","B-release","negative_validity","cleanup","default_driver","configuration","capture_identity","guest_hold_color","top_level_control"})failedChecks[key]=new{status="not_run",reason="startup failed before observation"};
                 string startupPrefix=error.Message.Split(':')[0];
                 failedChecks[failedChecks.ContainsKey(startupPrefix)?startupPrefix:"boot"]=new{status="failed",reason=error.Message};
                 string scenarioIndex=Array.IndexOf(args,"--scenario") is int index&&index>=0&&index+1<args.Length?args[index+1]:"unknown";
@@ -62,7 +64,7 @@ internal sealed class FrontendRun:IDisposable
         string runtime=Path.Combine(root,"PokemonPlayRuntime"),retroarch=Path.Combine(runtime,"Emulators","RetroArch");
         hashes=new{harnessExe=SessionConfig.Hash(Path.Combine(runtime,"Check.exe")),harnessDll=SessionConfig.Hash(Path.Combine(runtime,"Check.dll")),app=SessionConfig.Hash(Path.Combine(runtime,"Pokemons Play.dll")),retroarch=SessionConfig.Hash(Path.Combine(retroarch,"retroarch.exe")),core=SessionConfig.Hash(Path.Combine(retroarch,"cores","mgba_libretro.dll")),rom=SessionConfig.Hash(Path.Combine(root,"roms","diagnostic.gba"))};
         identity=new{root,runId=Path.GetFileName(root),hashes};
-        foreach(string key in new[]{"boot","process_identity","root_identity","embedding","focus","cadence","neutral","A-held","A-release","B-held","B-release","negative_validity","cleanup","default_driver","configuration","capture_identity","guest_hold_color"})Set(key,"not_run","not reached");
+        foreach(string key in new[]{"boot","process_identity","root_identity","embedding","focus","cadence","neutral","A-held","A-release","B-held","B-release","negative_validity","cleanup","default_driver","configuration","capture_identity","guest_hold_color","top_level_control"})Set(key,"not_run","not reached");
         var existing=Process.GetProcessesByName("retroarch");bool conflict=existing.Length!=0;foreach(var item in existing)item.Dispose();if(conflict)throw new InvalidDataException("process_identity: existing RetroArch; no third-party process killed");
         if(!AppPaths.Root.Equals(root,StringComparison.OrdinalIgnoreCase)||InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json")).Mode!=3)throw new InvalidDataException("root_identity: wrong root/profile");
         SessionConfig.Owned(root,Path.Combine(root,"roms","diagnostic.gba"));
@@ -125,9 +127,11 @@ internal sealed class FrontendRun:IDisposable
             Native.MouseAt(mousePoint,true);await Task.Delay(80);Native.MouseAt(mousePoint,false);await Task.Delay(200);
             await Phase("neutral",0,15000);
             await Hold(4);
-            GuestMaskMismatch negativeMismatch=null;
+            GuestMaskMismatch negativeMismatch=null,embeddedMismatch=null;
             try{await Phase("A-held",1,10000);}
             catch(GuestMaskMismatch error) when(scenario=="suppressed-a"&&error.Expected==1&&error.Observed==0&&error.ValidatedPairs==2&&error.RawGuardValidated){negativeMismatch=error;}
+            catch(GuestMaskMismatch error) when(scenario=="positive"&&error.Expected==1&&error.Observed==0){embeddedMismatch=error;await ProbeTopLevelControl();}
+            if(embeddedMismatch!=null)throw embeddedMismatch;
             if(scenario=="suppressed-a"&&negativeMismatch==null)throw new InvalidDataException("negative_validity: actual expected mask mismatch absent");
             await Release();await Phase("A-release",0,10000);keyReleaseProved=true;
             if(scenario=="positive"){
@@ -209,7 +213,10 @@ internal sealed class FrontendRun:IDisposable
                 lastObservedInjection=bridge.LastInjectionTrace.Sequence;
                 events.Add(new{kind="actual-input-delivery",phase=current,timeMs=wall.ElapsedMilliseconds,poll=bridge.LastInputTrace,injections=bridge.RecentInjectionAttempts});
             }
-            ValidateEmbedding();var focus=Focus();events.Add(new{kind="focus-sample",timeMs=wall.ElapsedMilliseconds,phase=current,focus,held,raw=held>=0?pad.Actions[held]:false,supplied=held>=0?pad.VirtualActions[held]:false,capture=pad.Capture,mouseAction=Field<int>(pad,"mouseAction"),childHwnd=hwnd.ToInt64(),panelHwnd=Field<Panel>(host,"gamePanel").Handle.ToInt64(),hostHwnd=host.Handle.ToInt64(),launcherHwnd=Launcher.Handle.ToInt64(),style=Native.GetWindowLong(hwnd,-16)});
+            bool topLevelProbe=current.StartsWith("top-level-control",StringComparison.Ordinal);
+            if(topLevelProbe){Native.GetWindowThreadProcessId(hwnd,out uint topLevelPid);if(topLevelPid!=child.Id||Native.GetParent(hwnd)!=IntPtr.Zero||(unchecked((uint)Native.GetWindowLong(hwnd,-16))&0x40000000)!=0)throw new InvalidDataException("top_level_control: sampler lost owned top-level HWND");}
+            else ValidateEmbedding();
+            var focus=Focus();events.Add(new{kind="focus-sample",timeMs=wall.ElapsedMilliseconds,phase=current,focus,held,raw=held>=0?pad.Actions[held]:false,supplied=held>=0?pad.VirtualActions[held]:false,capture=pad.Capture,mouseAction=Field<int>(pad,"mouseAction"),childHwnd=hwnd.ToInt64(),panelHwnd=Field<Panel>(host,"gamePanel").Handle.ToInt64(),hostHwnd=host.Handle.ToInt64(),launcherHwnd=Launcher.Handle.ToInt64(),style=Native.GetWindowLong(hwnd,-16)});
             if(held>=0){
                 if(!pad.Capture||!pad.Actions[held]||Field<int>(pad,"mouseAction")!=held)throw new InvalidDataException("focus: raw hold/capture lost");
                 if(!focus.guard)throw new InvalidDataException("focus: exact bridge guard false during virtual hold");
@@ -265,6 +272,51 @@ internal sealed class FrontendRun:IDisposable
         if(boundsError!=null)invalid.Add("bounds unavailable: "+boundsError);else if(childBounds.Width<=0||childBounds.Height<=0||!panelBounds.Contains(childBounds))invalid.Add("child client bounds empty/outside panel");
         if(Launcher.WindowState==FormWindowState.Minimized)invalid.Add("Launcher minimized");
         if(invalid.Count!=0)throw new InvalidDataException("embedding: "+(hwnd==IntPtr.Zero||!declaredEmbedded?"not_ready: ":"invalid: ")+string.Join("; ",invalid));
+    }
+    async Task ProbeTopLevelControl()
+    {
+        Progress("top-level-control");var attempt=host.LastEmbeddingAttempt??throw new InvalidDataException("top_level_control: production embedding trace absent");
+        var panel=Field<Panel>(host,"gamePanel");var embedTimer=Field<System.Windows.Forms.Timer>(host,"timer");var bridge=Field<GameInputBridge>(host,"inputBridge");
+        uint originalStyle=attempt.OriginalStyle,embeddedStyle=attempt.RequestedStyle;bool detached=false,restored=false,foregroundRequestAccepted=false;string diagnostic="not completed";
+        try{
+            Native.GetWindowThreadProcessId(hwnd,out uint pid);
+            if(hwnd.ToInt64()!=attempt.ChildHwnd||pid!=child.Id||Native.GetParent(hwnd)!=panel.Handle||!Native.IsChild(panel.Handle,hwnd)||unchecked((uint)Native.GetWindowLong(hwnd,-16))!=embeddedStyle)
+                throw new InvalidDataException("top_level_control: owned embedded HWND precondition changed");
+            embedTimer.Stop();Native.MouseAt(mousePoint,false);held=-1;acquisition.Release();pad.ReleaseVirtual();await Task.Delay(180);CheckFailures();
+            if(pad.Actions.Any(value=>value)||pad.VirtualActions.Any(value=>value))throw new InvalidDataException("top_level_control: embedded key did not release before control");
+            IntPtr oldParentResult=Native.SetParent(hwnd,IntPtr.Zero);int parentError=Marshal.GetLastPInvokeError();
+            detached=Native.GetParent(hwnd)==IntPtr.Zero;
+            if(parentError!=0||oldParentResult!=panel.Handle||!detached)throw new InvalidDataException("top_level_control: could not detach the verified owned HWND");
+            int styleResult=Native.SetWindowLong(hwnd,-16,unchecked((int)originalStyle));int styleError=Marshal.GetLastPInvokeError();
+            if(styleResult==0&&styleError!=0||unchecked((uint)Native.GetWindowLong(hwnd,-16))!=originalStyle)throw new InvalidDataException("top_level_control: original top-level style did not restore");
+            if(!Native.SetWindowPos(hwnd,IntPtr.Zero,0,0,Math.Max(320,panel.ClientSize.Width),Math.Max(240,panel.ClientSize.Height),0x74))throw new Win32Exception(Marshal.GetLastPInvokeError(),"top_level_control: window bounds update failed");Native.ShowWindow(hwnd,9);
+            foregroundRequestAccepted=Native.SetForegroundWindow(hwnd);events.Add(new{kind="top-level-foreground-request",accepted=foregroundRequestAccepted,observedForeground=Native.GetForegroundWindow().ToInt64(),expectedForeground=hwnd.ToInt64()});
+            await Until(()=>Native.GetForegroundWindow()==hwnd&&Focus().guard,3000,"top_level_control: owned frontend did not become foreground");
+            long injectionBefore=bridge.LastInjectionTrace?.Sequence??0;Array.Clear(pad.VirtualActions);pad.VirtualActions[4]=true;
+            await Until(()=>bridge.LastInputTrace is {ResolvedActions.Length:>4} trace&&trace.ResolvedActions[4]=='1'&&bridge.LastInjectionTrace is {Down:true} injected&&injected.Sequence>injectionBefore,2000,"top_level_control: production bridge did not inject A");
+            phaseStarted=wall.ElapsedMilliseconds;int accepted=0;uint previous=internalCounter??0;
+            while(accepted<2){if(wall.ElapsedMilliseconds-lastRequest<1100)await Task.Delay((int)(1100-(wall.ElapsedMilliseconds-lastRequest)));var pair=await Capture("top-level-control-held",wall.ElapsedMilliseconds+10000);if(pair.Internal.Mask!=1||pair.Desktop.Mask!=1)throw new GuestMaskMismatch(1,pair.Internal.Mask,accepted,false);if(accepted>0&&!GuestDecoder.Advances(previous,pair.Internal.Counter))throw new InvalidDataException("top_level_control: guest frame did not advance");previous=pair.Internal.Counter;accepted++;}
+            Array.Clear(pad.VirtualActions);await Until(()=>bridge.LastInjectionTrace?.Down==false&&bridge.LastInputTrace?.HeldAfter?.Contains("Z",StringComparison.Ordinal)==false,2000,"top_level_control: production key-up absent");
+            phaseStarted=wall.ElapsedMilliseconds;while(wall.ElapsedMilliseconds-lastRequest<1100)await Task.Delay((int)(1100-(wall.ElapsedMilliseconds-lastRequest)));
+            var released=await Capture("top-level-control-release",wall.ElapsedMilliseconds+10000);if(released.Internal.Mask!=0||released.Desktop.Mask!=0)throw new GuestMaskMismatch(0,released.Internal.Mask,0,false);keyReleaseProved=true;
+            diagnostic="owned top-level foreground control observed A mask and key-up through production bridge";Set("top_level_control","passed",diagnostic);
+        }catch(Exception error){diagnostic=error.Message;Set("top_level_control","failed",diagnostic);events.Add(new{kind="top-level-control-result",status="failed",error=error.ToString()});}
+        finally{
+            Array.Clear(pad.VirtualActions);
+            if(detached){
+                Native.GetWindowThreadProcessId(hwnd,out uint pid);
+                if(pid!=child.Id||child.HasExited)throw new InvalidDataException("top_level_control: owned process identity lost before re-embed");
+                IntPtr parentResult=Native.SetParent(hwnd,panel.Handle);int parentError=Marshal.GetLastPInvokeError();
+                if(parentError!=0||parentResult!=IntPtr.Zero||Native.GetParent(hwnd)!=panel.Handle)throw new InvalidDataException("top_level_control: failed to restore panel parent");
+                int styleResult=Native.SetWindowLong(hwnd,-16,unchecked((int)embeddedStyle));int styleError=Marshal.GetLastPInvokeError();
+                if(styleResult==0&&styleError!=0||unchecked((uint)Native.GetWindowLong(hwnd,-16))!=embeddedStyle)throw new InvalidDataException("top_level_control: failed to restore child style");
+                if(!Native.SetWindowPos(hwnd,IntPtr.Zero,0,0,panel.ClientSize.Width,panel.ClientSize.Height,0x74))throw new Win32Exception(Marshal.GetLastPInvokeError(),"top_level_control: embedded bounds update failed");Native.ShowWindow(hwnd,5);
+                restored=Native.GetParent(hwnd)==panel.Handle&&Native.IsChild(panel.Handle,hwnd)&&(unchecked((uint)Native.GetWindowLong(hwnd,-16))&0x40000000)!=0;
+                if(!restored)throw new InvalidDataException("top_level_control: re-embedded HWND did not pass native checks");
+                ValidateEmbedding();
+            }
+            embedTimer.Start();events.Add(new{kind="top-level-control-result",status=checks["top_level_control"],diagnostic,foregroundRequestAccepted,restored});Write("top-level-control.json",new{diagnostic,foregroundRequestAccepted,restored,attempt,hwnd=hwnd.ToInt64(),pid=child.Id,focus=Focus(),parent=Native.GetParent(hwnd).ToInt64(),style=unchecked((uint)Native.GetWindowLong(hwnd,-16))});
+        }
     }
     async Task Hold(int action)
     {

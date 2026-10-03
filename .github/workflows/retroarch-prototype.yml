@@ -55,16 +55,27 @@ jobs:
             if (!$path) { $identity.teardown='identity_uncorroborated_no_termination'; $identity | ConvertTo-Json | Set-Content $identityFile; $p.Dispose(); throw 'Owned process identity could not be corroborated; no PID-only termination.' }
             try {
               $deadline = [DateTime]::UtcNow.AddSeconds(15)
+              $postExitLogDeadline = $null
               do {
                 $text = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue),(Get-Content $stderr -Raw -ErrorAction SilentlyContinue)) -join "`n"
                 $identity.expectedOutput = $text -match $pattern
-                if ($identity.expectedOutput -or $p.HasExited) { break }
+                if ($identity.expectedOutput) { break }
+                if ($p.HasExited) {
+                  # Redirected output can become visible just after the process handle signals exit.
+                  if ($null -eq $postExitLogDeadline) { $postExitLogDeadline = [DateTime]::UtcNow.AddSeconds(2) }
+                  if ([DateTime]::UtcNow -ge $postExitLogDeadline) { break }
+                  Start-Sleep -Milliseconds 50
+                  continue
+                }
                 Start-Sleep -Milliseconds 100
               } while ([DateTime]::UtcNow -lt $deadline)
               if (!$identity.expectedOutput) { throw "Expected $name output absent; cleanup is emergency failure." }
               if ($p.HasExited) { $identity.exitCode=$p.ExitCode; $identity.teardown='natural_exit' }
             } finally {
-              if (!$p.HasExited) {
+              if ($p.HasExited) {
+                $identity.teardown='natural_exit'
+                $identity.exitCode=$p.ExitCode
+              } else {
                 # CLI information/error modes may continue into a menu. Kill is
                 # intentional only after the required output, never guest proof.
                 $active = Get-Process -Id $p.Id -ErrorAction SilentlyContinue

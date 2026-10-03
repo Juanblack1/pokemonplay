@@ -7,6 +7,11 @@ internal static class Native
     [StructLayout(LayoutKind.Sequential)] struct Mouse { public int X,Y; public uint Data,Flags,Time; public UIntPtr Extra; }
     [StructLayout(LayoutKind.Explicit,Size=40)] struct Input { [FieldOffset(0)] public uint Type; [FieldOffset(8)] public Mouse Mouse; }
     [DllImport("user32.dll",SetLastError=true)] static extern uint SendInput(uint count,Input[] input,int size);
+    [DllImport("user32.dll",SetLastError=true)] internal static extern IntPtr SetParent(IntPtr child,IntPtr parent);
+    [DllImport("user32.dll",EntryPoint="SetWindowLongW",SetLastError=true)] internal static extern int SetWindowLong(IntPtr hwnd,int index,int value);
+    [DllImport("user32.dll",SetLastError=true)] internal static extern bool SetWindowPos(IntPtr hwnd,IntPtr insertAfter,int x,int y,int width,int height,uint flags);
+    [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr hwnd,int command);
+    [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] internal static extern IntPtr GetParent(IntPtr hwnd);
     [DllImport("user32.dll")] internal static extern IntPtr WindowFromPoint(Point point);
