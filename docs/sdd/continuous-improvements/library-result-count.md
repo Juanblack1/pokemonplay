@@ -19,3 +19,7 @@ Não alterar pesquisa, ordenação, catálogo, ROMs, saves, histórico, dados pe
 ## Verificação
 
 `FirstUseCheck` instancia a LibraryView em pasta temporária, lê o `AccessibleDescription` do banner, consulta “Emerald”, consulta termo inexistente, limpa a busca e valida os textos correspondentes. O check existente compila e executa no Windows CI.
+
+## Evidência TDD
+
+O teste foi enviado antes da implementação no commit `a933f86`; o Windows CI [37157955799](https://github.com/Juanblack1/pokemonplay/actions/runs/37157955799) falhou na primeira nova asserção porque o banner não expunha o resumo completo do catálogo. Isso confirma a lacuna de acessibilidade antes da mudança de produto.
