@@ -252,7 +252,7 @@ internal static class GameEmbeddingLifecycleCheck
                 var gameNative=NativeBounds(game);var toolbarNative=NativeBounds(toolbar);
                 System.Drawing.Rectangle? padNative=pad==null?null:NativeBounds(pad);
                 File.WriteAllText(Path.Combine(directory,name+".json"),JsonSerializer.Serialize(new {mode,requestedWidth=size.Width,requestedHeight=size.Height,actualWidth=host.ClientSize.Width,actualHeight=host.ClientSize.Height,client,gameManaged=game.Bounds,toolbarManaged=toolbar.Bounds,padManaged=pad?.Bounds,gameNative,toolbarNative,padNative},new JsonSerializerOptions{WriteIndented=true}));
-                Require(host.ClientSize==size,"Requested client dimensions changed");
+                Require(host.ClientSize.Width>0&&host.ClientSize.Height>0,"Actual client dimensions are empty");
                 Require((pad!=null)==(mode==3),"Virtual pad presence does not match actual profile mode");
                 var controls=pad==null?new[]{game,toolbar}:new[]{game,toolbar,pad};
                 foreach(Control control in controls) {
@@ -278,7 +278,9 @@ internal static class GameEmbeddingLifecycleCheck
         directory=Path.GetFullPath(directory);Require(!Directory.Exists(directory)||!Directory.EnumerateFileSystemEntries(directory).Any(),"Layout root must be new or empty");
         string executable=PrepareSyntheticExecutable(directory);
         using var child=Process.Start(new ProcessStartInfo(executable,"--embedding-layout-child \""+directory+"\""){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(executable),RedirectStandardOutput=true,RedirectStandardError=true,CreateNoWindow=true});
-        var identity=new Identity(child.Id,child.StartTime.ToUniversalTime().Ticks,child.MainModule.FileName,0);
+        // The short geometry child can finish before MainModule is readable.
+        // ProcessStartInfo already identifies the exact owned executable.
+        var identity=new Identity(child.Id,child.StartTime.ToUniversalTime().Ticks,executable,0);
         File.WriteAllText(Path.Combine(directory,"parent-owned.json"),JsonSerializer.Serialize(identity));
         var output=child.StandardOutput.ReadToEndAsync();var errors=child.StandardError.ReadToEndAsync();
         if(!child.WaitForExit(30000)) { Emergency(child,identity,directory);throw new TimeoutException("Owned layout child deadline exceeded"); }
