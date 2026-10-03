@@ -21,6 +21,21 @@ internal static class SaveListBoundsCheck
             Assert(Children(view).OfType<Button>().Where(button=>button.Text is "Backup ZIP" or "Restaurar backup" or "Novo perfil").All(button=>!button.Enabled),"known partial save listings disable operations that require complete data");
             Assert(Children(view).OfType<Button>().Single(button=>button.Text=="Abrir pasta").Enabled&&((Control)Field(view,"gameList")).Enabled,"partial save listings keep folder access and game navigation available");
             Assert(((Label)Field(view,"profileSummary")).Text.Contains("incompleta"),"profile summary does not claim a complete compatible-save count after a limited scan");
+            ((System.Threading.Tasks.Task)Call(view,"RunCloudAction","upload")).GetAwaiter().GetResult();
+            Assert(!(bool)Field(view,"cloudBusy")&&((Label)Field(view,"cloudMessage")).Text.Contains("incompleta"),"partial save listing stops cloud upload before network work");
+            string preview=Environment.GetEnvironmentVariable("POKEMONPLAY_LIBRARY_PREVIEW");
+            if(!string.IsNullOrEmpty(preview)) {
+                Directory.CreateDirectory(preview);using var host=new Form{ShowInTaskbar=false,AutoScaleMode=AutoScaleMode.None,ClientSize=new System.Drawing.Size(1100,950)};
+                host.Controls.Add(view);host.Show();Application.DoEvents();
+                foreach(int width in new[]{760,1100}) {
+                    host.ClientSize=new System.Drawing.Size(width,950);Application.DoEvents();
+                    var refresh=Children(view).OfType<Button>().Single(button=>button.Text=="Atualizar lista");
+                    var heading=Children(view).Single(control=>(string)control.Tag=="files-heading");
+                    Assert(heading.Right<=refresh.Left&&refresh.Right<=refresh.Parent.ClientSize.Width,"partial save list heading and refresh button fit at width "+width);
+                    using var bitmap=new System.Drawing.Bitmap(view.Width,view.Height);view.DrawToBitmap(bitmap,view.ClientRectangle);bitmap.Save(Path.Combine(preview,"save-list-partial-"+width+".png"));
+                }
+                host.Controls.Remove(view);
+            }
             Call(view,"SelectGame",games[1]);Assert(Children(view).OfType<Button>().Single(button=>button.Text=="Backup ZIP").Enabled,"selecting a complete game restores save actions after a partial listing");
         }
         Assert(File.ReadAllText(Path.Combine(folder,"note-0000.txt"))=="sentinel 0"&&Directory.GetFiles(folder).Length==600,"bounded save listing preserves the original files");
@@ -33,7 +48,8 @@ internal static class SaveListBoundsCheck
         try {
             using var view=new SaveManagerView(junctionFixture);
             Assert(((Control)Field(view,"fileList")).Controls.OfType<SaveFileRow>().Count()==1&&((Label)Field(view,"status")).Text.Contains("parcial"),"save directory junction is skipped without duplicates and reported as a partial listing");
-            Directory.Delete(link);Call(view,"BuildDetail");
+            var refresh=Children(view).OfType<Button>().Single(button=>button.Text=="Atualizar lista");
+            Directory.Delete(link);refresh.PerformClick();
             Assert(((Control)Field(view,"fileList")).Controls.OfType<SaveFileRow>().Count()==1&&!((Label)Field(view,"status")).Text.Contains("parcial")&&Children(view).OfType<Button>().Single(button=>button.Text=="Backup ZIP").Enabled,"removing a directory junction and refreshing restores a complete save listing");
             Assert(File.ReadAllText(original)=="sentinel","junction inspection preserves the original save-folder content");
         }finally{if(Directory.Exists(link))Directory.Delete(link);}
