@@ -48,6 +48,13 @@ jobs:
           $commit = git rev-parse HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Commit indisponível.' }
           ./recovered-source/tools/verify-frontend-e2e.ps1 -Mode Prepare -OutputDirectory '${{ runner.temp }}/frontend-e2e' -BundleZip $env:FRONTEND_BUNDLE -BundleSha256 '6f57a01804e76671e0095368d0665c04a105fb378fde4ab837ed631bf82f7654' -ReleaseTag v171.10.7 -Commit $commit
+      - name: Verificar contrato de serialização antes da execução do frontend
+        shell: pwsh
+        timeout-minutes: 1
+        run: |
+          $plan = Get-Content -LiteralPath '${{ runner.temp }}/frontend-e2e/plan.json' -Raw | ConvertFrom-Json
+          & (Join-Path $plan.runs[0].root 'PokemonPlayRuntime/Check.exe') --verify-evidence-contract
+          if ($LASTEXITCODE -ne 0) { throw 'Contrato de evidência inválido.' }
       - name: Verificar Play, foco, pixels e pressionar/soltar reais
         shell: pwsh
         timeout-minutes: 8

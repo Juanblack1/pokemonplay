@@ -11,6 +11,7 @@ internal static class Program
     {
         string root=null;
         try{
+            if(args.Length==1&&args[0]=="--verify-evidence-contract"){EmbeddingEvidence.VerifyContract();Console.WriteLine("Evidence serialization contract passed");return 0;}
             var options=new Dictionary<string,string>();if(args.Length!=8)throw new ArgumentException("Expected --root --scenario --port --commit");
             for(int i=0;i<args.Length;i+=2)options.Add(args[i],args[i+1]);
             root=Path.TrimEndingDirectorySeparator(Path.GetFullPath(options["--root"]));
@@ -55,6 +56,7 @@ internal sealed class FrontendRun:IDisposable
     static readonly JsonSerializerOptions JsonOptions=new(){WriteIndented=true};
     internal FrontendRun(string root,string scenario,int port,string commit)
     {
+        EmbeddingEvidence.VerifyContract();
         this.root=root;this.scenario=scenario;this.port=port;this.commit=commit;evidence=Path.Combine(root,"evidence");
         string runtime=Path.Combine(root,"PokemonPlayRuntime"),retroarch=Path.Combine(runtime,"Emulators","RetroArch");
         hashes=new{harnessExe=SessionConfig.Hash(Path.Combine(runtime,"Check.exe")),harnessDll=SessionConfig.Hash(Path.Combine(runtime,"Check.dll")),app=SessionConfig.Hash(Path.Combine(runtime,"Pokemons Play.dll")),retroarch=SessionConfig.Hash(Path.Combine(retroarch,"retroarch.exe")),core=SessionConfig.Hash(Path.Combine(retroarch,"cores","mgba_libretro.dll")),rom=SessionConfig.Hash(Path.Combine(root,"roms","diagnostic.gba"))};
@@ -139,8 +141,15 @@ internal sealed class FrontendRun:IDisposable
         }finally{
             try{if(ring.Count>0)ring[^1].Image.Save(Path.Combine(evidence,"last-desktop.png"));}catch(Exception error){events.Add(new{kind="failure-capture",error=error.Message});}
             try{await Cleanup();}catch(Exception error){Passed=false;Set("cleanup","failed",error.ToString());}
-            Write("observations.json",events);Write("result.json",Result());sampler.Stop();
-            if(Passed)Launcher.Close();else{host?.Dispose();Launcher.Dispose();Application.ExitThread();}
+            try{
+                try{Write("observations.json",events);}catch(Exception error){Passed=false;Set("capture_identity","failed","evidence finalization failed: "+error.Message);Console.Error.WriteLine("Observation finalization failed: "+error);}
+                try{Write("result.json",Result());}catch(Exception error){Passed=false;Console.Error.WriteLine("Result finalization failed: "+error);}
+            }
+            finally{
+                try{sampler.Stop();if(Passed)Launcher.Close();else{host?.Dispose();Launcher.Dispose();}}
+                catch(Exception error){Passed=false;Console.Error.WriteLine("UI shutdown failed: "+error);}
+                finally{Application.ExitThread();}
+            }
         }
     }
     async Task PreparePlayClick(GameCard card)
@@ -219,16 +228,16 @@ internal sealed class FrontendRun:IDisposable
         }
         Rectangle childBounds=Rectangle.Empty,panelBounds=panel.RectangleToScreen(panel.ClientRectangle);string boundsError=null;
         try{childBounds=Native.Bounds(hwnd);}catch(Exception error){boundsError=error.Message;}
-        var facts=new{
-            timeMs=wall.ElapsedMilliseconds,phase=current,state=hwnd==IntPtr.Zero||!declaredEmbedded?"not_ready":"declared_embedded",
-            childHwnd=hwnd.ToInt64(),windowExists,thread,pid,expectedPid=child.Id,parent=parent.ToInt64(),expectedPanel=panel.Handle.ToInt64(),
-            style,hasChildStyle=(style&0x40000000)!=0,visible,declaredEmbedded,host.TopLevel,host.Visible,
-            hostHwnd=host.Handle.ToInt64(),findFormType=found?.GetType().FullName,findFormHwnd=found?.Handle.ToInt64(),findFormIsHost=found==host,
-            managedContains,launcherHwnd=Launcher.Handle.ToInt64(),ancestry,reachedLauncher=reached,ancestryTruncated=ancestor!=IntPtr.Zero,
-            childBounds,panelBounds,boundsError,geometryContained=boundsError==null&&panelBounds.Contains(childBounds),launcherState=Launcher.WindowState.ToString(),
-            sourceTiming="TryEmbed assigns HWND then SetParent/style/emulatorEmbedded/ResizeEmbedded synchronously on UI timer; no readiness wait justified by that assignment alone",
-            findFormContract="dotnet/winforms v10.0.0 Control.FindForm starts with this and stops at first Form; embedded GameHostForm returns itself"
-        };
+        var facts=EmbeddingEvidence.Create(new Dictionary<string,object>{
+            ["timeMs"]=wall.ElapsedMilliseconds,["phase"]=current,["state"]=hwnd==IntPtr.Zero||!declaredEmbedded?"not_ready":"declared_embedded",
+            ["childHwnd"]=hwnd.ToInt64(),["windowExists"]=windowExists,["thread"]=thread,["pid"]=pid,["expectedPid"]=child.Id,["parent"]=parent.ToInt64(),["expectedPanel"]=panel.Handle.ToInt64(),
+            ["style"]=style,["hasChildStyle"]=(style&0x40000000)!=0,["nativeVisible"]=visible,["declaredEmbedded"]=declaredEmbedded,["topLevel"]=host.TopLevel,["hostVisible"]=host.Visible,
+            ["hostHwnd"]=host.Handle.ToInt64(),["findFormType"]=found?.GetType().FullName,["findFormHwnd"]=found?.Handle.ToInt64(),["findFormIsHost"]=found==host,
+            ["managedContains"]=managedContains,["launcherHwnd"]=Launcher.Handle.ToInt64(),["ancestry"]=ancestry,["reachedLauncher"]=reached,["ancestryTruncated"]=ancestor!=IntPtr.Zero,
+            ["childBounds"]=childBounds,["panelBounds"]=panelBounds,["boundsError"]=boundsError,["geometryContained"]=boundsError==null&&panelBounds.Contains(childBounds),["launcherState"]=Launcher.WindowState.ToString(),
+            ["sourceTiming"]="TryEmbed HWND/parent/style/flag/resize synchronous UI timer; no readiness delay justified",
+            ["findFormContract"]="WinForms v10.0.0 Control.FindForm starts this and stops first Form"
+        });
         events.Add(new{kind="embedding-facts",facts});Write("embedding-current.json",facts);Write("observations.json",events);
         var invalid=new List<string>();
         if(!windowExists)invalid.Add("HWND does not exist");if(pid!=child.Id)invalid.Add("PID mismatch");if(parent!=panel.Handle)invalid.Add("parent differs from gamePanel");
@@ -311,7 +320,9 @@ internal sealed class FrontendRun:IDisposable
     }
     async Task Cleanup()
     {
-        Progress("cleanup");if(pad!=null){try{Native.MouseAt(mousePoint,false);}catch{}held=-1;pad.ReleaseVirtual();}
+        current="cleanup";
+        try{Progress("cleanup");}catch(Exception error){Passed=false;Console.Error.WriteLine("Cleanup evidence write failed: "+error);}
+        if(pad!=null){try{Native.MouseAt(mousePoint,false);}catch{}held=-1;pad.ReleaseVirtual();}
         if(child!=null&&!child.HasExited){
             if(child.StartTime.ToUniversalTime()!=childStart||!child.MainModule.FileName.Equals(childPath,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("cleanup: process identity changed");
             using var exitObservation=Process.GetProcessById(child.Id);
@@ -354,4 +365,21 @@ internal sealed class GuestMaskMismatch:Exception
 internal sealed class EvidenceUnavailable:Exception
 {
     internal EvidenceUnavailable(string reason):base("default_driver: "+reason){}
+}
+
+internal static class EmbeddingEvidence
+{
+    internal static Dictionary<string,object> Create(Dictionary<string,object> facts){
+        if(facts.Keys.Distinct(StringComparer.OrdinalIgnoreCase).Count()!=facts.Count)throw new InvalidDataException("embedding evidence has case-colliding keys");
+        if(!facts.TryGetValue("nativeVisible",out var native)||native is not bool||!facts.TryGetValue("hostVisible",out var host)||host is not bool)throw new InvalidDataException("embedding visibility evidence missing/invalid");
+        return facts;
+    }
+    internal static void VerifyContract(){
+        var facts=Create(new Dictionary<string,object>{["nativeVisible"]=true,["hostVisible"]=false,["childBounds"]=new Rectangle(1,2,240,160),["ancestry"]=new[]{new{depth=0,hwnd=123L,pid=12u,parent=456L}},["boundsError"]=null});
+        using var document=JsonDocument.Parse(JsonSerializer.Serialize(new{kind="embedding-facts",facts}));
+        var data=document.RootElement.GetProperty("facts");
+        if(!data.GetProperty("nativeVisible").GetBoolean()||data.GetProperty("hostVisible").GetBoolean()||data.GetProperty("ancestry")[0].GetProperty("hwnd").GetInt64()!=123)throw new InvalidDataException("embedding serialization lost actual visibility/ancestry fields");
+        bool rejected=false;try{Create(new Dictionary<string,object>{["nativeVisible"]=true,["hostVisible"]=false,["visible"]=true,["Visible"]=false});}catch(InvalidDataException){rejected=true;}
+        if(!rejected)throw new InvalidDataException("case-collision evidence must be rejected");
+    }
 }
