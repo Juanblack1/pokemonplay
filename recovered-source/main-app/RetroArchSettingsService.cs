@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Windows.Forms;
 
 internal sealed class RetroArchSettings
 {
@@ -120,9 +121,20 @@ internal static class RetroArchSettingsService
                 "libretro_info_path = \"" + ConfigValue(Path.Combine(binary, "info")) + "\"",
                 "assets_directory = \"" + ConfigValue(Path.Combine(binary, "assets")) + "\"",
                 "system_directory = \"" + ConfigValue(Path.Combine(data, "system")) + "\"" }).ToArray();
-            string[] keys=LauncherSettings.KeyboardFor(root).Concat(InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json")).ExtraKeys).ToArray();
-            string[] actions={"up","down","left","right","a","b","l","r","start","select","x","y"};
-            config=config.Concat(actions.Select((action,index)=>"input_player1_"+action+" = \""+RetroArchKey(keys[index])+"\"")).Concat(new[]{"config_save_on_exit = \"false\""}).ToArray();
+        }
+        InputDeviceProfile profile=InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json"));
+        string[] keys=LauncherSettings.KeyboardFor(root).Concat(profile.ExtraKeys).ToArray();
+        string[] actions={"up","down","left","right","a","b","l","r","start","select","x","y"};
+        string[] mappedKeys=keys.Select(RetroArchKey).ToArray();
+        string modifier=new[]{"f11","f10","f9","f8","f7","f6","f5","f4","f3","f2","f1","pause","scroll_lock","numlock","capslock"}.First(key=>!mappedKeys.Contains(key));
+        config=config.Concat(actions.Select((action,index)=>"input_player1_"+action+" = \""+mappedKeys[index]+"\""))
+            .Concat(new[]{"config_save_on_exit = \"false\"","input_enable_hotkey = \""+modifier+"\""}).ToArray();
+        if(profile.Mode is 2 or 3) {
+            // The launcher supplies keyboard events for its remapped/virtual actions.
+            // Explicit nul binds prevent RetroArch's autoconfig from also supplying input.
+            string[] physical=actions.Concat(new[]{"l2","r2","l3","r3","l_x_plus","l_x_minus","l_y_plus","l_y_minus","r_x_plus","r_x_minus","r_y_plus","r_y_minus"}).ToArray();
+            config=config.Concat(physical.SelectMany(action=>new[]{"input_player1_"+action+"_btn = \"nul\"","input_player1_"+action+"_axis = \"nul\""}))
+                .Concat(new[]{"input_enable_hotkey_btn = \"nul\"","input_enable_hotkey_axis = \"nul\"","input_menu_toggle_gamepad_combo = \"0\"","input_quit_gamepad_combo = \"0\""}).ToArray();
         }
         File.WriteAllLines(configPath, config);
         string arguments = "-L " + Quote(corePath) + " --appendconfig " + Quote(configPath) + " " + Quote(Path.GetFullPath(romPath));
@@ -140,7 +152,27 @@ internal static class RetroArchSettingsService
     }
 
     private static string ConfigValue(string value) => value.Replace("\"", "\\\"", StringComparison.Ordinal);
-    private static string RetroArchKey(string key) => key switch {"Backspace"=>"backspace","Enter"=>"enter","Shift"=>"shift","Ctrl"=>"ctrl","Alt"=>"alt",_=>key.ToLowerInvariant()};
+    private static string RetroArchKey(string key)
+    {
+        Keys value=InputReader.ParseKey(key??string.Empty);
+        if(value>=Keys.A&&value<=Keys.Z)return value.ToString().ToLowerInvariant();
+        if(value>=Keys.D0&&value<=Keys.D9)return "num"+((int)value-(int)Keys.D0);
+        if(value>=Keys.NumPad0&&value<=Keys.NumPad9)return "keypad"+((int)value-(int)Keys.NumPad0);
+        if(value>=Keys.F1&&value<=Keys.F15)return value.ToString().ToLowerInvariant();
+        return value switch {
+            Keys.Up=>"up",Keys.Down=>"down",Keys.Left=>"left",Keys.Right=>"right",
+            Keys.Return=>"enter",Keys.Back=>"backspace",Keys.ShiftKey or Keys.LShiftKey=>"shift",Keys.RShiftKey=>"rshift",
+            Keys.ControlKey or Keys.LControlKey=>"ctrl",Keys.RControlKey=>"rctrl",Keys.Menu or Keys.LMenu=>"alt",Keys.RMenu=>"ralt",
+            Keys.Tab=>"tab",Keys.Space=>"space",Keys.Escape=>"escape",Keys.Insert=>"insert",Keys.Delete=>"del",
+            Keys.Home=>"home",Keys.End=>"end",Keys.PageUp=>"pageup",Keys.PageDown=>"pagedown",
+            Keys.CapsLock=>"capslock",Keys.NumLock=>"numlock",Keys.Scroll=>"scroll_lock",Keys.Pause=>"pause",Keys.PrintScreen=>"print_screen",
+            Keys.Add=>"add",Keys.Subtract=>"subtract",Keys.Multiply=>"multiply",Keys.Divide=>"divide",Keys.Decimal=>"kp_period",
+            Keys.OemPeriod=>"period",Keys.Oemcomma=>"comma",Keys.OemMinus=>"minus",Keys.Oemplus=>"equals",
+            Keys.OemQuestion=>"slash",Keys.OemSemicolon=>"semicolon",Keys.OemQuotes=>"quote",Keys.Oemtilde=>"tilde",
+            Keys.OemOpenBrackets=>"leftbracket",Keys.OemCloseBrackets=>"rightbracket",Keys.OemPipe=>"backslash",Keys.OemBackslash=>"oem102",
+            _=>"nul"
+        };
+    }
 
     private static string Quote(string value)
     {

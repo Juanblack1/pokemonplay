@@ -80,9 +80,22 @@ jobs:
           $prefix = [IO.Path]::GetFullPath($fixture) + [IO.Path]::DirectorySeparatorChar
           if (!$source.StartsWith($prefix) -or !$target.StartsWith($prefix)) { throw 'Pasta de fixture inválida.' }
           [IO.Directory]::Move($source, $target)
+      - name: Verificar execução e entrada no core GBA real
+        shell: pwsh
+        run: python ./recovered-source/tools/probe-libretro.py --core '${{ runner.temp }}/pokemonplay-emulators/Emulators/RetroArch/cores/mgba_libretro.dll' --output '${{ runner.temp }}/pokemonplay-gba-probe' --frames 90
       - name: Executar ProfilesCheck
         shell: pwsh
+        env:
+          POKEMONPLAY_CONTROLS_PREVIEW: ${{ runner.temp }}/pokemonplay-controls-preview
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj
+      - name: Guardar evidências de emulação e controles
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playability-evidence
+          path: |
+            ${{ runner.temp }}/pokemonplay-gba-probe/*.json
+            ${{ runner.temp }}/pokemonplay-controls-preview/*.png
       - name: Compilar e validar o pacote Windows
         shell: pwsh
         run: |

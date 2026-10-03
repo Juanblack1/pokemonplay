@@ -18,21 +18,22 @@ internal sealed class ConsoleTestForm : Form, IMessageFilter
     public ConsoleTestForm(InputDeviceProfile profile,string[] keys,int model)
     {
         this.profile=profile;this.keys=keys;
-        Text="Teste de controles · Pokemons Play";ClientSize=new Size(940,720);MinimumSize=new Size(800,640);StartPosition=FormStartPosition.CenterParent;BackColor=AppTheme.Background;
-        var top=new BufferedPanel{Dock=DockStyle.Top,Height=128,BackColor=AppTheme.Surface};
-        var title=new Label{Text="Teste do console",Font=AppTheme.Section,ForeColor=AppTheme.Text,AutoSize=true,Location=new Point(24,18)};
+        Text="Teste de comandos · Pokemons Play";ClientSize=new Size(940,720);MinimumSize=new Size(800,640);StartPosition=FormStartPosition.CenterParent;BackColor=AppTheme.Background;
+        var top=new BufferedPanel{Dock=DockStyle.Top,Height=154,BackColor=AppTheme.Surface};
+        var title=new Label{Text="Teste de comandos",Font=AppTheme.Section,ForeColor=AppTheme.Text,AutoSize=true,Location=new Point(24,18)};
         console=new ThemeSelect{Location=new Point(24,58),Width=230};console.Items.AddRange(new object[]{"Game Boy Advance","Nintendo DS","Nintendo 3DS"});console.SelectedIndex=Math.Clamp(model,0,2);
         toggle=new ThemeButton("Pausar teste",ButtonKind.Secondary){AutoSize=true,Location=new Point(274,58)};toggle.Click+=(_,_)=>SetRunning(!running);
         var close=new ThemeButton("Concluir teste",ButtonKind.Primary){AutoSize=true};close.Click+=(_,_)=>Close();top.Resize+=(_,_)=>close.Location=new Point(top.Width-close.Width-24,58);
         instructions=new Label{Font=AppTheme.Caption,ForeColor=AppTheme.TextSecondary,Location=new Point(24,106),Height=20,AutoSize=false,Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right};
-        top.Controls.AddRange(new Control[]{title,console,toggle,close,instructions});
+        var explanation=new Label{Text="Visualização de comandos e toque; não abre uma ROM nem comprova que o jogo roda.",Font=AppTheme.Caption,ForeColor=AppTheme.TextSecondary,Location=new Point(24,130),Height=20,AutoSize=false,Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right};
+        top.Controls.AddRange(new Control[]{title,console,toggle,close,instructions,explanation});
         status=new Label{Dock=DockStyle.Bottom,Height=64,Padding=new Padding(24,10,24,8),Font=AppTheme.Body,ForeColor=AppTheme.Text,BackColor=AppTheme.Surface,AutoSize=false};
         visual=new ControllerVisualizer{Dock=DockStyle.Fill,ConsoleModel=console.SelectedIndex,DeadZone=profile.DeadZone,BackColor=AppTheme.Background};
         Controls.Add(visual);Controls.Add(status);Controls.Add(top);
         console.SelectedIndexChanged+=(_,_)=>{visual.ReleaseVirtual();visual.ConsoleModel=console.SelectedIndex;SetRunning(running);};
         timer=new Timer{Interval=16};timer.Tick+=(_,_)=>Poll();Application.AddMessageFilter(this);SetRunning(true);timer.Start();
         Deactivate+=(_,_)=>{if(running&&!illustrative){SetRunning(false);status.Text="Teste pausado ao sair da janela. Clique em Retomar teste.";}};
-        top.Width=ClientSize.Width;instructions.Width=ClientSize.Width-48;
+        top.Width=ClientSize.Width;instructions.Width=explanation.Width=ClientSize.Width-48;
     }
     private void SetRunning(bool value)
     {

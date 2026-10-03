@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -139,6 +140,15 @@ internal sealed class GameHostForm : Form
 			Width = 920,
 			Height = 18
 		};
+        if(string.Equals(processName,"retroarch",StringComparison.OrdinalIgnoreCase)&&File.Exists(temporaryConfigPath)) {
+            try {
+                string shortcut=File.ReadLines(temporaryConfigPath).FirstOrDefault(line=>line.StartsWith("input_enable_hotkey = ",StringComparison.Ordinal));
+                if(shortcut!=null) {
+                    string modifier=shortcut.Split('=',2)[1].Trim().Trim('"').ToUpperInvariant();
+                    value2.Text=$"F12 pausa e volta à Biblioteca · Menu do RetroArch: segure {modifier} e pressione F1.";
+                }
+            }catch(IOException){}catch(UnauthorizedAccessException){}
+        }
 		ThemeButton back = new ThemeButton(canPauseToMenu ? "PAUSAR · MENU" : "VOLTAR AO MENU", ButtonKind.Secondary)
 		{
 			Width = 158,
