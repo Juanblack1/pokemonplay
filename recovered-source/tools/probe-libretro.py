@@ -255,11 +255,12 @@ def probe(args):
     loaded = False
     core.retro_init()
     try:
+        # melonDS DS declares its options inside LoadGame, before parsing config.
+        loaded = core.retro_load_game(C.byref(game))
         if args.system == "ds":
             missing = [key for key in DS_OPTIONS if key not in options]
             if missing or configuration_errors:
                 raise RuntimeError("DS configuration rejected: " + "; ".join(missing + configuration_errors))
-        loaded = core.retro_load_game(C.byref(game))
         if not loaded:
             raise RuntimeError("Core rejected ROM; see native log formats in evidence.")
         core.retro_set_controller_port_device(0, 1)
