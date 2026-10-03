@@ -9,7 +9,7 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
     public InputDeviceProfile Profile { get; private set; }
     public readonly List<KeyBindingRow> Rows = new();
     private readonly ThemeSelect mode, slot, console;
-    private readonly Label connection, hint, live, deadZoneLabel, deadZoneValue;
+    private readonly Label title, connection, hint, live, deadZoneLabel, deadZoneValue;
     private readonly ThemeSlider deadZone;
     private readonly ThemeButton test, cancel, detectController;
     internal Func<int,InputSnapshot> ControllerReader { get; set; }
@@ -30,7 +30,7 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
         Profile = profile; this.keyboard = keyboard; this.captureKeyboard = captureKeyboard; keyboardPreset = preset;
         BackColor = AppTheme.Surface; Height = 700;
         ControllerReader=index=>InputReader.ReadPad(index,Profile.DeadZone);
-        var title = MakeLabel("Controles e comandos", AppTheme.Section); title.SetBounds(24,20,600,28); Controls.Add(title);
+        title = MakeLabel("Controles e comandos", AppTheme.Section); title.SetBounds(24,20,600,28); Controls.Add(title);
         hint = MakeLabel("Escolha como jogar. Clique em uma atribuição para personalizar.",AppTheme.Caption); hint.SetBounds(24,54,750,30); Controls.Add(hint);
         mode = new ThemeSelect { Location = new Point(24,100), Width = 290 }; mode.Items.AddRange(new object[] { "Só teclado", "Teclado + mouse", "Controle", "Touchpad" }); mode.SelectedIndex = Profile.Mode;
         slot = new ThemeSelect { Location = new Point(334,100), Width = 230 }; slot.Items.AddRange(new object[]{"Controle 1 · XInput","Controle 2 · XInput","Controle 3 · XInput","Controle 4 · XInput"}); slot.SelectedIndex = Profile.ControllerSlot;
@@ -66,19 +66,24 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
     private Label MakeLabel(string text,Font font) => new(){Text=text,Font=font,ForeColor=AppTheme.TextSecondary,BackColor=Color.Transparent,AutoSize=false};
     private void Arrange()
     {
+        bool narrow=Width<800, pad=Profile.Mode==2;
+        int contentTop=narrow?224:174;
         int leftWidth=Math.Max(320,(Width-72)*55/100), rightX=leftWidth+48, rightWidth=Width-rightX-24;
-        mode.Width=Math.Min(230,Math.Max(160,(Width-72)/4));
-        test.Location=new Point(Width-test.Width-24,100);
-        detectController.Location=new Point(test.Left-detectController.Width-12,100);
-        slot.Left=mode.Right+12;slot.Width=Math.Max(100,detectController.Left-slot.Left-12);
-        visual.SetBounds(24,174,leftWidth,Math.Max(120,Height-234)); presetLabel.SetBounds(rightX,174,rightWidth,24); keyboardPreset.SetBounds(rightX,204,rightWidth,40);
-        mappingPanel.SetBounds(rightX,254,rightWidth,Math.Max(90,Height-278));
+        mode.SetBounds(24,100,narrow?200:Math.Min(230,Math.Max(160,(Width-72)/4)),mode.Height);
+        test.Location=new Point(Width-test.Width-24,narrow?144:100);
+        detectController.Location=new Point(test.Left-detectController.Width-12,narrow?144:100);
+        slot.SetBounds(mode.Right+12,100,narrow?Math.Min(260,Width-mode.Right-36):Math.Max(100,detectController.Left-mode.Right-24),slot.Height);
+        visual.SetBounds(24,contentTop,leftWidth,Math.Max(120,Height-contentTop-(cancel.Visible?108:60)));
+        presetLabel.SetBounds(rightX,contentTop,rightWidth,24); keyboardPreset.SetBounds(rightX,contentTop+30,rightWidth,40);
+        int mappingTop=contentTop+(pad?30:80);
+        mappingPanel.SetBounds(rightX,mappingTop,rightWidth,Math.Max(90,Height-mappingTop-24));
         for(int i=0;i<Rows.Count;i++) Rows[i].SetBounds(0,i*34,rightWidth-20,32);
         live.SetBounds(24,Height-54,leftWidth,40);cancel.Location=new Point(24,Height-100);
-        int connectionWidth=Math.Min(520,Math.Max(250,Width-336));
-        connection.SetBounds(24,145,connectionWidth,28);deadZoneLabel.SetBounds(32+connectionWidth,145,76,28);
-        int sliderX=deadZoneLabel.Right+4,valueX=Width-76;deadZone.SetBounds(sliderX,140,Math.Max(80,valueX-sliderX-8),30);deadZoneValue.SetBounds(valueX,145,52,28);
-        hint.Width=Width-48;console.Location=new Point(Width-console.Width-24,20);
+        int connectionWidth=narrow&&pad?200:Math.Min(520,Math.Max(250,Width-336)), connectionTop=narrow?185:145;
+        connection.SetBounds(24,connectionTop,connectionWidth,28);deadZoneLabel.SetBounds(32+connectionWidth,connectionTop,76,28);
+        int sliderX=deadZoneLabel.Right+4,valueX=Width-76;deadZone.SetBounds(sliderX,connectionTop-5,Math.Max(80,valueX-sliderX-8),30);deadZoneValue.SetBounds(valueX,connectionTop,52,28);
+        hint.SetBounds(24,54,Width-48,narrow?38:30);console.Location=new Point(Width-console.Width-24,20);
+        title.Width=Math.Max(180,console.Left-36);
     }
     public void UpdateRows()
     {
@@ -105,9 +110,9 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
         SetTesting(false);
         if(Profile.Mode!=2){captureKeyboard(index);UpdateRows();return;}
         if(!ControllerReader(Profile.ControllerSlot).Connected){live.Text="Conecte um controle XInput para personalizar.";return;}
-        capturing=index;armed=false;cancel.Visible=true;live.Text="Solte os botões; depois pressione para: "+Names[index];
+        capturing=index;armed=false;cancel.Visible=true;Arrange();live.Text="Solte os botões; depois pressione para: "+Names[index];
     }
-    private void CancelCapture(){capturing=-1;cancel.Visible=false;live.Text="Teste parado";}
+    private void CancelCapture(){capturing=-1;cancel.Visible=false;Arrange();live.Text="Teste parado";}
     private void SetTesting(bool value)
     {
         CancelCapture();testing=value;test.Text=value?"Parar teste":"Testar comandos";visual.ReleaseVirtual();visual.VirtualInput=value&&Profile.Mode==3;visual.Testing=value;live.Text=value?"Pressione teclas ou botões. Esc encerra o teste.":"Teste parado";visual.Actions=new bool[12];visual.Snapshot=new();visual.Invalidate();foreach(var row in Rows)row.Active=false;Arrange();

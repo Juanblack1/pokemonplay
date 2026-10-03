@@ -43,6 +43,7 @@ internal static class SettingsResponsiveCheck
             Control[] actions = new[] { "mode", "slot", "detectController", "test" }.Select(name => Field(workbench, name)).Where(c => c.Visible).ToArray();
             for (int i = 0; i < actions.Length; i++) for (int j = i + 1; j < actions.Length; j++)
                 Assert(!actions[i].Bounds.IntersectsWith(actions[j].Bounds), "input selectors and actions do not overlap at " + width + " mode " + inputMode);
+            Assert(!Field(workbench, "title").Bounds.IntersectsWith(console.Bounds), "console selector leaves the settings heading readable at " + width);
             var mapping = Field(workbench, "mappingPanel");
             Assert(mapping.Width >= 226 && mapping.Controls.Count == 12 && mapping.Controls.Cast<Control>().All(row => row.Width >= 206 && row.Right <= mapping.ClientSize.Width), "all twelve binding rows retain readable keys at " + width);
             foreach (string name in new[] { "dsCard", "audioCard", "retroArchCard" })
@@ -50,6 +51,16 @@ internal static class SettingsResponsiveCheck
                 var card = Field(view, name);
                 Assert(card.Left >= 0 && card.Right <= canvas.Width, "settings card fits canvas: " + name + " at " + width);
                 foreach (Control child in card.Controls.Cast<Control>().Where(c => c.Visible)) Assert(child.Left >= 0 && child.Right <= card.ClientSize.Width, "settings option fits card: " + child.GetType().Name + " at " + width);
+            }
+            if(inputMode==2)
+            {
+                ((InputWorkbench)workbench).ControllerReader=_=>new InputSnapshot{Connected=true};
+                workbench.GetType().GetMethod("Capture",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(workbench,new object[]{0});
+                Application.DoEvents();
+                var cancel=Field(workbench,"cancel");
+                Assert(cancel.Visible&&cancel.Right<=workbench.Width&&!cancel.Bounds.IntersectsWith(Field(workbench,"visual").Bounds),"capture cancellation remains reachable without covering diagnostic visual at "+width);
+                if(!string.IsNullOrEmpty(preview)){using var bitmap=new Bitmap(host.Width,host.Height);host.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(Path.Combine(preview,"settings-responsive-"+width+"-capture.png"));}
+                workbench.GetType().GetMethod("CancelCapture",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(workbench,null);
             }
             Assert(File.ReadAllBytes(preferences).SequenceEqual(original), "responsive layout preserves preference bytes");
         }

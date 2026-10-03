@@ -14,3 +14,7 @@ Acceptance candidate:
 - Preserve config/save bytes during layout changes; run existing611+ suite after implementing. Red native layout reproduction before code edit, full installer/update gates before publication. Release after v171.10.5 and settings-recovery release are verified public in order.
 
 Next: wait for C13 immutable final head/full gate, then new branch from updated main, spec under docs/sdd/continuous-improvements, native regression reproducing out-of-viewport bounds at760. This candidate is not implementation or proof that all existing layouts are broken.
+
+Reproduction: nativeCI37101680635 at11bf42f failed settings avoid horizontal scrolling at viewport760 mode0. Screenshot inspected shows cropped Testar comandos and binding keys. No fixture/cast failure.
+
+Implementation: width derives from viewport instead of850minimum; DS/audio stack below850. InputWorkbench below800 moves actions to a second row, shifts connection/content down, constrains heading and preserves binding widths. Capture cancellation gets reserved space; hints resize within their cards. Native tests cover four input modes,760/1100,12DSrows, bounds/collisions/bytes, heading and capture cancellation with an explicitly synthetic connected snapshot. Build only passed locally. CI/screenshots pending; no physical controller or emulator execution claim.
