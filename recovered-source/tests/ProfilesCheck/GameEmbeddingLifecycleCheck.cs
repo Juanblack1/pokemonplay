@@ -246,19 +246,28 @@ internal static class GameEmbeddingLifecycleCheck
             try {
                 new InputDeviceProfile {Mode=mode}.Save(profile);
                 Require(InputDeviceProfile.Load(profile).Mode==mode,"Actual saved mode did not round-trip");
+                using var frame=new Form();
+                using var container=new Panel {Location=System.Drawing.Point.Empty};
+                frame.Controls.Add(container);
                 using var host=new GameHostForm(Path.Combine(expected,"never-launched.exe"),"synthetic-layout",string.Empty);
-                host.ClientSize=size;host.PerformLayout();
-                // Native handles without Show: no process launch, guest, input, or visibility claim.
-                _=host.Handle;
+                // Match PresentGameSession's actual embedded role before creating native handles.
+                host.TopLevel=false;host.FormBorderStyle=FormBorderStyle.None;host.Dock=DockStyle.Fill;
+                container.Controls.Add(host);
+                // Hidden native containers can own child regions larger than the physical desktop.
+                // Never Show: geometry checks must not trigger StartGame/guest/input.
+                _=frame.Handle;_=container.Handle;_=host.Handle;
                 var game=(Control)Field(host,"gamePanel");var pad=(Control)Field(host,"virtualPad");
                 var toolbar=host.Controls.Cast<Control>().Single(control=>control.Dock==DockStyle.Top);
                 foreach(Control control in host.Controls) _=control.Handle;
-                host.PerformLayout();
+                container.ClientSize=size;host.ClientSize=size;host.Location=System.Drawing.Point.Empty;
+                container.PerformLayout();host.PerformLayout();
                 var client=host.RectangleToScreen(host.ClientRectangle);
                 var gameNative=NativeBounds(game);var toolbarNative=NativeBounds(toolbar);
                 System.Drawing.Rectangle? padNative=pad==null?null:NativeBounds(pad);
-                File.WriteAllText(Path.Combine(directory,name+".json"),JsonSerializer.Serialize(new {mode,requestedWidth=size.Width,requestedHeight=size.Height,actualWidth=host.ClientSize.Width,actualHeight=host.ClientSize.Height,client,gameManaged=game.Bounds,toolbarManaged=toolbar.Bounds,padManaged=pad?.Bounds,gameNative,toolbarNative,padNative},new JsonSerializerOptions{WriteIndented=true}));
-                Require(host.ClientSize.Width>0&&host.ClientSize.Height>0,"Actual client dimensions are empty");
+                File.WriteAllText(Path.Combine(directory,name+".json"),JsonSerializer.Serialize(new {mode,requestedWidth=size.Width,requestedHeight=size.Height,actualWidth=host.ClientSize.Width,actualHeight=host.ClientSize.Height,hostTopLevel=host.TopLevel,hostBorder=host.FormBorderStyle.ToString(),hostDock=host.Dock.ToString(),hostHwnd=host.Handle.ToInt64(),containerHwnd=container.Handle.ToInt64(),containerWidth=container.ClientSize.Width,containerHeight=container.ClientSize.Height,hostNative=NativeBounds(host),containerNative=NativeBounds(container),client,gameManaged=game.Bounds,toolbarManaged=toolbar.Bounds,padManaged=pad?.Bounds,gameNative,toolbarNative,padNative},new JsonSerializerOptions{WriteIndented=true}));
+                Require(!host.TopLevel&&host.FormBorderStyle==FormBorderStyle.None&&host.Dock==DockStyle.Fill&&ReferenceEquals(host.Parent,container),"Layout host lost actual embedded role");
+                Require(container.ClientSize==size&&host.ClientSize==size,"Requested embedded client dimensions changed");
+                Require(NativeBounds(host)==container.RectangleToScreen(container.ClientRectangle),"Native embedded host does not fill exact container client");
                 Require((pad!=null)==(mode==3),"Virtual pad presence does not match actual profile mode");
                 var controls=pad==null?new[]{game,toolbar}:new[]{game,toolbar,pad};
                 foreach(Control control in controls) {
@@ -270,14 +279,14 @@ internal static class GameEmbeddingLifecycleCheck
                     Require(!controls[i].Bounds.IntersectsWith(controls[j].Bounds),"Managed game/toolbar/pad regions overlap");
                     Require(!NativeBounds(controls[i]).IntersectsWith(NativeBounds(controls[j])),"Native game/toolbar/pad regions overlap");
                 }
-                Require(game.Height==host.ClientSize.Height-toolbar.Height-(pad?.Height??0),"Game panel does not reserve toolbar/pad height");
+                Require(game.Height==size.Height-toolbar.Height-(pad?.Height??0),"Game panel does not reserve toolbar/pad height");
                 Require(Field(host,"emulator")==null&&Field(host,"inputBridge")==null,"NoShow layout case unexpectedly launched process or bridge");
                 Console.WriteLine("PASS synthetic managed/native dock regions "+name);
             } catch(Exception error) { failures.Add(name+": "+error.Message);Console.WriteLine("FAIL synthetic managed/native dock regions "+name+": "+error.Message); }
         }
-        File.WriteAllText(Path.Combine(directory,"layout-result.json"),JsonSerializer.Serialize(new {cases=8,failures,scope="synthetic noShow host geometry; no ROM/render/input proof"}));
+        File.WriteAllText(Path.Combine(directory,"layout-result.json"),JsonSerializer.Serialize(new {cases=8,failures,scope="synthetic noShow TopLevel=false host at exact requested client sizes; no ROM/render/input proof"}));
         if(failures.Count>0) throw new Exception(string.Join("; ",failures));
-        File.WriteAllText(Path.Combine(directory,"layout-passed"),"8 actual mode/size cases; noShow managed/native geometry");
+        File.WriteAllText(Path.Combine(directory,"layout-passed"),"8 exact requested mode/size cases; noShow embedded managed/native geometry");
     }
     internal static void RunLayout(string directory)
     {

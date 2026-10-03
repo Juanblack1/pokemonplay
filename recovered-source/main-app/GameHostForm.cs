@@ -364,8 +364,7 @@ internal sealed class GameHostForm : Form
             timer?.Stop();embeddedWindowHandle=IntPtr.Zero;emulatorEmbedded=false;ShowLaunchFailure(failure);return;
         }
         embeddedWindowHandle=mainWindowHandle;
-        inputBridge=new GameInputBridge(AppPaths.Root,GetEmulatorProcessId,()=>
-            (Form.ActiveForm==this&&ContainsFocus)||(virtualPad?.Capture==true),
+        inputBridge=new GameInputBridge(AppPaths.Root,GetEmulatorProcessId,()=>IsInputHostFocused,
             ()=>virtualPad?.VirtualActions??new bool[12],FocusEmulator);
         emulatorEmbedded=true;ResizeEmbedded();Resize+=(_,_)=>ResizeEmbedded();
     }
@@ -565,6 +564,16 @@ internal sealed class GameHostForm : Form
     {
         if(disposing){inputBridge?.Dispose();timer?.Stop();timer?.Dispose();emulator?.Dispose();}
         base.Dispose(disposing);
+    }
+    internal bool IsInputHostFocused
+    {
+        get
+        {
+            if (!Visible || closing || launchFailed) return false;
+            InputReader.GetWindowThreadProcessId(InputReader.GetForegroundWindow(), out uint foregroundPid);
+            return foregroundPid == Environment.ProcessId &&
+                ((Form.ActiveForm == this && ContainsFocus) || virtualPad?.Capture == true);
+        }
     }
     private void FocusEmulator()
     {

@@ -2,6 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows.Forms;
 using PKHeX.Core;
 
@@ -25,6 +28,55 @@ internal static class RetroAchievementsCheck
     private static string ActiveFolder(Assembly app, string root, string game)
         => (string)Call(app.GetType("SaveProfileService"), "ActiveFolder", null, root, game);
 
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window,out uint processId);
+    record SyntheticIdentity(int Pid,long StartUtcTicks,string Executable,long Hwnd);
+    static void PumpUntil(Func<bool> condition,int limit,string reason)
+    {
+        var deadline=Stopwatch.StartNew();
+        while(!condition()) { if(deadline.ElapsedMilliseconds>limit) throw new TimeoutException(reason);Application.DoEvents();System.Threading.Thread.Sleep(10); }
+    }
+    static void ObserveSyntheticActiveTime(LauncherForm launcher,Form host,Stopwatch sessionClock,string directory,string executable)
+    {
+        var observations=new System.Collections.Generic.List<object>();
+        var identity=JsonSerializer.Deserialize<SyntheticIdentity>(File.ReadAllText(Path.Combine(directory,"ready.json")));
+        using var child=Process.GetProcessById(identity.Pid);
+        void Record(string phase) {
+            IntPtr foreground=GetForegroundWindow();GetWindowThreadProcessId(foreground,out uint foregroundPid);
+            observations.Add(new {phase,foreground=foreground.ToInt64(),foregroundPid,launcher=launcher.Handle.ToInt64(),hostVisible=host.Visible,launchFailed=(bool)Get(host,"launchFailed"),clockRunning=sessionClock.IsRunning,elapsedMilliseconds=sessionClock.ElapsedMilliseconds});
+        }
+        try {
+            Assert(!child.HasExited&&child.StartTime.ToUniversalTime().Ticks==identity.StartUtcTicks&&string.Equals(child.MainModule.FileName,identity.Executable,StringComparison.OrdinalIgnoreCase)&&string.Equals(identity.Executable,executable,StringComparison.OrdinalIgnoreCase),"synthetic active-time transition verifies owned child PID, start time and executable");
+            GetWindowThreadProcessId(new IntPtr(identity.Hwnd),out uint windowPid);
+            Assert(windowPid==identity.Pid,"synthetic active-time transition verifies owned child HWND");
+            Record("after-child-ready");
+            bool childForegroundRequested=SetForegroundWindow(new IntPtr(identity.Hwnd));
+            PumpUntil(()=>GetForegroundWindow()==new IntPtr(identity.Hwnd)&&!sessionClock.IsRunning,5000,"Owned child foreground did not pause actual launcher session clock");
+            Record("owned-child-foreground-clock-stopped");
+            Call(host.GetType(),"ReturnToMenu",host);
+            Call(launcher.GetType(),"ResumeGameSession",launcher);
+            launcher.Activate();bool launcherForegroundRequested=SetForegroundWindow(launcher.Handle);
+            PumpUntil(()=>GetForegroundWindow()==launcher.Handle&&host.Visible&&sessionClock.IsRunning,5000,"Real launcher activation/resume did not restart actual visible session clock");
+            Record("launcher-foreground-resumed");
+            long start=sessionClock.ElapsedMilliseconds;
+            var wall=Stopwatch.StartNew();
+            while(sessionClock.ElapsedMilliseconds-start<1200) {
+                Application.DoEvents();
+                AssertClockForeground();
+                if(wall.ElapsedMilliseconds>5000) throw new TimeoutException("Actual active clock did not accumulate 1200ms under launcher foreground");
+                System.Threading.Thread.Sleep(10);
+            }
+            Record("launcher-foreground-active-interval-complete");
+            observations.Add(new {childForegroundRequested,launcherForegroundRequested,activeElapsedMilliseconds=sessionClock.ElapsedMilliseconds-start,wallElapsedMilliseconds=wall.ElapsedMilliseconds});
+            void AssertClockForeground() {
+                if(GetForegroundWindow()!=launcher.Handle||!sessionClock.IsRunning||!host.Visible) throw new Exception("Synthetic active-time interval lost launcher foreground, running clock or visible session");
+            }
+        } finally {
+            Record("final");
+            File.WriteAllText(Path.Combine(directory,"active-time-observations.json"),JsonSerializer.Serialize(observations,new JsonSerializerOptions {WriteIndented=true}));
+        }
+    }
     internal static void Run(string root, Assembly app)
     {
         Type settingsType = app.GetType("RetroArchSettings");
@@ -131,7 +183,7 @@ internal static class RetroAchievementsCheck
             var updateButton = topbar.Controls.OfType<UpdateNoticeButton>().Single();
             Assert(pageTitle.Visible && pageTitle.AutoEllipsis && pageTitle.Width >= 80 && pageTitle.Right + 16 <= updateButton.Left,
                 "active long game title stays visible before the top-bar actions");
-            System.Threading.Thread.Sleep(1100);
+            ObserveSyntheticActiveTime(launcher,host,sessionClock,syntheticDirectory,syntheticExecutable);
             Call(hostType, "ReturnToMenu", host);
             var resumeButton = (ThemeButton)Get(launcher, "resumeGameButton");
             var endButton = (ThemeButton)Get(launcher, "endGameButton");

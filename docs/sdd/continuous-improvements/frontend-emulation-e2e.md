@@ -129,3 +129,11 @@ It failed paired-frame cadence before neutral/input: the composed desktop shows 
 Capture diagnostics must retain arriving internal screenshots and per-frame desktop rejection reasons before attempting the pair match; failed matching cannot erase the evidence needed to distinguish frame contents, clipping and stale counter. Keep the same strict full-region decoder, timing/counter thresholds, capture ownership and negative semantics.
 
 Failure lifecycle additionally requires actual owned GUI child checks: failed embedding plus live child must allow confirmation Yes normal exit and No preservation without restarting embedding; failed startup cannot adopt an independent same-name child. These are synthetic process/lifecycle checks and do not prove ROM rendering or physical controller input. Existing active-session layout fixture must launch a real synthetic GUI child instead of treating missing executable as a successfully paused game.
+
+## S5 input-delivery diagnosis checkpoint
+
+Native run37138554949 at1ef09fb passed neutral internal/desktop advancing pairs after the docking fix, but A-held observed mask0 instead of1 while the actual virtual pad retained raw/supplied A and mouse capture. The focus HWND pointed at the emulator child; foreground remained the launcher. This does not prove DirectInput keyboard acquisition or successful SendInput.
+
+The host eligibility predicate now permits an actual captured virtual control only while the application owns foreground and the host is visible/live. The harness observes this production predicate instead of reimplementing a broader capture-only guard. Background input is ineligible. Diagnose actual resolver bits, dispatcher held keys and actual SendInput return/error/focus in bounded read-only trace records. A successful Windows insertion still cannot substitute for guest-held/released pixels.
+
+The synthetic active-time fixture must perform real owned child/launcher foreground transitions and production pause/resume, then measure its actual clock. It must not start/reset the clock through reflection. Layout fixtures must use the production embedded role (TopLevel=false) and retain exact1024x720/1280x900 client assertions; accepting clamped sizes is not the large-layout requirement. Full source checks and all original guest/default-driver/negative/cleanup requirements remain pending.

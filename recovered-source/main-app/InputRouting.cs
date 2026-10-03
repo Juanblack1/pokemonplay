@@ -27,6 +27,7 @@ internal sealed class InputKeyDispatcher
     private readonly Func<Keys,bool,bool> send;
     private readonly Action focus;
     private readonly HashSet<Keys> held=new();
+    internal string HeldKeysSnapshot => string.Join(",",held.OrderBy(key=>(int)key));
     internal InputKeyDispatcher(Keys[] keys,Func<Keys,bool,bool> send,Action focus)
     {this.keys=(Keys[])keys.Clone();this.send=send;this.focus=focus;}
     internal void Update(bool[] actions)

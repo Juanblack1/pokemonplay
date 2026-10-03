@@ -52,7 +52,7 @@ internal sealed class FrontendRun:IDisposable
     readonly System.Windows.Forms.Timer sampler=new(){Interval=100};
     GameHostForm host;ControllerVisualizer pad;Process child;IntPtr hwnd;string childPath;DateTime childStart;
     Exception callbackFailure,sampleFailure;int held=-1;bool rawNegative;Point mousePoint;long lastRequest=-2000;
-    uint? internalCounter,desktopCounter;object configEvidence,identity;string current="startup";bool keyReleaseProved;long phaseStarted,lastEvidencePersist;int desktopDecodeAttempts,desktopDecodeFailures;string lastDesktopDecodeError;
+    uint? internalCounter,desktopCounter;object configEvidence,identity;string current="startup";bool keyReleaseProved;long phaseStarted,lastEvidencePersist,lastObservedInjection;int desktopDecodeAttempts,desktopDecodeFailures;string lastDesktopDecodeError;
     static readonly JsonSerializerOptions JsonOptions=new(){WriteIndented=true};
     internal FrontendRun(string root,string scenario,int port,string commit)
     {
@@ -199,6 +199,12 @@ internal sealed class FrontendRun:IDisposable
                 if(!host.LastEmbeddingAttempt.Success)throw new InvalidDataException("embedding: production attempt failed: "+host.LastEmbeddingAttempt.Failure);
             }
             hwnd=Field<IntPtr>(host,"embeddedWindowHandle");if(hwnd==IntPtr.Zero)return;
+            var bridge=Field<GameInputBridge>(host,"inputBridge");
+            Write("input-delivery-current.json",new{phase=current,timeMs=wall.ElapsedMilliseconds,poll=bridge.LastInputTrace,injections=bridge.RecentInjectionAttempts});
+            if(bridge.LastInjectionTrace!=null&&bridge.LastInjectionTrace.Sequence!=lastObservedInjection){
+                lastObservedInjection=bridge.LastInjectionTrace.Sequence;
+                events.Add(new{kind="actual-input-delivery",phase=current,timeMs=wall.ElapsedMilliseconds,poll=bridge.LastInputTrace,injections=bridge.RecentInjectionAttempts});
+            }
             ValidateEmbedding();var focus=Focus();events.Add(new{kind="focus-sample",timeMs=wall.ElapsedMilliseconds,phase=current,focus,held,raw=held>=0?pad.Actions[held]:false,supplied=held>=0?pad.VirtualActions[held]:false,capture=pad.Capture,mouseAction=Field<int>(pad,"mouseAction"),childHwnd=hwnd.ToInt64(),panelHwnd=Field<Panel>(host,"gamePanel").Handle.ToInt64(),hostHwnd=host.Handle.ToInt64(),launcherHwnd=Launcher.Handle.ToInt64(),style=Native.GetWindowLong(hwnd,-16)});
             if(held>=0){
                 if(!pad.Capture||!pad.Actions[held]||Field<int>(pad,"mouseAction")!=held)throw new InvalidDataException("focus: raw hold/capture lost");
@@ -222,7 +228,7 @@ internal sealed class FrontendRun:IDisposable
     FocusState Focus()
     {
         Native.GetWindowThreadProcessId(Native.GetForegroundWindow(),out uint pid);
-        bool active=Form.ActiveForm==host,contains=host.ContainsFocus,captured=pad?.Capture==true;return new(pid,active,contains,pid==child.Id||(active&&contains)||captured,Form.ActiveForm?.GetType().Name??"none",Native.GetForegroundWindow().ToInt64(),Native.FocusEvidence(Native.GetForegroundWindow()));
+        bool active=Form.ActiveForm==host,contains=host.ContainsFocus;return new(pid,active,contains,pid==child.Id||host.IsInputHostFocused,Form.ActiveForm?.GetType().Name??"none",Native.GetForegroundWindow().ToInt64(),Native.FocusEvidence(Native.GetForegroundWindow()));
     }
     void ValidateEmbedding()
     {
