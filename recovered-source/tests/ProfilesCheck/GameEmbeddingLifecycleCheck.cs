@@ -166,8 +166,11 @@ internal static class GameEmbeddingLifecycleCheck
     static void InvalidStart(string executable,string directory)
     {
         Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"fixture-owned"),"owned");
-        using var independent=Process.Start(new ProcessStartInfo(executable,"--embedding-lifecycle-child \""+directory+"\""){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(executable)});
-        Identity identity=new(independent.Id,independent.StartTime.ToUniversalTime().Ticks,independent.MainModule.FileName,0);
+        var startInfo=new ProcessStartInfo(executable,"--embedding-lifecycle-child \""+directory+"\""){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(executable)};
+        using var independent=Process.Start(startInfo);
+        // Early module path is declared only; actual ReadIdentity + CheckIdentity below
+        // verify PID/start-time/module-path/HWND before this scenario can pass.
+        Identity identity=new(independent.Id,independent.StartTime.ToUniversalTime().Ticks,startInfo.FileName,0);
         File.WriteAllText(Path.Combine(directory,"parent-owned.json"),JsonSerializer.Serialize(identity));
         Form host=null;
         try {
@@ -232,6 +235,9 @@ internal static class GameEmbeddingLifecycleCheck
         Require(GetWindowRect(control.Handle,out var rect),"Cannot observe native layout bounds");
         return System.Drawing.Rectangle.FromLTRB(rect.Left,rect.Top,rect.Right,rect.Bottom);
     }
+    [DllImport("user32.dll",SetLastError=true)] static extern bool GetClientRect(IntPtr window,out NativeRect rectangle);
+    [DllImport("user32.dll",EntryPoint="GetWindowLongW",SetLastError=true)] static extern int LayoutWindowStyle(IntPtr window,int index);
+    [DllImport("user32.dll")] static extern IntPtr LayoutAncestor(IntPtr window,uint flags);
     internal static void LayoutChild(string directory)
     {
         directory=Path.GetFullPath(directory);
@@ -267,8 +273,26 @@ internal static class GameEmbeddingLifecycleCheck
                 var game=(Control)Field(host,"gamePanel");var pad=(Control)Field(host,"virtualPad");
                 var toolbar=host.Controls.Cast<Control>().Single(control=>control.Dock==DockStyle.Top);
                 foreach(Control control in host.Controls) _=control.Handle;
+                var sizingObservations=new System.Collections.Generic.List<object>();
+                void ObserveNativeSizing(string phase) {
+                    Marshal.SetLastPInvokeError(0);int style=LayoutWindowStyle(host.Handle,-16);int styleError=Marshal.GetLastPInvokeError();
+                    Marshal.SetLastPInvokeError(0);bool clientRead=GetClientRect(host.Handle,out var nativeClient);int clientError=Marshal.GetLastPInvokeError();
+                    bool containerClientRead=GetClientRect(container.Handle,out var nativeContainerClient);
+                    sizingObservations.Add(new {phase,managedHostClient=host.ClientSize,managedHostBounds=host.Bounds,
+                        nativeHostBounds=NativeBounds(host),nativeClientRead=clientRead,nativeClientError=clientError,
+                        nativeClientWidth=nativeClient.Right-nativeClient.Left,nativeClientHeight=nativeClient.Bottom-nativeClient.Top,
+                        nativeStyle=unchecked((uint)style),nativeStyleError=styleError,nativeGaParent=LayoutAncestor(host.Handle,1).ToInt64(),
+                        expectedContainer=container.Handle.ToInt64(),containerClientRead,nativeContainerClientWidth=nativeContainerClient.Right-nativeContainerClient.Left,
+                        nativeContainerClientHeight=nativeContainerClient.Bottom-nativeContainerClient.Top,managedContainerClient=container.ClientSize,
+                        state=host.WindowState.ToString(),host.Visible,host.TopLevel,host.MinimumSize,host.MaximumSize,
+                        managedClampSource="Form.SetBoundsCore v10.0.0 lines4883-4895 clamps normal-state bounds to SystemInformation.MaxWindowTrackSize independently of MaximumSize/TopLevel"});
+                    File.WriteAllText(Path.Combine(directory,name+"-native-sizing.json"),JsonSerializer.Serialize(sizingObservations,new JsonSerializerOptions{WriteIndented=true}));
+                }
+                ObserveNativeSizing("before-request");
                 container.ClientSize=size;host.ClientSize=size;host.Location=System.Drawing.Point.Empty;
+                ObserveNativeSizing("after-request-before-layout");
                 container.PerformLayout();host.PerformLayout();
+                ObserveNativeSizing("after-layout");
                 var client=host.RectangleToScreen(host.ClientRectangle);
                 var gameNative=NativeBounds(game);var toolbarNative=NativeBounds(toolbar);
                 System.Drawing.Rectangle? padNative=pad==null?null:NativeBounds(pad);
