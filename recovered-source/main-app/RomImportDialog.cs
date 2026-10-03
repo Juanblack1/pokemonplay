@@ -102,7 +102,13 @@ internal sealed class RomImportDialog : Form
 	private static string GuessTitle(string path, RomIdentity identity)
 	{
 		string fromFile = Path.GetFileNameWithoutExtension(path).Replace('_', ' ').Trim();
-		return fromFile.Length > 0 ? fromFile : identity.HeaderTitle.Trim();
+		if (fromFile.Length == 0) fromFile = identity.HeaderTitle.Trim();
+		if (fromFile.Length > 80)
+		{
+			fromFile = fromFile[..80];
+			if (char.IsHighSurrogate(fromFile[^1])) fromFile = fromFile[..^1];
+		}
+		return fromFile;
 	}
 
 	private static bool MatchesSystem(string extension, int generation) => generation == 3
