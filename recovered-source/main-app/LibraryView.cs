@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -13,6 +12,7 @@ internal sealed class LibraryView : BufferedPanel
 	private readonly LauncherForm host;
 
 	private readonly List<GameInfo> games;
+    private ImportedGameAvailability importedAvailability;
 
 	private readonly ThemeInput search;
 
@@ -47,6 +47,7 @@ internal sealed class LibraryView : BufferedPanel
 		this.host = host;
 		this.root = root;
 		games = GameCatalog.Build(root);
+        importedAvailability=ImportedGameAvailability.Inspect(root);
 		Dock = DockStyle.Fill;
 		BackColor = Color.Transparent;
 		Controls.Add(CreateContentArea());
@@ -146,7 +147,7 @@ internal sealed class LibraryView : BufferedPanel
 			BackColor = Color.Transparent
 		};
         ThemeInput box = new ThemeInput{Location=new Point(24,8),Width=330,Height=40};
-        box.SetAccessibleMetadata("Buscar jogos", "Filtra os jogos pelo título ou plataforma e ignora diferenças de acentuação.");
+        box.SetAccessibleMetadata("Buscar jogos", "Combine palavras do título e plataforma, como Ruby GBA. Ignora diferenças de acentuação. Ctrl+F ou Ctrl+E foca a busca; Esc limpa.");
 		searchBox = box;
 		ThemeSelect comboBox = new ThemeSelect();
 		comboBox.Location = new Point(370, 8);
@@ -321,11 +322,12 @@ internal sealed class LibraryView : BufferedPanel
 		if (dialog.ShowDialog(this) != DialogResult.OK) return;
 		try
 		{
-			string[] files = Directory.EnumerateFiles(dialog.SelectedPath, "*.*", SearchOption.AllDirectories)
-				.Where(ImportedGameCatalog.IsSupportedRom).Take(501).ToArray();
+			var discovered = RomFileDiscovery.Scan(dialog.SelectedPath, ImportedGameCatalog.IsSupportedRom, 501);
+			string[] files = discovered.Files.ToArray();
 			if (files.Length == 0)
 			{
-				MessageBox.Show(this, "Não encontrei arquivos GBA, Nintendo DS ou Nintendo 3DS compatíveis nesta pasta.", "Examinar pasta", MessageBoxButtons.OK, MessageBoxIcon.Information);
+				string detail=discovered.SkippedLocations>0||discovered.LimitReached ? " O exame foi parcial: há locais inacessíveis, links ou limites de leitura. Escolha a pasta da ROM diretamente ou selecione seus arquivos." : string.Empty;
+				MessageBox.Show(this, "Não encontrei arquivos GBA, Nintendo DS ou Nintendo 3DS compatíveis nesta pasta."+detail, "Examinar pasta", MessageBoxButtons.OK, MessageBoxIcon.Information);
 				return;
 			}
 			if (files.Length > 500)
@@ -333,6 +335,8 @@ internal sealed class LibraryView : BufferedPanel
 				MessageBox.Show(this, "A pasta contém mais de 500 ROMs compatíveis. Escolha uma pasta menor para revisar os arquivos com segurança.", "Limite de arquivos", MessageBoxButtons.OK, MessageBoxIcon.Information);
 				return;
 			}
+			if(discovered.SkippedLocations>0||discovered.LimitReached)
+				MessageBox.Show(this,"O exame encontrou "+files.Length+" ROM(s), mas foi parcial: há locais inacessíveis, links ou limites de leitura. Você pode adicionar os arquivos encontrados; para os demais, selecione a pasta ou o arquivo diretamente.","Exame parcial",MessageBoxButtons.OK,MessageBoxIcon.Information);
 			ImportSelectedRoms(files);
 		}
 		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)
@@ -384,11 +388,6 @@ internal sealed class LibraryView : BufferedPanel
 		foreach (Control child in parent.Controls) yield return child;
 	}
 
-	private static bool ContainsSearchText(string value, string searchText)
-	{
-		return CultureInfo.CurrentCulture.CompareInfo.IndexOf(value, searchText, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
-	}
-
 	protected override bool ProcessCmdKey(ref Message message, Keys keyData)
 	{
 		if (keyData == Keys.Escape && search.ContainsFocus && search.Text.Length > 0)
@@ -401,7 +400,7 @@ internal sealed class LibraryView : BufferedPanel
 			RefreshCatalog();
 			return true;
 		}
-		if (keyData == (Keys.Control | Keys.F))
+		if (keyData == (Keys.Control | Keys.F) || keyData == (Keys.Control | Keys.E))
 		{
 			search.Focus();
 			return true;
@@ -416,6 +415,7 @@ internal sealed class LibraryView : BufferedPanel
 			List<GameInfo> refreshedGames = GameCatalog.Build(root);
 			games.Clear();
 			games.AddRange(refreshedGames);
+            importedAvailability=ImportedGameAvailability.Inspect(root);
 			heroBanner.UpdateGameCount(games.Count, DateTimeOffset.Now);
 			Rebuild();
 			if (refreshButton.Visible)
@@ -453,6 +453,12 @@ internal sealed class LibraryView : BufferedPanel
 		content.SuspendLayout();
 		foreach (Control old in new List<Control>(GetChildren(content))) old.Dispose();
 		content.Controls.Clear();
+        if(importedAvailability.CatalogUnreadable||importedAvailability.UnavailableCount>0) {
+            string title=importedAvailability.CatalogUnreadable?"Não foi possível ler os jogos importados":importedAvailability.UnavailableCount==1?"Uma ROM importada não está acessível":$"{importedAvailability.UnavailableCount} ROMs importadas não estão acessíveis";
+            string description=importedAvailability.CatalogUnreadable?"O catálogo local precisa ser verificado. Seus arquivos de ROM e saves foram preservados. Abra o gerenciador para ver o problema.":"Reconecte a unidade ou localize o arquivo no gerenciador. A associação do jogo com seus saves será mantida.";
+            var notice=new EmptyStatePanel(title,description,"GERENCIAR JOGOS",(_,_)=>ManageImportedGames()) {Tag="imported-rom-notice",AccessibleName=title,AccessibleDescription=description};
+            content.Controls.Add(notice);
+        }
 		if (generationFilter == 0 && !favoritesOnly && !recentOnly && !alphabeticalOnly && !mostPlayedOnly && num == 0 && text.Length == 0 &&
 			!games.Any(game => game.IsImported ? File.Exists(game.RomPath) : !string.IsNullOrEmpty(game.Launcher) && File.Exists(Path.Combine(root, game.Launcher))))
 		{
@@ -479,7 +485,7 @@ internal sealed class LibraryView : BufferedPanel
 					: mostPlayedOnly
 						? recentGames.TryGetValue(game.Title, out GameLaunchHistoryEntry entry) && entry.TotalPlayTimeSeconds > 0
 						: alphabeticalOnly || game.Generation == i;
-				if (sectionMatches && (!favoritesOnly || favorites.Contains(game.Title)) && (num != 1 || game.Subtitle.IndexOf("Game Boy", StringComparison.OrdinalIgnoreCase) >= 0) && (num != 2 || game.Subtitle.IndexOf("Nintendo DS", StringComparison.OrdinalIgnoreCase) >= 0) && (num != 3 || game.Subtitle.IndexOf("Nintendo 3DS", StringComparison.OrdinalIgnoreCase) >= 0) && (text.Length <= 0 || ContainsSearchText(game.Title, text) || ContainsSearchText(game.Subtitle, text)))
+				if (sectionMatches && (!favoritesOnly || favorites.Contains(game.Title)) && (num != 1 || game.Subtitle.IndexOf("Game Boy", StringComparison.OrdinalIgnoreCase) >= 0) && (num != 2 || game.Subtitle.IndexOf("Nintendo DS", StringComparison.OrdinalIgnoreCase) >= 0) && (num != 3 || game.Subtitle.IndexOf("Nintendo 3DS", StringComparison.OrdinalIgnoreCase) >= 0) && GameSearch.Matches(game,text))
 				{
 					list.Add(game);
 				}

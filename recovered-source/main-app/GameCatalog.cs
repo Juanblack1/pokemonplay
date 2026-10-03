@@ -164,10 +164,7 @@ internal static class GameCatalog
 			return list;
 		}
 		string[] extensions = new string[5] { ".3ds", ".cci", ".cxi", ".3dsx", ".zcci" };
-		string[] files = Directory.GetFiles(romsDir, "*.*", SearchOption.AllDirectories)
-			.Where(path => extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
-			.OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-			.ToArray();
+		string[] files = RomFileDiscovery.Scan(romsDir, path => extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)).Files.ToArray();
 		var nameCounts = files.GroupBy(path => ThreeDsGameName(path), StringComparer.OrdinalIgnoreCase)
 			.ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
 		foreach (string text in files)
