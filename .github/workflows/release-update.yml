@@ -37,6 +37,9 @@ jobs:
       - name: Verificar binários reais e empacotar fontes correspondentes
         shell: pwsh
         run: ./recovered-source/tools/verify-emulator-bundle.ps1 -Directory '${{ runner.temp }}/pokemonplay-emulators' -OutputDirectory '${{ runner.temp }}/pokemonplay-sources'
+      - name: Verificar execução e entrada no core GBA real
+        shell: pwsh
+        run: python ./recovered-source/tools/probe-libretro.py --core '${{ runner.temp }}/pokemonplay-emulators/Emulators/RetroArch/cores/mgba_libretro.dll' --output '${{ runner.temp }}/pokemonplay-gba-probe' --frames 90
       - name: Verificar a aplicação e o atualizador
         shell: pwsh
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj

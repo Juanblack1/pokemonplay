@@ -11,7 +11,9 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
     private readonly ThemeSelect mode, slot, console;
     private readonly Label connection, hint, live, deadZoneLabel, deadZoneValue;
     private readonly ThemeSlider deadZone;
-    private readonly ThemeButton test, cancel;
+    private readonly ThemeButton test, cancel, detectController;
+    internal Func<int,InputSnapshot> ControllerReader { get; set; }
+    private long nextConnectionRefresh;
     private readonly ControllerVisualizer visual;
     private readonly Timer timer;
     private readonly Func<string[]> keyboard;
@@ -27,7 +29,8 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
     {
         Profile = profile; this.keyboard = keyboard; this.captureKeyboard = captureKeyboard; keyboardPreset = preset;
         BackColor = AppTheme.Surface; Height = 700;
-        var title = MakeLabel("Controles e teste", AppTheme.Section); title.SetBounds(24,20,600,28); Controls.Add(title);
+        ControllerReader=index=>InputReader.ReadPad(index,Profile.DeadZone);
+        var title = MakeLabel("Controles e comandos", AppTheme.Section); title.SetBounds(24,20,600,28); Controls.Add(title);
         hint = MakeLabel("Escolha como jogar. Clique em uma atribuição para personalizar.",AppTheme.Caption); hint.SetBounds(24,54,750,30); Controls.Add(hint);
         mode = new ThemeSelect { Location = new Point(24,100), Width = 290 }; mode.Items.AddRange(new object[] { "Só teclado", "Teclado + mouse", "Controle", "Touchpad" }); mode.SelectedIndex = Profile.Mode;
         slot = new ThemeSelect { Location = new Point(334,100), Width = 230 }; slot.Items.AddRange(new object[]{"Controle 1 · XInput","Controle 2 · XInput","Controle 3 · XInput","Controle 4 · XInput"}); slot.SelectedIndex = Profile.ControllerSlot;
@@ -49,9 +52,11 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
         mappingPanel=new Panel{AutoScroll=true,BackColor=AppTheme.Surface};Controls.Add(mappingPanel);
         for(int i=0;i<12;i++) { int index=i; var row=new KeyBindingRow(Names[i],""){Height=30}; row.RowClick+=(_,_)=>Capture(index); Rows.Add(row); mappingPanel.Controls.Add(row); }
         live = MakeLabel("Teste parado",AppTheme.Body); live.SetBounds(24,520,500,30);
-        test = new ThemeButton("Iniciar teste",ButtonKind.Primary) { AutoSize=true, Location=new Point(24,570) }; test.Click+=(_,_)=>OpenConsoleTest();
+        test = new ThemeButton("Testar comandos",ButtonKind.Primary) { AutoSize=true, Location=new Point(24,570),AccessibleName="Testar comandos sem abrir uma ROM" }; test.Click+=(_,_)=>OpenConsoleTest();
+        detectController=new ThemeButton("Detectar controle",ButtonKind.Secondary){AutoSize=true,AccessibleName="Selecionar um controle XInput conectado"};
+        detectController.Click+=(_,_)=>SelectConnectedController();
         cancel = new ThemeButton("Cancelar captura",ButtonKind.Secondary) { AutoSize=true,Location=new Point(24,640),Visible=false }; cancel.Click+=(_,_)=>CancelCapture();
-        Controls.AddRange(new Control[]{mode,slot,connection,deadZoneLabel,deadZone,deadZoneValue,visual,presetLabel,preset,live,test,cancel,console});
+        Controls.AddRange(new Control[]{mode,slot,connection,deadZoneLabel,deadZone,deadZoneValue,visual,presetLabel,preset,live,test,cancel,console,detectController});
         console.SelectedIndexChanged+=(_,_)=>{SetTesting(false);Profile.TestConsole=console.SelectedIndex;visual.ConsoleModel=console.SelectedIndex;UpdateRows();};
         mode.SelectedIndexChanged+=(_,_)=>{SetTesting(false);CancelCapture();Profile.Mode=mode.SelectedIndex;UpdateRows();};
         slot.SelectedIndexChanged+=(_,_)=>{CancelCapture();Profile.ControllerSlot=slot.SelectedIndex;};
@@ -62,7 +67,10 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
     private void Arrange()
     {
         int leftWidth=Math.Max(320,(Width-72)*55/100), rightX=leftWidth+48, rightWidth=Width-rightX-24;
-        mode.Width=Math.Min(290,Width-48); slot.Left=334; slot.Width=Math.Max(150,Math.Min(250,Width-358));
+        mode.Width=Math.Min(230,Math.Max(160,(Width-72)/4));
+        test.Location=new Point(Width-test.Width-24,100);
+        detectController.Location=new Point(test.Left-detectController.Width-12,100);
+        slot.Left=mode.Right+12;slot.Width=Math.Max(100,detectController.Left-slot.Left-12);
         visual.SetBounds(24,174,leftWidth,Math.Max(120,Height-234)); presetLabel.SetBounds(rightX,174,rightWidth,24); keyboardPreset.SetBounds(rightX,204,rightWidth,40);
         mappingPanel.SetBounds(rightX,254,rightWidth,Math.Max(90,Height-278));
         for(int i=0;i<Rows.Count;i++) Rows[i].SetBounds(0,i*34,rightWidth-20,32);
@@ -70,39 +78,55 @@ internal sealed class InputWorkbench : BufferedPanel, IMessageFilter
         int connectionWidth=Math.Min(520,Math.Max(250,Width-336));
         connection.SetBounds(24,145,connectionWidth,28);deadZoneLabel.SetBounds(32+connectionWidth,145,76,28);
         int sliderX=deadZoneLabel.Right+4,valueX=Width-76;deadZone.SetBounds(sliderX,140,Math.Max(80,valueX-sliderX-8),30);deadZoneValue.SetBounds(valueX,145,52,28);
-        hint.Width=Width-48;test.Location=new Point(Width-test.Width-24,100);console.Location=new Point(Width-console.Width-24,20);
+        hint.Width=Width-48;console.Location=new Point(Width-console.Width-24,20);
     }
     public void UpdateRows()
     {
-        bool pad=Profile.Mode==2;slot.Visible=pad;keyboardPreset.Visible=!pad;presetLabel.Text=pad?"Atribuições do controle":"Perfil de teclado";
+        bool pad=Profile.Mode==2;slot.Visible=detectController.Visible=pad;keyboardPreset.Visible=!pad;presetLabel.Text=pad?"Atribuições do controle":"Perfil de teclado";
         deadZoneLabel.Visible=deadZone.Visible=deadZoneValue.Visible=pad;
         if(deadZone.Value!=Profile.DeadZone)deadZone.Value=Profile.DeadZone;
         deadZoneValue.Text=Profile.DeadZone+"%";visual.DeadZone=Profile.DeadZone;
         var keys=keyboard(); for(int i=0;i<Rows.Count;i++){Rows[i].SetKey(pad?InputReader.Label(Profile.Bindings[i]):keys[i]);Rows[i].Editable=true;}
         for(int i=0;i<Rows.Count;i++)Rows[i].Visible=i<10||Profile.TestConsole>0;
         hint.Text=Profile.Mode switch { 0=>"Teclas acionam os botões. Clique em uma atribuição para editar.",1=>"Teclado para os botões; mouse como caneta na tela do DS.",2=>"Controle XInput: personalize os botões e ajuste a zona morta do analógico.",_=>"Botões virtuais na tela do jogo. Inicie o teste e toque ou clique no desenho." };
-        visual.Actions=new bool[12];visual.Snapshot=new();visual.Invalidate();
+        visual.Actions=new bool[12];visual.Snapshot=new();visual.Invalidate();Arrange();
+    }
+    internal void SelectConnectedController()
+    {
+        CancelCapture();
+        int connected=ControllerSelection.ConnectedSlot(Profile.ControllerSlot,index=>ControllerReader(index).Connected);
+        if(connected<0){live.Text="Nenhum controle XInput conectado. Reconecte e tente novamente.";return;}
+        slot.SelectedIndex=connected;
+        live.Text=$"Controle {connected+1} selecionado. Teste os comandos e salve as configurações.";
+        nextConnectionRefresh=0;
     }
     private void Capture(int index)
     {
         SetTesting(false);
         if(Profile.Mode!=2){captureKeyboard(index);UpdateRows();return;}
-        if(!InputReader.ReadPad(Profile.ControllerSlot,Profile.DeadZone).Connected){live.Text="Conecte um controle XInput para personalizar.";return;}
+        if(!ControllerReader(Profile.ControllerSlot).Connected){live.Text="Conecte um controle XInput para personalizar.";return;}
         capturing=index;armed=false;cancel.Visible=true;live.Text="Solte os botões; depois pressione para: "+Names[index];
     }
     private void CancelCapture(){capturing=-1;cancel.Visible=false;live.Text="Teste parado";}
     private void SetTesting(bool value)
     {
-        CancelCapture();testing=value;test.Text=value?"Parar teste":"Iniciar teste";visual.ReleaseVirtual();visual.VirtualInput=value&&Profile.Mode==3;visual.Testing=value;live.Text=value?"Pressione teclas ou botões. Esc encerra o teste.":"Teste parado";visual.Actions=new bool[12];visual.Snapshot=new();visual.Invalidate();foreach(var row in Rows)row.Active=false;Arrange();
+        CancelCapture();testing=value;test.Text=value?"Parar teste":"Testar comandos";visual.ReleaseVirtual();visual.VirtualInput=value&&Profile.Mode==3;visual.Testing=value;live.Text=value?"Pressione teclas ou botões. Esc encerra o teste.":"Teste parado";visual.Actions=new bool[12];visual.Snapshot=new();visual.Invalidate();foreach(var row in Rows)row.Active=false;Arrange();
     }
     private void Poll()
     {
         if(IsDisposed || FindForm()==null)return;
-        var pad=InputReader.ReadPad(Profile.ControllerSlot,Profile.DeadZone);
-        connection.Text=Profile.Mode==2?(pad.Connected?$"Controle conectado · zona morta {Profile.DeadZone}%":"Nenhum controle neste slot. Conecte um controle XInput ou escolha outro slot."):"";
+        var pad=ControllerReader(Profile.ControllerSlot);
+        if(Profile.Mode==2&&Environment.TickCount64>=nextConnectionRefresh){
+            nextConnectionRefresh=Environment.TickCount64+750;
+            for(int index=0;index<4;index++){
+                string text=$"Controle {index+1} · "+(ControllerReader(index).Connected?"conectado":"desconectado");
+                if(!string.Equals(slot.Items[index]?.ToString(),text,StringComparison.Ordinal))slot.Items[index]=text;
+            }
+        }
+        connection.Text=Profile.Mode==2?(pad.Connected?$"Controle {Profile.ControllerSlot+1} conectado · XInput":"Slot desconectado. Use Detectar controle ou escolha outro."):"";
         connection.ForeColor=pad.Connected?AppTheme.Green:AppTheme.TextMuted;
         bool focused=Form.ActiveForm==FindForm()&&FindForm().ContainsFocus;
-        if(!focused){ if(testing||capturing>=0){SetTesting(false);live.Text="Teste pausado ao sair da janela. Clique em Iniciar teste.";} previous.Clear();return; }
+        if(!focused){ if(testing||capturing>=0){SetTesting(false);live.Text="Teste pausado ao sair da janela. Clique em Testar comandos.";} previous.Clear();return; }
         if(capturing>=0)
         {
             if(!pad.Connected){CancelCapture();live.Text="Controle desconectado. Reconecte para personalizar.";return;}
