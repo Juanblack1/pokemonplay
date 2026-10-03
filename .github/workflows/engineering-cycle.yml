@@ -1,6 +1,11 @@
 name: Verificar ciclo de melhorias
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'recovered-source/main-app/**'
+      - 'recovered-source/tests/ProfilesCheck/**'
+      - '.github/workflows/engineering-cycle.yml'
 permissions:
   contents: read
 jobs:
