@@ -152,6 +152,7 @@ internal sealed class SaveManagerView : BufferedPanel
   string[] files=Directory.GetFiles(SelectedFolder(),"*",SearchOption.AllDirectories);
   if(files.Length==0)fileList.Controls.Add(new Label{Text="Nenhum save nesta pasta. Seu progresso aparecerá aqui depois de salvar dentro do jogo.",Font=AppTheme.Body,ForeColor=AppTheme.TextMuted,AutoSize=false,Size=new Size(400,64),Padding=new Padding(0,12,0,0)});
   else {Array.Sort(files,StringComparer.OrdinalIgnoreCase);foreach(string file in files)fileList.Controls.Add(new SaveFileRow(new FileInfo(file)));}
+  status.ForeColor=AppTheme.TextMuted;
   status.Text=files.Length==0?"Pasta pronta para receber seu progresso.":files.Length+" arquivo(s) nesta pasta.";
   BuildCloudControls();LayoutCanvas(detailCard.Parent?.ClientSize.Width??1000);
  }
@@ -415,6 +416,20 @@ internal sealed class SaveManagerView : BufferedPanel
 	}
 
 	private void OpenSelected()
+		=> RunLocalSaveAction(OpenSelectedCore);
+
+	private void RunLocalSaveAction(Action action)
+	{
+		try { action(); }
+		catch(Exception error) when(error is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException or System.Security.SecurityException or System.ComponentModel.Win32Exception)
+		{
+			BuildDetail();
+			status.ForeColor=AppTheme.Red;
+			status.Text="Ação interrompida. Confira o acesso aos arquivos e tente novamente.";
+		}
+	}
+
+	private void OpenSelectedCore()
 	{
 		ProcessStartInfo processStartInfo = new ProcessStartInfo();
 		processStartInfo.FileName = SelectedFolder();
@@ -432,6 +447,9 @@ internal sealed class SaveManagerView : BufferedPanel
 	}
 
 	private void BackupSelected()
+		=> RunLocalSaveAction(BackupSelectedCore);
+
+	private void BackupSelectedCore()
 	{
 		string text = SelectedFolder();
 		string[] files = Directory.GetFiles(text, "*", SearchOption.AllDirectories);
@@ -467,6 +485,9 @@ internal sealed class SaveManagerView : BufferedPanel
 	}
 
 	private void RestoreSelected()
+		=> RunLocalSaveAction(RestoreSelectedCore);
+
+	private void RestoreSelectedCore()
 	{
 		string processName = selected.EmulatorProcess;
 		if (string.IsNullOrWhiteSpace(processName))

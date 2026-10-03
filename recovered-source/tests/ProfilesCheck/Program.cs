@@ -48,6 +48,11 @@ class Check {
    finally {if(Directory.Exists(achievementsRoot)&&Path.GetDirectoryName(Path.GetFullPath(achievementsRoot))==Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar))Directory.Delete(achievementsRoot,true);}
    return;
   }
+  if(args.Length>0&&args[0]=="--save-actions-recovery") {
+   string actionRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-save-actions-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(actionRoot);
+   try{SaveActionsRecoveryCheck.Run(actionRoot);}finally{DeleteTemporaryFixture(actionRoot);}
+   return;
+  }
   if(args.Length>0&&args[0]=="--save-manager-recovery") {
    string managerRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-save-manager-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(managerRoot);
    try{SaveManagerRecoveryCheck.Run(managerRoot);}finally{DeleteTemporaryFixture(managerRoot);}
@@ -81,7 +86,7 @@ class Check {
   RomDiscoveryCheck.Run(root);
   LibrarySearchCheck.Run(root);
   ImportedAvailabilityCheck.Run(root);
-  ProfileLibraryRecoveryCheck.Run(root);SaveManagerRecoveryCheck.Run(root);
+  ProfileLibraryRecoveryCheck.Run(root);SaveManagerRecoveryCheck.Run(root);SaveActionsRecoveryCheck.Run(root);
   AtomicArchiveCheck.Run(root,app);BankFiltersCheck.Run(root,app);AppUpdatesCheck.Run(root);GameLaunchHistoryCheck.Run(root,app);RetroAchievementsCheck.Run(root,app);FirstUseCheck.Run(root,app);AzaharSessionCheck.Run(app,root);ImportedRomRecoveryCheck.Run(root,app);PokemonBasesCheck.Run(root,app);SpriteResilienceCheck.Run(root,app);BundledEmulatorsCheck.Run(root,app);
   byte[] gen3=new byte[0x20000];for(int group=0;group<2;group++)for(int sector=0;sector<14;sector++){int p=(group*14+sector)*0x1000;BinaryPrimitives.WriteUInt16LittleEndian(gen3.AsSpan(p+0xFF4), (ushort)sector);BinaryPrimitives.WriteUInt32LittleEndian(gen3.AsSpan(p+0xFF8),0x08012025);}
   byte[] gen4=new byte[0x80000];foreach(int start in new[]{0,0x40000}){int length=53036;BinaryPrimitives.WriteUInt32LittleEndian(gen4.AsSpan(start+length-12),(uint)length);BinaryPrimitives.WriteUInt32LittleEndian(gen4.AsSpan(start+length-8),537265699);}
