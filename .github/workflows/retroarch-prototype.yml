@@ -34,17 +34,44 @@ jobs:
         run: |
           $out = $env:RETROARCH_PROTOTYPE_OUTPUT
           $exe = Join-Path $out 'runtime/retroarch.exe'
-          & $exe --version 2>&1 | Tee-Object (Join-Path $out 'evidence/version.log')
-          if ($LASTEXITCODE -ne 0) { throw 'Version probe failed.' }
-          if ((Get-Content (Join-Path $out 'evidence/version.log') -Raw) -notmatch '1\.22\.2') { throw 'Unexpected version.' }
-          & $exe --features 2>&1 | Tee-Object (Join-Path $out 'evidence/features.log')
-          if ($LASTEXITCODE -ne 0) { throw 'Feature probe failed.' }
-          # Fail closed loader-negative probe, independent of positive content.
+          function Invoke-OwnedProbe($name, $arguments, $pattern) {
+            $stdout = Join-Path $out "evidence/$name.stdout.log"
+            $stderr = Join-Path $out "evidence/$name.stderr.log"
+            $p = Start-Process $exe -ArgumentList $arguments -WorkingDirectory (Split-Path $exe) -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            $started = $p.StartTime.ToUniversalTime()
+            $path = $p.Path
+            $identity = [ordered]@{pid=$p.Id;startUtc=$started.ToString('O');path=$path;expectedOutput=$false;teardown='pending';exitCode=$null}
+            $identityFile = Join-Path $out "evidence/$name.identity.json"
+            $identity | ConvertTo-Json | Set-Content $identityFile
+            try {
+              $deadline = [DateTime]::UtcNow.AddSeconds(15)
+              do {
+                $text = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue),(Get-Content $stderr -Raw -ErrorAction SilentlyContinue)) -join "`n"
+                $identity.expectedOutput = $text -match $pattern
+                if ($identity.expectedOutput -or $p.HasExited) { break }
+                Start-Sleep -Milliseconds 100
+              } while ([DateTime]::UtcNow -lt $deadline)
+              if (!$identity.expectedOutput) { throw "Expected $name output absent; cleanup is emergency failure." }
+              if ($p.HasExited) { $identity.exitCode=$p.ExitCode; $identity.teardown='natural_exit' }
+            } finally {
+              if (!$p.HasExited) {
+                # CLI information/error modes may continue into a menu. Kill is
+                # intentional only after the required output, never guest proof.
+                if ($p.StartTime.ToUniversalTime() -ne $started -or $p.Path -ne $path -or [IO.Path]::GetFullPath($path) -ne [IO.Path]::GetFullPath($exe)) { throw 'Owned probe identity changed; refusing termination.' }
+                $p.Kill()
+                if (!$p.WaitForExit(5000)) { throw 'Owned probe termination unverified.' }
+                $identity.teardown = if ($identity.expectedOutput) {'intentional_post_output_menu_teardown'} else {'emergency_failed_probe_teardown'}
+                $identity.exitCode=$p.ExitCode
+              }
+              $identity | ConvertTo-Json | Set-Content $identityFile
+              $p.Dispose()
+            }
+          }
+          Invoke-OwnedProbe 'version' '--version' '1\.22\.2'
+          # Compiled features are already fail-closed checked in config.h.
+          # Loader-negative output is required even if RA retains its menu.
           $missing = Join-Path $out 'missing-owned-core.dll'
-          & $exe --verbose -L $missing 2>&1 | Tee-Object (Join-Path $out 'evidence/loader-negative.log')
-          if ($LASTEXITCODE -eq 0) { throw 'Missing core unexpectedly accepted.' }
-          $log = Get-Content (Join-Path $out 'evidence/loader-negative.log') -Raw
-          if ($log -notmatch 'Failed to open libretro core') { throw 'Loader failure evidence missing.' }
+          Invoke-OwnedProbe 'loader-negative' ('--verbose -L "{0}"' -f $missing) 'Failed to open libretro core'
       - name: Load owned diagnostic content with the pinned public core
         timeout-minutes: 5
         shell: pwsh
