@@ -20,6 +20,9 @@ jobs:
           lfs: false
       - name: Verificar oráculo e limites do programa original
         run: python -B -m unittest discover -s ./recovered-source/tests/DsKeypadCheck -v
+      - name: Rejeitar evidência antiga e DLL ausente
+        shell: pwsh
+        run: ./recovered-source/tests/DsKeypadCheck/verify-evidence-guard.ps1
       - name: Obter o core da release verificada
         shell: pwsh
         env:

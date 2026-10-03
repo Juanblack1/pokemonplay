@@ -141,6 +141,9 @@ def probe(args):
     if not rom.is_file():
         raise FileNotFoundError(rom)
     core_path = Path(args.core).resolve()
+    digests = {"rom_sha256": hashlib.sha256(rom.read_bytes()).hexdigest(),
+               "core_sha256": hashlib.sha256(core_path.read_bytes()).hexdigest(),
+               "generator_sha256": hashlib.sha256(Path(__file__).with_name("original_ds_test.py").read_bytes()).hexdigest() if args.system == "ds" else None}
     directory_handles = []
     if os.name == "nt":
         for directory in (core_path.parent, core_path.parent.parent):
@@ -372,9 +375,7 @@ def probe(args):
             pass
         return {"result": "passed", "core": info.name.decode(), "core_version": info.version.decode(),
                 "rom_name": rom.name, "original_diagnostic_rom": not bool(args.rom),
-                "rom_sha256": hashlib.sha256(rom.read_bytes()).hexdigest(), "seed_frame_hash": seed_hash,
-                "core_sha256": hashlib.sha256(core_path.read_bytes()).hexdigest(),
-                "generator_sha256": hashlib.sha256(Path(__file__).with_name("original_ds_test.py").read_bytes()).hexdigest() if args.system == "ds" else None,
+                **digests, "seed_frame_hash": seed_hash,
                 "width": frame["width"], "height": frame["height"], "frames": args.frames,
                 "seconds": time.monotonic() - started, "stats": stats, "state_comparison": comparison,
                 "guest_input": guest_input,
@@ -383,6 +384,7 @@ def probe(args):
     except Exception as error:
         (output / "native-failure.json").write_text(json.dumps({
             "result": "failed", "error": str(error), "stats": stats,
+            **digests,
             "guest_input": locals().get("guest_input", []),
             "options": {key: (value or b"").decode() for key, value in options.items()},
             "native_log_formats": native_logs}, indent=2), encoding="utf-8")
