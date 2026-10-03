@@ -23,6 +23,13 @@ internal static class RomDiscoveryCheck
         Assert(found.Files.Count==2&&found.LimitReached,"ROM discovery stops at its caller's file limit");
         found=RomFileDiscovery.Scan(Path.Combine(folder,"missing"),ImportedGameCatalog.IsSupportedRom);
         Assert(found.Files.Count==0&&found.SkippedLocations==1,"vanished root reports incomplete discovery without crashing the library");
+        IEnumerable<FileSystemInfo> Interrupted(string path){yield return new FileInfo(gba);throw new IOException("synthetic interrupted enumeration");}
+        found=RomFileDiscovery.Scan(folder,ImportedGameCatalog.IsSupportedRom,enumerate:Interrupted);
+        Assert(found.Files.SequenceEqual(new[]{gba})&&found.SkippedLocations==1,"interrupted enumeration retains ROMs delivered before the I/O failure");
+        int delivered=0;
+        IEnumerable<FileSystemInfo> LargeNonRomTree(string path){var entry=new FileInfo(Path.Combine(folder,"unrelated.txt"));for(int i=0;i<100010;i++){delivered++;yield return entry;}}
+        found=RomFileDiscovery.Scan(folder,ImportedGameCatalog.IsSupportedRom,enumerate:LargeNonRomTree);
+        Assert(found.Files.Count==0&&found.LimitReached&&delivered==100001,"discovery bounds work even when a large tree contains no compatible ROMs");
         if(OperatingSystem.IsWindows()) {
             string link=Path.Combine(folder,"loop-junction");
             using var junction=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe") {

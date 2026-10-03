@@ -47,6 +47,11 @@ class Check {
    finally {if(Directory.Exists(achievementsRoot)&&Path.GetDirectoryName(Path.GetFullPath(achievementsRoot))==Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar))Directory.Delete(achievementsRoot,true);}
    return;
   }
+  if(args.Length>0&&args[0]=="--library-search") {
+   string searchRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-library-search-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(searchRoot);
+   try{LibrarySearchCheck.Run(searchRoot);}finally{Directory.Delete(searchRoot,true);}
+   return;
+  }
   if(args.Length>0&&args[0]=="--rom-discovery") {
    string discoveryRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-rom-discovery-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(discoveryRoot);
    try{RomDiscoveryCheck.Run(discoveryRoot);}finally{Directory.Delete(discoveryRoot,true);}
@@ -63,6 +68,7 @@ class Check {
   BundledEmulatorArchiveCheck.Run(root,app);
   GameControlsCheck.Run(root);
   RomDiscoveryCheck.Run(root);
+  LibrarySearchCheck.Run(root);
   AtomicArchiveCheck.Run(root,app);BankFiltersCheck.Run(root,app);AppUpdatesCheck.Run(root);GameLaunchHistoryCheck.Run(root,app);RetroAchievementsCheck.Run(root,app);FirstUseCheck.Run(root,app);AzaharSessionCheck.Run(app,root);ImportedRomRecoveryCheck.Run(root,app);PokemonBasesCheck.Run(root,app);SpriteResilienceCheck.Run(root,app);BundledEmulatorsCheck.Run(root,app);
   byte[] gen3=new byte[0x20000];for(int group=0;group<2;group++)for(int sector=0;sector<14;sector++){int p=(group*14+sector)*0x1000;BinaryPrimitives.WriteUInt16LittleEndian(gen3.AsSpan(p+0xFF4), (ushort)sector);BinaryPrimitives.WriteUInt32LittleEndian(gen3.AsSpan(p+0xFF8),0x08012025);}
   byte[] gen4=new byte[0x80000];foreach(int start in new[]{0,0x40000}){int length=53036;BinaryPrimitives.WriteUInt32LittleEndian(gen4.AsSpan(start+length-12),(uint)length);BinaryPrimitives.WriteUInt32LittleEndian(gen4.AsSpan(start+length-8),537265699);}

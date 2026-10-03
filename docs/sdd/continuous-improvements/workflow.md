@@ -13,3 +13,9 @@ Plano: scanner de diretórios com resultado (arquivos, locais ignorados, limite)
 Próxima fila: evitar reconstrução e leitura de capas a cada tecla de pesquisa; facilitar localizar jogo quando filtros ativos ocultam resultados; sinalizar ROMs importadas movidas preservando associação de saves.
 
 Evidência do ciclo 2: reprodução de junction circular mostra 8 ocorrências no enumerador recursivo antigo para 3 arquivos; scanner corrigido retorna 3 e informa link ignorado. Teste focado: 8 PASS. Suíte completa local: exit 0, ALL CHECKS PASSED, fixtures removidas (`output/library-cycle-full-local.log`). Compilação Release: zero erros. Acrescentado workflow manual rápido para verificar app/atualizador e guardar logs durante ciclos sem recompilar emuladores inalterados.
+
+Ciclo 3: busca combinada. Critérios: C3.1 combinar palavras do título e da plataforma no mesmo jogo; C3.2 aceitar GBA/DS/3DS, espaços extras, caixa e acentos; C3.3 todos os termos precisam corresponder ao mesmo cartão; C3.4 limpar restaura a lista e filtros existentes continuam aplicados; C3.5 preservar Ctrl+F e acrescentar Ctrl+E com instrução acessível. Plano: predicado compartilhado e testes no fluxo real da LibraryView com metadados/arquivo sintéticos, sem executar ROM.
+
+Reprodução corrigida: Ruby não faz parte do catálogo padrão; a fixture agora cria explicitamente um jogo importado Ruby. Com a lógica anterior de frase inteira, `ruby advance` falhou. Com combinação de palavras, os 6 testes focados passaram (`output/library-search-red.log` e `output/library-search-green.log`). A avaliação inicial sem essa fixture não é usada como prova do bug.
+
+Ciclo 2: CI incremental 37089557969 success. Acrescentados cenários de falha no meio da enumeração e teto de 100.000 entradas mesmo sem ROMs. Próxima verificação: suíte completa com busca combinada.

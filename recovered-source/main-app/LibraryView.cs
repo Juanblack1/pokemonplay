@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -146,7 +145,7 @@ internal sealed class LibraryView : BufferedPanel
 			BackColor = Color.Transparent
 		};
         ThemeInput box = new ThemeInput{Location=new Point(24,8),Width=330,Height=40};
-        box.SetAccessibleMetadata("Buscar jogos", "Filtra os jogos pelo título ou plataforma e ignora diferenças de acentuação.");
+        box.SetAccessibleMetadata("Buscar jogos", "Combine palavras do título e plataforma, como Ruby GBA. Ignora diferenças de acentuação. Ctrl+F ou Ctrl+E foca a busca; Esc limpa.");
 		searchBox = box;
 		ThemeSelect comboBox = new ThemeSelect();
 		comboBox.Location = new Point(370, 8);
@@ -387,11 +386,6 @@ internal sealed class LibraryView : BufferedPanel
 		foreach (Control child in parent.Controls) yield return child;
 	}
 
-	private static bool ContainsSearchText(string value, string searchText)
-	{
-		return CultureInfo.CurrentCulture.CompareInfo.IndexOf(value, searchText, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
-	}
-
 	protected override bool ProcessCmdKey(ref Message message, Keys keyData)
 	{
 		if (keyData == Keys.Escape && search.ContainsFocus && search.Text.Length > 0)
@@ -404,7 +398,7 @@ internal sealed class LibraryView : BufferedPanel
 			RefreshCatalog();
 			return true;
 		}
-		if (keyData == (Keys.Control | Keys.F))
+		if (keyData == (Keys.Control | Keys.F) || keyData == (Keys.Control | Keys.E))
 		{
 			search.Focus();
 			return true;
@@ -482,7 +476,7 @@ internal sealed class LibraryView : BufferedPanel
 					: mostPlayedOnly
 						? recentGames.TryGetValue(game.Title, out GameLaunchHistoryEntry entry) && entry.TotalPlayTimeSeconds > 0
 						: alphabeticalOnly || game.Generation == i;
-				if (sectionMatches && (!favoritesOnly || favorites.Contains(game.Title)) && (num != 1 || game.Subtitle.IndexOf("Game Boy", StringComparison.OrdinalIgnoreCase) >= 0) && (num != 2 || game.Subtitle.IndexOf("Nintendo DS", StringComparison.OrdinalIgnoreCase) >= 0) && (num != 3 || game.Subtitle.IndexOf("Nintendo 3DS", StringComparison.OrdinalIgnoreCase) >= 0) && (text.Length <= 0 || ContainsSearchText(game.Title, text) || ContainsSearchText(game.Subtitle, text)))
+				if (sectionMatches && (!favoritesOnly || favorites.Contains(game.Title)) && (num != 1 || game.Subtitle.IndexOf("Game Boy", StringComparison.OrdinalIgnoreCase) >= 0) && (num != 2 || game.Subtitle.IndexOf("Nintendo DS", StringComparison.OrdinalIgnoreCase) >= 0) && (num != 3 || game.Subtitle.IndexOf("Nintendo 3DS", StringComparison.OrdinalIgnoreCase) >= 0) && GameSearch.Matches(game,text))
 				{
 					list.Add(game);
 				}
