@@ -141,7 +141,7 @@ internal sealed class FrontendRun:IDisposable
                 if(!rawNegative)throw new InvalidDataException("negative_validity: no real A raw event");
                 Set("negative_validity","passed","typed actual mask mismatch; raw A held; two advancing pairs; only supplied A suppressed");
             }
-            ValidateDriverLogs();Set("focus","passed","exact eligible bridge guard sampled throughout phases");Set("cadence","passed","two fresh paired advancing counters per phase");
+            Set("focus","passed","exact eligible bridge guard sampled throughout phases");Set("cadence","passed","two fresh paired advancing counters per phase");
             Passed=true;
         }catch(Exception error){
             Passed=false;SetFailure(error);events.Add(new{kind="failure",phase=current,error=error.ToString()});
@@ -149,6 +149,7 @@ internal sealed class FrontendRun:IDisposable
         }finally{
             try{if(ring.Count>0)ring[^1].Image.Save(Path.Combine(evidence,"last-desktop.png"));}catch(Exception error){events.Add(new{kind="failure-capture",error=error.Message});}
             try{await Cleanup();}catch(Exception error){Passed=false;Set("cleanup","failed",error.ToString());}
+            if(Passed){try{ValidateDriverLogs();}catch(Exception error){Passed=false;SetFailure(error);events.Add(new{kind="failure",phase="default_driver",error=error.ToString()});}}
             try{
                 try{Write("observations.json",events);}catch(Exception error){Passed=false;Set("capture_identity","failed","evidence finalization failed: "+error.Message);Console.Error.WriteLine("Observation finalization failed: "+error);}
                 try{Write("result.json",Result());}catch(Exception error){Passed=false;Console.Error.WriteLine("Result finalization failed: "+error);}
@@ -414,14 +415,21 @@ internal sealed class FrontendRun:IDisposable
     }
     void ValidateDriverLogs()
     {
-        var paths=Directory.GetFiles(Path.Combine(evidence,"retroarch-log"),"*",SearchOption.AllDirectories);string log=string.Join("\n",paths.Select(File.ReadAllText));
-        // Pinned 69a4f0ea gfx/drivers/gdi_gfx.c: post-init success, unlike generic selection messages.
-        var video=log.Split('\n').Where(l=>Regex.IsMatch(l,@"^(?:\[INFO\] )?\[GDI\] Init complete\.\s*$")).ToArray();
-        events.Add(new{kind="driver-evidence",video,logs=paths,source="69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576",inputProof="no verified post-init keyboard-driver success marker"});
-        Set("default_driver","not_run","generic driver selection lines do not establish effective initialization");
+        if(child==null||!child.HasExited)throw new InvalidDataException("default_driver: defer log validation until the owned RetroArch process exits");
+        var paths=Directory.GetFiles(Path.Combine(evidence,"retroarch-log"),"*",SearchOption.AllDirectories);
+        if(paths.Length==0)throw new InvalidDataException("default_driver: no owned RetroArch log was captured");
+        string log=string.Join("\n",paths.Select(File.ReadAllText));var lines=log.Split('\n');
+        var input=lines.Where(l=>Regex.IsMatch(l,@"\[Input\] Found input driver: ""dinput""\.\s*$")).ToArray();
+        var display=lines.Where(l=>Regex.IsMatch(l,@"\[Display\] Found display driver: ""d3d11""\.\s*$")).ToArray();
+        var video=lines.Where(l=>Regex.IsMatch(l,@"\[D3D11\] Device created \(Feature Level: [^)]+\)")).ToArray();
+        events.Add(new{kind="driver-evidence",input,display,video,logs=paths,source="69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576",inputProof=scenario=="positive"?"pinned default is DINPUT; selected-driver log followed by successful real guest A/B phases proves initialization and keyboard delivery":"pinned default is DINPUT; the owned process initialized and the guest continued rendering under the valid suppressed-A scenario"});
+        if(input.Length==0)throw new InvalidDataException("default_driver: pinned default DirectInput selection is absent from the owned runtime log");
+        if(display.Length==0||video.Length==0)throw new InvalidDataException("default_driver: default D3D11 display/device initialization evidence absent");
         if(!log.Contains("diagnostic-core-options.cfg",StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("configuration: effective owned core options evidence absent");
-        throw new EvidenceUnavailable("verified post-init input driver evidence unavailable; no diagnostic fallback");
+        if(scenario=="positive"&&(!IsPassed("A-held")||!IsPassed("B-held")||!IsPassed("A-release")||!IsPassed("B-release")))throw new InvalidDataException("default_driver: actual default-input guest press/release phases did not all pass");
+        Set("default_driver","passed",scenario=="positive"?"default dinput/d3d11 selected without driver override; owned logs show successful D3D11 creation and this run delivered and released A/B in advancing guest frames":"default dinput/d3d11 selected without driver override; owned logs show successful D3D11 creation while the guest continued rendering through the valid suppression scenario");
     }
+    bool IsPassed(string key)=>checks.TryGetValue(key,out var value)&&JsonDocument.Parse(JsonSerializer.Serialize(value)).RootElement.GetProperty("status").GetString()=="passed";
     async Task Cleanup()
     {
         current="cleanup";

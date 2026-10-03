@@ -92,6 +92,12 @@ O source pin lê appendconfig antes de settings e permite override posterior. Wh
 
 The eight LIBRETRO environment names above were confirmed in the pinned configuration.c at3841–3867 and4023–4042. mgba_skip_bios=ON is ignored when mgba_use_bios=OFF; BIOS isolation is use_bios=OFF and empty system, not skip alone.
 
+### PR31 evidence correction — validate owned logs after shutdown
+
+The exact-head run at `9f7e6849a8d1ab961aeb2ee1a0d692dc2ea637b5` proved the default positive guest phases: neutral, A held/released, and B held/released all had advancing paired frames and the expected masks. Cleanup observed the guest release and closed the owned process. The run then failed in harness log validation because it read `retroarch.log` while RetroArch still held it open; validation also ended with an unconditional `EvidenceUnavailable`, so a passing runtime could never pass that gate.
+
+The correction runs log validation only after the exact owned process exits. The pinned [`input_driver_find_driver`](https://github.com/libretro/RetroArch/blob/69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576/input/input_driver.c) writes the selected driver line before initialization; `input_driver_init_wrap` then requires its initializer to return data or the input subsystem fails. The pinned [`configuration.c`](https://github.com/libretro/RetroArch/blob/69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576/configuration.c) selects `INPUT_DINPUT` for Windows builds with `HAVE_DINPUT`, while [`dinput.c`](https://github.com/libretro/RetroArch/blob/69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576/input/drivers/dinput.c) binds its keyboard to the video window and polls DirectInput state. Acceptance combines the unchanged default-driver config, the owned runtime selection log, successful D3D11 device creation, continued emulation, and actual A/B guest delivery/release; no driver override or diagnostic path is introduced. The next exact-head run must verify both positive and valid-negative fixtures before this gate is accepted.
+
 S1 evidence: root reran Python -B unittest discover for test_original_gba_frontend.py:10 tests passed. Mode4 double-buffer payload3300bytes in deterministic32KiB original ROM; ten input regions, four-color magic/yellow border and32 uint32counter blocks. SHA25641be7710d767c385f5d8dc7a05b37ebde060ccc74c7b59e61455eb31b157d812. ARM execution, renderer timing and every-VBlank publication remain not_run until CI.
 
 
