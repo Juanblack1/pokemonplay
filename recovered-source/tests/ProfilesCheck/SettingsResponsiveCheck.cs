@@ -80,6 +80,26 @@ internal static class SettingsResponsiveCheck
                 if(!string.IsNullOrEmpty(preview)){using var bitmap=new Bitmap(host.Width,host.Height);host.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(Path.Combine(preview,"settings-responsive-"+width+"-capture.png"));}
                 workbench.GetType().GetMethod("CancelCapture",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(workbench,null);
             }
+            Exception dialogFailure=null;
+            host.BeginInvoke(new Action(()=>
+            {
+                ConsoleTestForm dialog=null;
+                try
+                {
+                    dialog=Application.OpenForms.OfType<ConsoleTestForm>().Single();
+                    var toggle=Field(dialog,"toggle");
+                    Assert(toggle.Text=="Pausar teste"&&dialog.SelectedConsole==1,"settings action opens a running DS command diagnostic at "+width+" mode "+inputMode);
+                    typeof(Control).GetMethod("OnClick",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(toggle,new object[]{EventArgs.Empty});
+                    Assert(toggle.Text=="Retomar teste"&&!(bool)dialog.GetType().GetField("running",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(dialog),"native diagnostic pause action stops input testing");
+                    if(!string.IsNullOrEmpty(preview)){using var bitmap=new Bitmap(dialog.Width,dialog.Height);dialog.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(Path.Combine(preview,"settings-diagnostic-paused-"+width+"-mode-"+inputMode+".png"));}
+                    typeof(Control).GetMethod("OnClick",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(toggle,new object[]{EventArgs.Empty});
+                    Assert(toggle.Text=="Pausar teste"&&(bool)dialog.GetType().GetField("running",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(dialog),"native diagnostic resume action restores input testing");
+                }
+                catch(Exception ex){dialogFailure=ex;}
+                finally{dialog?.Close();}
+            }));
+            typeof(Control).GetMethod("OnClick",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(Field(workbench,"test"),new object[]{EventArgs.Empty});
+            if(dialogFailure!=null)throw new Exception("Settings diagnostic interaction failed.",dialogFailure);
             Assert(File.ReadAllBytes(preferences).SequenceEqual(original), "responsive layout preserves preference bytes");
         }
         host.Close();
