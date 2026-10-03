@@ -275,7 +275,7 @@ internal sealed class FrontendRun:IDisposable
     }
     async Task ProbeTopLevelControl()
     {
-        Progress("top-level-control");var attempt=host.LastEmbeddingAttempt??throw new InvalidDataException("top_level_control: production embedding trace absent");
+        Progress("top-level-control-prep");var attempt=host.LastEmbeddingAttempt??throw new InvalidDataException("top_level_control: production embedding trace absent");
         var panel=Field<Panel>(host,"gamePanel");var embedTimer=Field<System.Windows.Forms.Timer>(host,"timer");var bridge=Field<GameInputBridge>(host,"inputBridge");
         uint originalStyle=attempt.OriginalStyle,embeddedStyle=attempt.RequestedStyle;bool detached=false,restored=false,foregroundRequestAccepted=false;string diagnostic="not completed";
         try{
@@ -290,6 +290,7 @@ internal sealed class FrontendRun:IDisposable
             int styleResult=Native.SetWindowLong(hwnd,-16,unchecked((int)originalStyle));int styleError=Marshal.GetLastPInvokeError();
             if(styleResult==0&&styleError!=0||unchecked((uint)Native.GetWindowLong(hwnd,-16))!=originalStyle)throw new InvalidDataException("top_level_control: original top-level style did not restore");
             if(!Native.SetWindowPos(hwnd,IntPtr.Zero,0,0,Math.Max(320,panel.ClientSize.Width),Math.Max(240,panel.ClientSize.Height),0x74))throw new Win32Exception(Marshal.GetLastPInvokeError(),"top_level_control: window bounds update failed");Native.ShowWindow(hwnd,9);
+            Progress("top-level-control");
             foregroundRequestAccepted=Native.SetForegroundWindow(hwnd);events.Add(new{kind="top-level-foreground-request",accepted=foregroundRequestAccepted,observedForeground=Native.GetForegroundWindow().ToInt64(),expectedForeground=hwnd.ToInt64()});
             await Until(()=>Native.GetForegroundWindow()==hwnd&&Focus().guard,3000,"top_level_control: owned frontend did not become foreground");
             long injectionBefore=bridge.LastInjectionTrace?.Sequence??0;Array.Clear(pad.VirtualActions);pad.VirtualActions[4]=true;
