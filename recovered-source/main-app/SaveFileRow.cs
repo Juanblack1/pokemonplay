@@ -13,6 +13,8 @@ internal sealed class SaveFileRow : BufferedPanel
 		Height = 60;
 		Margin = new Padding(0, 0, 0, 5);
 		BackColor = Color.Transparent;
+		AccessibleName = file.Name;
+		AccessibleRole = AccessibleRole.ListItem;
 	}
 
 	protected override void OnPaint(PaintEventArgs e)
@@ -24,8 +26,17 @@ internal sealed class SaveFileRow : BufferedPanel
 		}
 		PaintTools.DrawFileIcon(e.Graphics, new Rectangle(12, 11, 18, 21), AppTheme.BlueSoft);
 		TextRenderer.DrawText(e.Graphics, file.Name, AppTheme.Body, new Rectangle(43, 8, Math.Max(80, Width - 192), 24), AppTheme.Text, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-		TextRenderer.DrawText(e.Graphics, FormatSize(file.Length), AppTheme.Caption, new Rectangle(43, 34, 95, 20), AppTheme.TextMuted, TextFormatFlags.NoPadding);
-		TextRenderer.DrawText(e.Graphics, file.LastWriteTime.ToString("dd/MM/yyyy HH:mm"), AppTheme.Caption, new Rectangle(Math.Max(145, Width - 135), 20, 128, 24), AppTheme.TextSecondary, TextFormatFlags.Right | TextFormatFlags.NoPadding);
+		string size="Indisponível",date="";
+		bool available=false;
+		try
+		{
+			file.Refresh();
+			if(file.Exists){size=FormatSize(file.Length);date=file.LastWriteTime.ToString("dd/MM/yyyy HH:mm");available=true;}
+		}
+		catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.Security.SecurityException) { }
+		AccessibleDescription=available?size+" · "+date:"Arquivo indisponível. Selecione o jogo novamente depois de restaurar o arquivo ou o acesso à pasta.";
+		TextRenderer.DrawText(e.Graphics, size, AppTheme.Caption, new Rectangle(43, 34, Math.Max(95,Width-60), 20), available?AppTheme.TextMuted:AppTheme.Red, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+		TextRenderer.DrawText(e.Graphics, date, AppTheme.Caption, new Rectangle(Math.Max(145, Width - 135), 20, 128, 24), AppTheme.TextSecondary, TextFormatFlags.Right | TextFormatFlags.NoPadding);
 	}
 
 	private static string FormatSize(long bytes)
