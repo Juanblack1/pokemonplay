@@ -40,6 +40,19 @@ jobs:
       - name: Verificar execução e entrada no core GBA real
         shell: pwsh
         run: python ./recovered-source/tools/probe-libretro.py --core '${{ runner.temp }}/pokemonplay-emulators/Emulators/RetroArch/cores/mgba_libretro.dll' --output '${{ runner.temp }}/pokemonplay-gba-probe' --frames 90
+      - name: Verificar programa original e entrada no core DS real
+        shell: pwsh
+        timeout-minutes: 3
+        run: python ./recovered-source/tools/probe-libretro.py --system ds --core '${{ runner.temp }}/pokemonplay-emulators/Emulators/RetroArch/cores/melondsds_libretro.dll' --output '${{ runner.temp }}/pokemonplay-ds-probe' --frames 30
+      - name: Guardar evidências dos cores originais
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: original-core-evidence
+          path: |
+            ${{ runner.temp }}/pokemonplay-gba-probe/*.json
+            ${{ runner.temp }}/pokemonplay-ds-probe/*.json
+            ${{ runner.temp }}/pokemonplay-ds-probe/*.png
       - name: Verificar a aplicação e o atualizador
         shell: pwsh
         run: dotnet run --configuration Release --project ./recovered-source/tests/ProfilesCheck/Check.csproj

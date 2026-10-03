@@ -45,6 +45,7 @@ jobs:
           $failure = Get-Content -Raw '${{ runner.temp }}/ds-negative/native-failure.json' | ConvertFrom-Json
           if ($failure.error -ne 'DS guest framebuffer did not follow released/A/released input' -or $failure.guest_input.Count -ne 3 -or $failure.guest_input[1].passed) { throw 'O controle negativo falhou por outra razão.' }
           Write-Output 'PASS guest oracle rejects absent input.'
+          exit 0
       - name: Guardar evidências DS originais
         if: always()
         uses: actions/upload-artifact@v6
