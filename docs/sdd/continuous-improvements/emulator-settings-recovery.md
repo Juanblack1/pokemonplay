@@ -15,3 +15,8 @@ Acceptance candidates:
 8. Publish only after application, package/updater/installer gates pass on final head, previous release is public/verified, and release artifact hashes/version are checked.
 
 Next action: after C12 release, isolated codex branch; add red reproduction to ProfilesCheck and run Windows CI. If hypothesis is contradicted, revise this candidate before implementation. Research is not needed to establish this local file-handling defect; use primary docs only if behavior contracts become uncertain.
+
+## Reproduction and implementation
+Windows CI37100849431 at4162cc0 reproduced FileNotFoundException for absent legacy visualboyadvance-m.exe from LauncherSettings.PrepareGame after malformed retroarch.json, despite bundled RetroArch/core fixtures. Bytes were preserved before failure. Red full37100849413 canceled after focused reproduction.
+
+Implemented recovery in memory from installed defaults for JSON null, parse/IO/access/security failures. Transient LoadWarning is JsonIgnore, displayed in the native Settings view with accessible description. No automatic persistence; successful explicit Save clears the transient warning. Valid files preserve user choice; no installed emulator produces disabled selection. Tests cover GBA/DS launch planning without executing fake binaries, original bytes, locked file/failed Save, native warning/reload after external repair, saved opt-out, and absence of bundle. Local build passed; execution evidence remains pending green CI. Publication must follow C12 and full package validation.
