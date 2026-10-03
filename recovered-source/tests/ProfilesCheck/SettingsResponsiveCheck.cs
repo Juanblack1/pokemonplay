@@ -17,7 +17,7 @@ internal static class SettingsResponsiveCheck
         File.WriteAllText(preferences, "1\n0\n100\nfalse\nfalse\ntrue\n");
         byte[] original = File.ReadAllBytes(preferences);
         using var view = new SettingsView(preferences);
-        using var host = new Form { ClientSize = new Size(760, 720) };
+        using var host = new Form { MaximumSize = new Size(2000, 1600), ClientSize = new Size(760, 720) };
         host.Controls.Add(view); host.Show(); Application.DoEvents();
         var canvas = Field(view, "canvas");
         var scroll = (Panel)canvas.Parent;
@@ -30,6 +30,13 @@ internal static class SettingsResponsiveCheck
         {
             host.ClientSize = new Size(width, 720); mode.SelectedIndex = inputMode;
             host.PerformLayout(); view.PerformLayout(); Application.DoEvents();
+            Assert(host.ClientSize.Width==width && view.Width==width,"native settings viewport matches requested width "+width);
+            foreach(string name in new[]{"restoreButton","saveButton"})
+            {
+                var button=Field(view,name);
+                Point position=view.PointToClient(button.Parent.PointToScreen(button.Location));
+                Assert(button.Visible&&position.X>=0&&position.X+button.Width<=view.ClientSize.Width,"settings footer action fits viewport: "+name+" at "+width);
+            }
             string preview = Environment.GetEnvironmentVariable("POKEMONPLAY_LIBRARY_PREVIEW");
             if (!string.IsNullOrEmpty(preview))
             {
