@@ -83,6 +83,10 @@ jobs:
       - name: Verificar execução e entrada no core GBA real
         shell: pwsh
         run: python ./recovered-source/tools/probe-libretro.py --core '${{ runner.temp }}/pokemonplay-emulators/Emulators/RetroArch/cores/mgba_libretro.dll' --output '${{ runner.temp }}/pokemonplay-gba-probe' --frames 90
+      - name: Verificar programa original e entrada no core DS real
+        shell: pwsh
+        timeout-minutes: 3
+        run: python ./recovered-source/tools/probe-libretro.py --system ds --core '${{ runner.temp }}/pokemonplay-emulators/Emulators/RetroArch/cores/melondsds_libretro.dll' --output '${{ runner.temp }}/pokemonplay-ds-probe' --frames 30
       - name: Executar ProfilesCheck
         shell: pwsh
         env:
@@ -95,6 +99,8 @@ jobs:
           name: playability-evidence
           path: |
             ${{ runner.temp }}/pokemonplay-gba-probe/*.json
+            ${{ runner.temp }}/pokemonplay-ds-probe/*.json
+            ${{ runner.temp }}/pokemonplay-ds-probe/*.png
             ${{ runner.temp }}/pokemonplay-controls-preview/*.png
       - name: Compilar e validar o pacote Windows
         shell: pwsh
