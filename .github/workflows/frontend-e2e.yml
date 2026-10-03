@@ -1,0 +1,66 @@
+name: Verificar launcher e frontend reais
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'recovered-source/main-app/**'
+      - 'recovered-source/tests/FrontendE2E/**'
+      - 'recovered-source/tests/FrontendSupervisorCheck/**'
+      - 'recovered-source/tools/original_gba_frontend_test.py'
+      - 'recovered-source/tools/test_original_gba_frontend.py'
+      - 'recovered-source/tools/verify-frontend-e2e.ps1'
+      - '.github/workflows/frontend-e2e.yml'
+permissions:
+  contents: read
+jobs:
+  launcher-frontend:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verificar oráculo e guards sem execução nativa
+        shell: pwsh
+        run: |
+          python -B -m unittest discover -s ./recovered-source/tools -p test_original_gba_frontend.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Oráculo original falhou.' }
+          ./recovered-source/tests/FrontendSupervisorCheck/verify-guards.ps1
+      - name: Obter a distribuição pública conferida
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'frontend-public-bundle'
+          New-Item -ItemType Directory -Path $fixture | Out-Null
+          gh release download v171.10.7 --repo '${{ github.repository }}' --pattern pokemon-play-win-x64-update.zip --dir $fixture
+          if ($LASTEXITCODE -ne 0) { throw 'Download da distribuição falhou.' }
+          $zip = Join-Path $fixture 'pokemon-play-win-x64-update.zip'
+          if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '6f57a01804e76671e0095368d0665c04a105fb378fde4ab837ed631bf82f7654') { throw 'Digest da distribuição incorreto.' }
+          "FRONTEND_BUNDLE=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Preparar apphost e duas fixtures isoladas
+        shell: pwsh
+        run: |
+          $commit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Commit indisponível.' }
+          ./recovered-source/tools/verify-frontend-e2e.ps1 -Mode Prepare -OutputDirectory '${{ runner.temp }}/frontend-e2e' -BundleZip $env:FRONTEND_BUNDLE -BundleSha256 '6f57a01804e76671e0095368d0665c04a105fb378fde4ab837ed631bf82f7654' -ReleaseTag v171.10.7 -Commit $commit
+      - name: Verificar Play, foco, pixels e pressionar/soltar reais
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          $commit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Commit indisponível.' }
+          ./recovered-source/tools/verify-frontend-e2e.ps1 -Mode Run -OutputDirectory '${{ runner.temp }}/frontend-e2e' -Commit $commit
+      - name: Guardar todas as evidências, incluindo falhas
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: frontend-e2e-evidence
+          path: |
+            ${{ runner.temp }}/frontend-e2e/plan.json
+            ${{ runner.temp }}/frontend-e2e/result.json
+            ${{ runner.temp }}/frontend-e2e/run-*/evidence/**

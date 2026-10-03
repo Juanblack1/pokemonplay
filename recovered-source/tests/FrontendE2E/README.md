@@ -1,0 +1,15 @@
+# FrontendE2E
+
+Build `FrontendE2E.csproj` for Windows x64, publish self-contained, and copy the entire output into a fresh owned root's `PokemonPlayRuntime`. Assembly name `Check` uses the existing application friend declaration. Never run from the build directory or a real installation.
+
+```text
+Check.exe --root <ownedroot> --scenario positive|suppressed-a --port <49152..65535> --commit <40-hex-sha>
+```
+
+The external supervisor seeds bundled binaries/core, original `roms/diagnostic.gba`, one matching imported catalog entry, valid mode3 profile/preset1, owned TEMP/TMP/session environment and clears the eight LIBRETRO path variables in its child environment. Base RetroArch config must be absent (production creates it) or contain only config_save_on_exit. Session instrumentation happens synchronously in actual contentHost.ControlAdded, before the host Shown starts the frontend. No production hooks or ProcessStarter replacement.
+
+Artifacts are atomic `evidence/result.json`, `progress.json`, `child-identity.json` (pid/startUtc/path/hash), launch/config/hash evidence, observations and paired PNG files. Schema1 results use checks map with `{status,reason}`; phase names are `neutral`, `A-held`, `A-release`, `B-held`, `B-release`. Positive requires all five phases; suppressed-a deliberately leaves B phases not_run and reports A-held/guest_hold_color failed with negative_validity passed only after live fullmask0/cadence/eligible guard and real raw A hold. Release neutral is required before cleanup can pass. Each scenario needs a fresh root/process.
+
+Native execution is CI-only. Build success proves neither guest execution nor focus, capture, input or driver correctness. Effective driver/core-options evidence must appear in real RetroArch logs; missing/unrecognized lines fail rather than infer a pass. Mouse capture/focus failures from the real embedded host remain failures. Capture timeout ends the run, without sending another request. External supervisor must enforce independent120s deadline and reconcile exact owned identity if the STA stalls; this harness does not kill processes on timeout. Its cleanup uses the real host bounded close and a separate process exit observer. Emergency process kill is never guest key-up proof.
+
+Decoder is independent C# logic for S1 Mode4 protocol: yellow border, four-color magic, ten button regions and32 counter regions. It checks every canonical interior pixel (inset2) of button/counter/magic regions and every border pixel (inset0), mapped into the composed viewport. Color thresholds match S1: fixed-color tolerance16/channel, red/blue active channel>=240 and other channels<=16, counter white channels>=240 or black channels<=16. Desktop calibration uses the visible yellow border with16/channel tolerance and no driver/smoothing override. Center-only observations cannot accept mixed regions. It requires two distinct advancing paired counters, circular inter-layer distance<=12 and time<=500ms. If calibration/counter/default driver support fails, retain artifacts and diagnose; do not relax thresholds silently.

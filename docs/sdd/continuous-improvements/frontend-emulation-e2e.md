@@ -94,3 +94,10 @@ The eight LIBRETRO environment names above were confirmed in the pinned configur
 
 S1 evidence: root reran Python -B unittest discover for test_original_gba_frontend.py:10 tests passed. Mode4 double-buffer payload3300bytes in deterministic32KiB original ROM; ten input regions, four-color magic/yellow border and32 uint32counter blocks. SHA25641be7710d767c385f5d8dc7a05b37ebde060ccc74c7b59e61455eb31b157d812. ARM execution, renderer timing and every-VBlank publication remain not_run until CI.
 
+
+## Current verification checkpoint
+
+C14/v171.10.7 public release run37104169650 completed successfully, exact merge df36b8885664df4d2d7df6ccb6a224f5b1406221. Public setup/update downloaded and compared with sidecars/API digests and manifest. Update fixture SHA2566f57a01804e76671e0095368d0665c04a105fb378fde4ab837ed631bf82f7654 (451850894bytes). The ordered-publication prerequisite is closed.
+
+C15 harness initial Release build passed without warnings/errors; this is compile evidence only. Independent QA required correction of negative semantics, key-release state and decoder fidelity before native CI. Root supervisor parses and25pure guard checks pass (duplicate/missing scenario, root/nonce/hash changes, absent/failed cleanup and emergency/timeout cannot produce green). Dedicated workflow pins the verified public bundle and uploads failure evidence. No local native run, no frontend success, no product defect reproduction or C15 convergence claimed.
+Initial native CI is evidence collection: R7 effective-input-driver proof remains intentionally not_run rather than accepting generic pre-init log mentions. The current gate cannot declare convergence until this contract is closed. Positive/default and negative runtime observations are still required; a red caused by this known instrumentation gap is not a reproduced product defect.
