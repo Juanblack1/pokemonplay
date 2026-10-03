@@ -5,6 +5,7 @@ on:
     paths:
       - 'recovered-source/main-app/**'
       - 'recovered-source/tests/ProfilesCheck/**'
+      - 'recovered-source/tools/verify-ci-embedding-display.ps1'
       - '.github/workflows/engineering-cycle.yml'
 permissions:
   contents: read
