@@ -15,6 +15,8 @@ internal sealed class LibraryView : BufferedPanel
     private ImportedGameAvailability importedAvailability;
 
 	private readonly ThemeInput search;
+    private readonly Timer searchDelay = new(){Interval=150};
+    private bool searchPending;
 
 	private readonly ThemeSelect systemFilter;
 	private readonly ThemeButton favoriteFilter = new("☆ Favoritos", ButtonKind.Secondary);
@@ -90,10 +92,8 @@ internal sealed class LibraryView : BufferedPanel
 			LayoutGenerationChips();
 		};
 		panel.Resize += value;
-		search.TextChanged += (object param0, EventArgs param1) =>
-		{
-			Rebuild();
-		};
+        searchDelay.Tick+=(_,_)=>Rebuild();
+        search.TextChanged+=(_,_)=>ScheduleSearch();
 		systemFilter.SelectedIndexChanged += (object param0, EventArgs param1) =>
 		{
 			Rebuild();
@@ -108,10 +108,21 @@ internal sealed class LibraryView : BufferedPanel
 		Rebuild();
 		VisibleChanged += (_, _) =>
 		{
-			if (Visible && (recentOnly || mostPlayedOnly) && IsHandleCreated)
-				BeginInvoke((MethodInvoker)Rebuild);
+            if(!Visible)searchDelay.Stop();
+			if (Visible && (searchPending || recentOnly || mostPlayedOnly) && IsHandleCreated)
+				BeginInvoke((MethodInvoker)(()=>{if(!IsDisposed&&!Disposing)Rebuild();}));
 		};
 	}
+    private void ScheduleSearch()
+    {
+        if(!IsHandleCreated||!search.ContainsFocus||string.IsNullOrWhiteSpace(search.Text)){Rebuild();return;}
+        searchPending=true;searchDelay.Stop();if(Visible)searchDelay.Start();
+    }
+    protected override void Dispose(bool disposing)
+    {
+        if(disposing)searchDelay.Dispose();
+        base.Dispose(disposing);
+    }
 
 	private Panel CreateContentArea()
 	{
@@ -390,6 +401,7 @@ internal sealed class LibraryView : BufferedPanel
 
 	protected override bool ProcessCmdKey(ref Message message, Keys keyData)
 	{
+        if(keyData==Keys.Enter&&search.ContainsFocus){Rebuild();return true;}
 		if (keyData == Keys.Escape && search.ContainsFocus && search.Text.Length > 0)
 		{
 			search.Text = string.Empty;
@@ -433,6 +445,7 @@ internal sealed class LibraryView : BufferedPanel
 
 	private void Rebuild()
 	{
+        searchDelay.Stop();searchPending=false;
 		if (content == null)
 		{
 			return;

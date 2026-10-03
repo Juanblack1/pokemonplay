@@ -530,6 +530,8 @@ internal static class GameLaunchHistoryCheck
             var systemFilter = Get(library, "systemFilter");
             systemFilter.GetType().GetProperty("SelectedIndex").SetValue(systemFilter, 2);
             searchBox.Text = "platinum";
+            var searchDeadline=System.Diagnostics.Stopwatch.StartNew();
+            while(Descendants(library).OfType<Control>().Count(control=>control.GetType().Name=="GameCard")!=1&&searchDeadline.ElapsedMilliseconds<2000){Application.DoEvents();System.Threading.Thread.Sleep(10);}
             Assert(Descendants(library).OfType<Control>().Count(control => control.GetType().Name == "GameCard") == 1, "library search narrows results within the active system filter");
             object[] escapeArguments = { Message.Create(IntPtr.Zero, 0x100, IntPtr.Zero, IntPtr.Zero), Keys.Escape };
             bool escapeHandled = (bool)processCmdKey.Invoke(library, escapeArguments);
