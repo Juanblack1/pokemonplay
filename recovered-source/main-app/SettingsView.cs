@@ -347,26 +347,23 @@ internal sealed class SettingsView : BufferedPanel
 	private void CaptureKey(int index)
 	{
         if(index>=10){using var dialog=new KeyCaptureDialog(Actions[index]);if(dialog.ShowDialog(FindForm())==DialogResult.OK){var used=InputDeviceProfile.KeyboardKeys(preset.SelectedIndex,customKeys).Concat(controlsCard.Profile.ExtraKeys.Where((_,i)=>i!=index-10));if(used.Contains(dialog.CapturedKey)){status.Text="Essa tecla já está atribuída.";return;}controlsCard.Profile.ExtraKeys[index-10]=dialog.CapturedKey;UpdateMapping();status.Text="Tecla alterada. Salve as configurações.";}return;}
-		if (preset.SelectedIndex != 5)
-		{
-			var current=InputDeviceProfile.KeyboardKeys(preset.SelectedIndex,customKeys);
-            Array.Copy(current,customKeys,10);
-            preset.SelectedIndex=5;
-		}
 		using KeyCaptureDialog keyCaptureDialog = new KeyCaptureDialog(Actions[index]);
 		if (keyCaptureDialog.ShowDialog(FindForm()) != DialogResult.OK)
 		{
 			return;
 		}
-		for (int i = 0; i < customKeys.Length; i++)
+        var candidate=InputDeviceProfile.KeyboardKeys(preset.SelectedIndex,customKeys);
+		for (int i = 0; i < candidate.Length; i++)
 		{
-			if ((i != index && string.Equals(customKeys[i], keyCaptureDialog.CapturedKey, StringComparison.OrdinalIgnoreCase)) || controlsCard.Profile.ExtraKeys.Contains(keyCaptureDialog.CapturedKey))
+			if ((i != index && string.Equals(candidate[i], keyCaptureDialog.CapturedKey, StringComparison.OrdinalIgnoreCase)) || controlsCard.Profile.ExtraKeys.Contains(keyCaptureDialog.CapturedKey))
 			{
 				status.Text = "Essa tecla já está atribuída a outra ação.";
 				return;
 			}
 		}
-		customKeys[index] = keyCaptureDialog.CapturedKey;
+        candidate[index]=keyCaptureDialog.CapturedKey;
+        Array.Copy(candidate,customKeys,customKeys.Length);
+        preset.SelectedIndex=5;
 		UpdateMapping();
 		status.Text = "Tecla alterada. Clique em salvar para manter.";
 	}
