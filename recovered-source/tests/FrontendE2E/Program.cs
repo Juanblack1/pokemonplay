@@ -306,10 +306,10 @@ internal sealed class FrontendRun:IDisposable
             if(detached){
                 Native.GetWindowThreadProcessId(hwnd,out uint pid);
                 if(pid!=child.Id||child.HasExited)throw new InvalidDataException("top_level_control: owned process identity lost before re-embed");
-                IntPtr parentResult=Native.SetParent(hwnd,panel.Handle);int parentError=Marshal.GetLastPInvokeError();
-                if(parentError!=0||parentResult!=IntPtr.Zero||Native.GetParent(hwnd)!=panel.Handle)throw new InvalidDataException("top_level_control: failed to restore panel parent");
                 int styleResult=Native.SetWindowLong(hwnd,-16,unchecked((int)embeddedStyle));int styleError=Marshal.GetLastPInvokeError();
                 if(styleResult==0&&styleError!=0||unchecked((uint)Native.GetWindowLong(hwnd,-16))!=embeddedStyle)throw new InvalidDataException("top_level_control: failed to restore child style");
+                IntPtr parentResult=Native.SetParent(hwnd,panel.Handle);int parentError=Marshal.GetLastPInvokeError();
+                if(parentError!=0||parentResult!=IntPtr.Zero||Native.GetParent(hwnd)!=panel.Handle)throw new InvalidDataException("top_level_control: failed to restore panel parent");
                 if(!Native.SetWindowPos(hwnd,IntPtr.Zero,0,0,panel.ClientSize.Width,panel.ClientSize.Height,0x74))throw new Win32Exception(Marshal.GetLastPInvokeError(),"top_level_control: embedded bounds update failed");Native.ShowWindow(hwnd,5);
                 restored=Native.GetParent(hwnd)==panel.Handle&&Native.IsChild(panel.Handle,hwnd)&&(unchecked((uint)Native.GetWindowLong(hwnd,-16))&0x40000000)!=0;
                 if(!restored)throw new InvalidDataException("top_level_control: re-embedded HWND did not pass native checks");
