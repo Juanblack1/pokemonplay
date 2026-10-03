@@ -52,7 +52,7 @@ internal sealed class FrontendRun:IDisposable
     readonly System.Windows.Forms.Timer sampler=new(){Interval=100};
     GameHostForm host;ControllerVisualizer pad;Process child;IntPtr hwnd;string childPath;DateTime childStart;
     Exception callbackFailure,sampleFailure;int held=-1;bool rawNegative;Point mousePoint;long lastRequest=-2000;
-    uint? internalCounter,desktopCounter;object configEvidence,identity;string current="startup";bool keyReleaseProved;long phaseStarted,lastEvidencePersist;
+    uint? internalCounter,desktopCounter;object configEvidence,identity;string current="startup";bool keyReleaseProved;long phaseStarted,lastEvidencePersist;int desktopDecodeAttempts,desktopDecodeFailures;string lastDesktopDecodeError;
     static readonly JsonSerializerOptions JsonOptions=new(){WriteIndented=true};
     internal FrontendRun(string root,string scenario,int port,string commit)
     {
@@ -204,10 +204,14 @@ internal sealed class FrontendRun:IDisposable
                 if(!pad.Capture||!pad.Actions[held]||Field<int>(pad,"mouseAction")!=held)throw new InvalidDataException("focus: raw hold/capture lost");
                 if(!focus.guard)throw new InvalidDataException("focus: exact bridge guard false during virtual hold");
             }
-            var bounds=Native.Bounds(hwnd);using var screenshot=new Bitmap(bounds.Width,bounds.Height);
+            var bounds=Native.Bounds(hwnd);var panel=Field<Panel>(host,"gamePanel");
+            Rectangle padBounds=pad.RectangleToScreen(pad.ClientRectangle);
+            events.Add(new{kind="composition-geometry",timeMs=wall.ElapsedMilliseconds,phase=current,childBounds=bounds,panelBounds=panel.RectangleToScreen(panel.ClientRectangle),padBounds,childPadOverlap=Rectangle.Intersect(bounds,padBounds),panelChildIndex=host.Controls.GetChildIndex(panel),padChildIndex=host.Controls.GetChildIndex(pad),padVisible=pad.Visible,childParent=Native.GetAncestor(hwnd,1).ToInt64()});
+            using var screenshot=new Bitmap(bounds.Width,bounds.Height);
             using(var g=Graphics.FromImage(screenshot))g.CopyFromScreen(bounds.Location,Point.Empty,bounds.Size,CopyPixelOperation.SourceCopy);
-            try{var decoded=GuestDecoder.Decode(screenshot,true);ring.Add((wall.ElapsedMilliseconds,decoded,(Bitmap)screenshot.Clone()));}
-            catch(InvalidDataException error){string undecoded=Path.Combine(evidence,current+"-undecoded-desktop.png");if(!File.Exists(undecoded)){screenshot.Save(undecoded);events.Add(new{kind="desktop-decode",phase=current,error=error.Message,path=undecoded});}}
+            desktopDecodeAttempts++;
+            try{var decoded=GuestDecoder.Decode(screenshot,true);ring.Add((wall.ElapsedMilliseconds,decoded,(Bitmap)screenshot.Clone()));events.Add(new{kind="desktop-decoded",timeMs=wall.ElapsedMilliseconds,phase=current,frame=decoded});}
+            catch(InvalidDataException error){desktopDecodeFailures++;lastDesktopDecodeError=error.Message;events.Add(new{kind="desktop-rejected",timeMs=wall.ElapsedMilliseconds,phase=current,error=error.Message,width=screenshot.Width,height=screenshot.Height});string undecoded=Path.Combine(evidence,current+"-undecoded-desktop.png");if(!File.Exists(undecoded)){screenshot.Save(undecoded);events.Add(new{kind="desktop-decode",phase=current,error=error.Message,path=undecoded});}}
             while(ring.Count>0&&wall.ElapsedMilliseconds-ring[0].Time>2000){ring[0].Image.Dispose();ring.RemoveAt(0);}
             Write("progress.json",new{schema=1,scenario,phase=current,timeMs=wall.ElapsedMilliseconds,identity,focus,checks});
             if(wall.ElapsedMilliseconds-lastEvidencePersist>=1000){Write("observations.json",events);lastEvidencePersist=wall.ElapsedMilliseconds;}
@@ -293,7 +297,7 @@ internal sealed class FrontendRun:IDisposable
         Progress(phase);object endpoint=Native.UdpOwner(port,child.Id);Set("capture_identity","passed","UDP endpoint belongs to spawned identity");
         if(child.StartTime.ToUniversalTime()!=childStart||child.HasExited)throw new InvalidDataException("process_identity: lost owned process");
         string inbox=Path.Combine(root,"captures","inbox");if(Directory.EnumerateFiles(inbox).Any())throw new InvalidDataException("capture_ambiguous: inbox not empty");
-        string request=Guid.NewGuid().ToString("N");long sent=wall.ElapsedMilliseconds;lastRequest=sent;
+        string request=Guid.NewGuid().ToString("N");string prefix=phase+"-"+request;long sent=wall.ElapsedMilliseconds;lastRequest=sent;
         using(var udp=new UdpClient()){byte[] data=System.Text.Encoding.ASCII.GetBytes("SCREENSHOT\n");await udp.SendAsync(data,new IPEndPoint(IPAddress.Loopback,port));}
         string path=null;GuestFrame frame=default;long arrival=0;
         while(wall.ElapsedMilliseconds<deadline){
@@ -301,14 +305,22 @@ internal sealed class FrontendRun:IDisposable
             if(files.Length==1){
                 try{using var stream=new FileStream(files[0],FileMode.Open,FileAccess.Read,FileShare.None);using var image=new Bitmap(stream);frame=GuestDecoder.Decode(image,false);path=files[0];arrival=wall.ElapsedMilliseconds;break;}
                 catch(IOException){}catch(ArgumentException){}
+                catch(InvalidDataException error){
+                    string rejected=prefix+"-undecoded-internal.png";File.Copy(files[0],Path.Combine(evidence,rejected));
+                    events.Add(new{kind="internal-decode-rejected",phase,request,sentMs=sent,observedMs=wall.ElapsedMilliseconds,error=error.Message,internalPng=rejected});Write("observations.json",events);throw;
+                }
             }
             await Task.Delay(50);
         }
         if(path==null)throw new TimeoutException("capture_timeout: run invalidated; no retry");
+        // Preserve the actual fresh response and decoded frame before pairing can fail.
+        string internalPng=prefix+"-internal.png";File.Move(path,Path.Combine(evidence,internalPng));
+        events.Add(new{kind="capture-received",phase,request,sentMs=sent,arrivalMs=arrival,internalFrame=frame,internalPng,endpoint,focus=Focus(),desktopDecodeAttempts,desktopDecodeFailures,lastDesktopDecodeError,decodedCandidates=ring.Select(candidate=>new{timeMs=candidate.Time,timeDeltaMs=arrival-candidate.Time,counterDistance=GuestDecoder.Distance(frame.Counter,candidate.Frame.Counter),candidate.Frame.Mask,candidate.Frame.Counter,candidate.Frame.Viewport}).ToArray()});
+        Write("observations.json",events);
         var matches=ring.Where(r=>r.Time>=phaseStarted&&Math.Abs(arrival-r.Time)<=500&&GuestDecoder.Distance(frame.Counter,r.Frame.Counter)<=12&&r.Frame.Mask==frame.Mask).OrderBy(r=>GuestDecoder.Distance(frame.Counter,r.Frame.Counter)).ToArray();
-        if(matches.Length==0)throw new InvalidDataException("frame_missing_or_stale: no composed pair within 12 frames/500ms");
-        var match=matches[0];string prefix=phase+"-"+request;
-        File.Move(path,Path.Combine(evidence,prefix+"-internal.png"));match.Image.Save(Path.Combine(evidence,prefix+"-desktop.png"));
+        if(matches.Length==0)throw new InvalidDataException("frame_missing_or_stale: no composed pair within 12 frames/500ms; decoded candidates="+ring.Count+"; last desktop rejection="+(lastDesktopDecodeError??"none"));
+        var match=matches[0];
+        match.Image.Save(Path.Combine(evidence,prefix+"-desktop.png"));
         events.Add(new{kind="capture",phase,request,sentMs=sent,arrivalMs=arrival,desktopMs=match.Time,internalFrame=frame,desktopFrame=match.Frame,endpoint,childBounds=Native.Bounds(hwnd),dpi=Native.GetDpiForWindow(hwnd),focus=Focus(),internalPng=prefix+"-internal.png",desktopPng=prefix+"-desktop.png"});
         return(frame,match.Frame);
     }

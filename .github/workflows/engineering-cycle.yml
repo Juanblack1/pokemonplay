@@ -19,6 +19,36 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - name: Verificar encerramento de sessão com falha e filho GUI próprio
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          dotnet build --configuration Release ./recovered-source/tests/ProfilesCheck/Check.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $fixture = Join-Path '${{ runner.temp }}' 'embedding-lifecycle'
+          $check = (Resolve-Path './recovered-source/tests/ProfilesCheck/bin/Release/net10.0-windows/Check.exe').Path
+          $stdout = Join-Path '${{ runner.temp }}' 'embedding-lifecycle.stdout.log'
+          $stderr = Join-Path '${{ runner.temp }}' 'embedding-lifecycle.stderr.log'
+          $child = Start-Process -FilePath $check -ArgumentList @('--embedding-lifecycle', ('"' + $fixture + '"')) -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (-not $child.WaitForExit(120000)) {
+            try {
+              foreach ($file in @(Get-ChildItem -LiteralPath $fixture -Filter 'parent-owned.json' -Recurse -ErrorAction SilentlyContinue)) {
+                $identity = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+                $owned = Get-Process -Id $identity.Pid -ErrorAction SilentlyContinue
+                $ownedPath = [IO.Path]::GetFullPath($identity.Executable)
+                if ($owned -and $ownedPath.StartsWith($fixture + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -and $owned.StartTime.ToUniversalTime().Ticks -eq $identity.StartUtcTicks -and $owned.Path -eq $ownedPath) {
+                  $owned.Kill()
+                  $null = $owned.WaitForExit(5000)
+                }
+              }
+            } finally {
+              if (-not $child.HasExited) { $child.Kill(); $null = $child.WaitForExit(5000) }
+            }
+            throw 'Lifecycle watchdog expired; owned emergency cleanup is a failure.'
+          }
+          Get-Content -LiteralPath $stdout
+          Get-Content -LiteralPath $stderr
+          if ($child.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $fixture 'passed'))) { throw 'Lifecycle checks failed.' }
       - name: Compilar e testar aplicação e atualizador
         shell: pwsh
         env:
@@ -36,3 +66,6 @@ jobs:
             ${{ runner.temp }}/checks.log
             ${{ runner.temp }}/controls-preview/*.png
             ${{ runner.temp }}/library-preview/*.png
+            ${{ runner.temp }}/embedding-lifecycle.stdout.log
+            ${{ runner.temp }}/embedding-lifecycle.stderr.log
+            ${{ runner.temp }}/embedding-lifecycle/**

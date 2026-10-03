@@ -107,9 +107,9 @@ internal static class RetroAchievementsCheck
             .Single(constructor => constructor.GetParameters().Length == 8);
         Type historyType = app.GetType("GameLaunchHistoryService");
         Call(historyType, "TryRecordLaunch", null, uiRoot, "FireRed", DateTimeOffset.UtcNow);
-        var host = (Form)hostConstructor.Invoke(new object[] { "missing-retroarch.exe", "retroarch", string.Empty, "FireRed", "Principal", uiRoot, Path.Combine(root, "session.cfg"), 0 });
-        var sessionClock = System.Diagnostics.Stopwatch.StartNew();
-        hostType.GetField("sessionClock", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(host, sessionClock);
+        string syntheticDirectory=Path.Combine(root,"synthetic-active-session-"+Guid.NewGuid().ToString("N"));
+        string syntheticExecutable=GameEmbeddingLifecycleCheck.PrepareSyntheticExecutable(syntheticDirectory);
+        var host = (Form)hostConstructor.Invoke(new object[] { syntheticExecutable, Path.GetFileNameWithoutExtension(syntheticExecutable), "--embedding-lifecycle-child \""+syntheticDirectory+"\"", "FireRed", "Principal", uiRoot, Path.Combine(root, "session.cfg"), 0 });
         using (var launcher = new LauncherForm(root) { UpdatesEnabled = false })
         {
             launcher.Show();
@@ -117,9 +117,11 @@ internal static class RetroAchievementsCheck
             Application.DoEvents();
             Control libraryPage = ((Control)Get(launcher, "contentHost")).Controls[0];
             Call(launcher.GetType(), "RegisterGameSession", launcher, host);
+            using var syntheticChild=new GameEmbeddingLifecycleCheck.AttachedChild(host,syntheticDirectory,syntheticExecutable);
+            var sessionClock=(System.Diagnostics.Stopwatch)Get(host,"sessionClock");
             var contentHost = (Control)Get(launcher, "contentHost");
             Assert(!host.TopLevel && ReferenceEquals(host.Parent, contentHost) && host.Visible && launcher.Controls.OfType<Panel>().Any(panel => panel.Dock == DockStyle.Top && panel.Visible) && launcher.Controls.OfType<Panel>().Any(panel => panel.Dock == DockStyle.Bottom && panel.Visible),
-                "RetroArch runs inside the launcher while the app top bar and navigation remain visible");
+                "synthetic active session host sits inside the launcher while the app top bar and navigation remain visible");
             Label pageTitle = (Label)Get(launcher, "pageTitle");
             string longGameTitle = "Pokémon Mystery Dungeon: Explorers of Sky — Special Edition";
             pageTitle.Text = longGameTitle;
@@ -147,28 +149,29 @@ internal static class RetroAchievementsCheck
                 "long paused-game title remains available to accessibility while the page title yields space to its controls");
             object historyEntry = ((System.Collections.IEnumerable)Call(historyType, "Load", null, uiRoot)).Cast<object>().Single();
             long recordedSeconds = (long)historyEntry.GetType().GetProperty("TotalPlayTimeSeconds").GetValue(historyEntry);
-            Assert(recordedSeconds >= 1, "returning to the launcher persists the active session time without waiting for emulator exit");
+            Assert(recordedSeconds >= 1, "returning to the launcher persists synthetic active session time while its owned child remains alive");
             Call(launcher.GetType(), "ResumeGameSession", launcher);
             Application.DoEvents();
-            Assert(host.Visible && !resumeButton.Visible && !endButton.Visible && sessionClock.IsRunning, "resuming the RetroArch session hides launcher actions, restores the game host and restarts active play time");
+            Assert(host.Visible && !resumeButton.Visible && !endButton.Visible && sessionClock.IsRunning, "resuming the synthetic active session hides launcher actions, restores the game host and restarts active play time");
             Call(launcher.GetType(), "Navigate", launcher, "settings");
             Assert(!host.Visible && resumeButton.Visible && ((Label)Get(launcher, "pageTitle")).Text == "Configurações",
-                "using launcher navigation pauses the embedded RetroArch session and keeps a resume action in the app bar");
+                "using launcher navigation pauses the synthetic active session and keeps a resume action in the app bar");
             Call(launcher.GetType(), "ResumeGameSession", launcher);
             Application.DoEvents();
             Call(hostType, "ReturnToMenu", host);
             Assert(!sessionClock.IsRunning, "returning to the launcher stops active play-time counting");
-            Call(launcher.GetType(), "EndGameSession", launcher);
-            Assert(host.IsDisposed && !resumeButton.Visible && !endButton.Visible, "ending a paused RetroArch session closes the host and clears its launcher actions");
+            syntheticChild.ConfirmRegisteredClose(host,()=>Call(launcher.GetType(), "EndGameSession", launcher));
+            Assert(host.IsDisposed && !resumeButton.Visible && !endButton.Visible, "ending a paused synthetic active session normally exits its owned child, closes the host and clears its launcher actions");
 
             var exitHost = (Form)hostConstructor.Invoke(new object[] { "missing-retroarch.exe", "retroarch", string.Empty, "FireRed", "Principal", uiRoot, Path.Combine(root, "exit-session.cfg"), 0 });
             Call(launcher.GetType(), "RegisterGameSession", launcher, exitHost);
             exitHost.Show();
             Application.DoEvents();
             Call(hostType, "ReturnToMenu", exitHost);
+            Assert((bool)Get(exitHost,"launchFailed") && Get(exitHost,"emulator")==null && !resumeButton.Visible && !endButton.Visible, "real failed startup cannot become a resumable synthetic active session");
             launcher.Close();
             Application.DoEvents();
-            Assert(exitHost.IsDisposed && launcher.IsDisposed, "exiting the launcher closes its paused failed session and completes the original exit action");
+            Assert(exitHost.IsDisposed && launcher.IsDisposed, "exiting the launcher closes its failed startup session and completes the original exit action");
         }
 
         string tempDirectory = Path.Combine(root, "retroarch-session-fixtures");
