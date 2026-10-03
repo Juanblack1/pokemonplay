@@ -35,10 +35,16 @@ internal static class FirstUseCheck
         Type libraryType = app.GetType("LibraryView");
         using (var library = (Control)Activator.CreateInstance(libraryType, new object[] { null, fixture }))
         {
+            var hero = (Control)Field(library, "heroBanner");
+            Assert(hero.AccessibleDescription == "10 jogos prontos para jogar · selecione uma aventura", "library banner exposes the full catalog count before filtering");
             Assert(Descendants(library).Count(control => Equals(control.Tag, "library-getting-started")) == 1, "clean library provides actionable first-use guidance");
             ((Control)Field(library, "search")).Text = "not-a-game";
+            Assert(hero.AccessibleDescription == "Exibindo 0 de 10 jogos encontrados", "library banner announces zero search results");
             Assert(!Descendants(library).Any(control => Equals(control.Tag, "library-getting-started")), "first-use guidance does not replace filtered empty states");
+            ((Control)Field(library, "search")).Text = "Emerald";
+            Assert(hero.AccessibleDescription == "Exibindo 1 de 10 jogos encontrados", "library banner announces the count for one matching game");
             ((Control)Field(library, "search")).Text = "";
+            Assert(hero.AccessibleDescription == "10 jogos prontos para jogar · selecione uma aventura", "clearing search restores the unfiltered library summary");
             Assert(Descendants(library).Any(control => Equals(control.Tag, "library-getting-started")), "clearing search restores first-use guidance");
             using var host = new Form { Width = 1000, Height = 840 };
             library.Dock = DockStyle.Fill;
