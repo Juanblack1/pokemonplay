@@ -264,7 +264,7 @@ internal static class GameEmbeddingLifecycleCheck
                     Require(!controls[i].Bounds.IntersectsWith(controls[j].Bounds),"Managed game/toolbar/pad regions overlap");
                     Require(!NativeBounds(controls[i]).IntersectsWith(NativeBounds(controls[j])),"Native game/toolbar/pad regions overlap");
                 }
-                Require(game.Height==size.Height-toolbar.Height-(pad?.Height??0),"Game panel does not reserve toolbar/pad height");
+                Require(game.Height==host.ClientSize.Height-toolbar.Height-(pad?.Height??0),"Game panel does not reserve toolbar/pad height");
                 Require(Field(host,"emulator")==null&&Field(host,"inputBridge")==null,"NoShow layout case unexpectedly launched process or bridge");
                 Console.WriteLine("PASS synthetic managed/native dock regions "+name);
             } catch(Exception error) { failures.Add(name+": "+error.Message);Console.WriteLine("FAIL synthetic managed/native dock regions "+name+": "+error.Message); }
