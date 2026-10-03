@@ -118,6 +118,21 @@ internal sealed class SaveManagerView : BufferedPanel
 
  private void BuildDetail()
  {
+  try { BuildDetailCore(); }
+  catch(Exception error) when(error is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException or System.Security.SecurityException) {
+   ClearDetail();profileControls=null;profileSummary=null;cloudLogin=null;cloudUpload=null;cloudDownload=null;cloudMessage=null;
+   status.Text="Leitura interrompida. Os arquivos existentes foram preservados.";
+   var title=new Label {Text=selected.Title,Font=AppTheme.Section,ForeColor=AppTheme.Text,Location=new Point(24,88),Size=new Size(detailCard.Width-48,48),Tag="cloud-message"};
+   string guidance="Não foi possível conferir os saves de "+selected.Title+". Verifique o acesso à pasta Saves e ao arquivo Settings/SaveProfiles/"+selected.SaveFolderName+".json. Depois, tente novamente. Você pode selecionar outro jogo. Nenhum perfil foi redefinido.";
+   var message=new Label {Text=guidance,AccessibleName="Falha na leitura dos saves de "+selected.Title,AccessibleDescription=guidance,Font=AppTheme.Body,ForeColor=AppTheme.Red,Location=new Point(24,148),Size=new Size(detailCard.Width-48,132),Tag="cloud-message"};
+   var retry=new ThemeButton("Tentar novamente",ButtonKind.Secondary){Location=new Point(24,296),AutoSize=true,AccessibleDescription="Conferir novamente os perfis e saves deste jogo sem redefinir seus arquivos."};
+   retry.Click+=(_,_)=>BuildDetail();
+   detailCard.Controls.AddRange(new Control[]{title,message,retry,status});
+   LayoutCanvas(detailCard.Parent?.ClientSize.Width??1000);
+  }
+ }
+ private void BuildDetailCore()
+ {
   ClearDetail();if(selected==null)return;
   var cover=new PictureBox{Location=new Point(24,88),Size=new Size(108,148),SizeMode=PictureBoxSizeMode.Zoom,BackColor=AppTheme.Surface};
   cover.Image=GameCoverService.Load(root,selected.Cover);
@@ -212,11 +227,11 @@ internal sealed class SaveManagerView : BufferedPanel
 		bool flag = (cloudDownload.Enabled = false);
 		flag = (themeButton2.Enabled = flag);
 		themeButton.Enabled = flag;
-		string gameId = SaveProfileService.CloudId(root, selected.SaveFolderName);
-		string folder = SelectedFolder();
 		CloudBankInfo expectedSnapshot = null;
 		try
 		{
+			string gameId = SaveProfileService.CloudId(root, selected.SaveFolderName);
+			string folder = SelectedFolder();
 			if (action == "upload")
 			{
 				cloudMessage.Text = "Consultando a cópia atual antes do envio...";
