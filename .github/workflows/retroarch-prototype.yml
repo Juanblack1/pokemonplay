@@ -11,9 +11,11 @@ jobs:
   vanilla-build:
     runs-on: windows-latest
     timeout-minutes: 35
-    env:
-      RETROARCH_PROTOTYPE_OUTPUT: ${{ runner.temp }}/retroarch-prototype
     steps:
+      - name: Set owned diagnostic output
+        shell: pwsh
+        run: |
+          "RETROARCH_PROTOTYPE_OUTPUT=$(Join-Path $env:RUNNER_TEMP 'retroarch-prototype')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
