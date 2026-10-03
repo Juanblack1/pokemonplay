@@ -19,8 +19,12 @@ internal static class ImportedAvailabilityCheck
             string output=Environment.GetEnvironmentVariable("POKEMONPLAY_LIBRARY_PREVIEW");if(string.IsNullOrEmpty(output))return;
             Directory.CreateDirectory(output);
             var notice=Children(library).Single(control=>Equals(control.Tag,"imported-rom-notice"));
+            using var previewHost=new Form {ShowInTaskbar=false,AutoScaleMode=AutoScaleMode.None,ClientSize=new Size(760,notice.Height)};
+            previewHost.Controls.Add(notice);notice.Dock=DockStyle.Fill;previewHost.Show();Application.DoEvents();
             foreach(int width in new[]{760,1100}) {
-                notice.Width=width;notice.CreateControl();notice.PerformLayout();
+                previewHost.ClientSize=new Size(width,184);Application.DoEvents();notice.PerformLayout();
+                var recovery=notice.Controls.OfType<Button>().Single();
+                Assert(recovery.Visible&&recovery.Right<=notice.Width&&recovery.Bottom<=notice.Height,"import recovery action is visible and fits notice width "+width);
                 using var bitmap=new Bitmap(notice.Width,notice.Height);notice.DrawToBitmap(bitmap,notice.ClientRectangle);
                 bitmap.Save(Path.Combine(output,name+"-"+width+".png"));
             }
