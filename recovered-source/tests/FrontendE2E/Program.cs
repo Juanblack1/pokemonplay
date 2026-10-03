@@ -23,7 +23,7 @@ internal static class Program
             foreach(string name in new[]{"TEMP","TMP","POKEMONPLAY_RETROARCH_TEMP"})SessionConfig.Owned(root,Environment.GetEnvironmentVariable(name)??throw new InvalidDataException("Missing owned "+name));
             foreach(string name in new[]{"LIBRETRO_VIDEO_SHADER_DIRECTORY","LIBRETRO_VIDEO_FILTER_DIRECTORY","LIBRETRO_ASSETS_DIRECTORY","LIBRETRO_AUTOCONFIG_DIRECTORY","LIBRETRO_CHEATS_DIRECTORY","LIBRETRO_DATABASE_DIRECTORY","LIBRETRO_SYSTEM_DIRECTORY","LIBRETRO_DIRECTORY"})if(!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(name)))throw new InvalidDataException("configuration: inherited LIBRETRO environment");
             Directory.CreateDirectory(Path.Combine(root,"evidence"));
-            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+            Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
             using var run=new FrontendRun(root,scenario,port,options["--commit"]);Application.Run(run.Launcher);return run.Passed?0:1;
         }catch(Exception error){
             Console.Error.WriteLine(error);
@@ -194,6 +194,10 @@ internal sealed class FrontendRun:IDisposable
                 Write("hashes.json",new{commit,harness=SessionConfig.Hash(Environment.ProcessPath),app=SessionConfig.Hash(typeof(LauncherForm).Assembly.Location),retroarch=SessionConfig.Hash(childPath),core=SessionConfig.Hash(Path.Combine(Path.GetDirectoryName(childPath),"cores","mgba_libretro.dll")),rom=SessionConfig.Hash(Path.Combine(root,"roms","diagnostic.gba"))});
             }
             if(host==null||child==null)return;
+            if(host.LastEmbeddingAttempt!=null){
+                Write("embedding-attempt.json",host.LastEmbeddingAttempt);
+                if(!host.LastEmbeddingAttempt.Success)throw new InvalidDataException("embedding: production attempt failed: "+host.LastEmbeddingAttempt.Failure);
+            }
             hwnd=Field<IntPtr>(host,"embeddedWindowHandle");if(hwnd==IntPtr.Zero)return;
             ValidateEmbedding();var focus=Focus();events.Add(new{kind="focus-sample",timeMs=wall.ElapsedMilliseconds,phase=current,focus,held,raw=held>=0?pad.Actions[held]:false,supplied=held>=0?pad.VirtualActions[held]:false,capture=pad.Capture,mouseAction=Field<int>(pad,"mouseAction"),childHwnd=hwnd.ToInt64(),panelHwnd=Field<Panel>(host,"gamePanel").Handle.ToInt64(),hostHwnd=host.Handle.ToInt64(),launcherHwnd=Launcher.Handle.ToInt64(),style=Native.GetWindowLong(hwnd,-16)});
             if(held>=0){
@@ -219,29 +223,29 @@ internal sealed class FrontendRun:IDisposable
     void ValidateEmbedding()
     {
         var panel=Field<Panel>(host,"gamePanel");bool declaredEmbedded=Field<bool>(host,"emulatorEmbedded");
-        uint thread=Native.GetWindowThreadProcessId(hwnd,out uint pid);IntPtr parent=Native.GetParent(hwnd);int style=Native.GetWindowLong(hwnd,-16);
+        uint thread=Native.GetWindowThreadProcessId(hwnd,out uint pid);IntPtr parent=Native.GetAncestor(hwnd,1);int style=Native.GetWindowLong(hwnd,-16);
         bool windowExists=Native.IsWindow(hwnd),visible=Native.IsWindowVisible(hwnd),managedContains=Descendants(Launcher).Contains(host);
         Form found=host.FindForm();var ancestry=new List<object>();IntPtr ancestor=hwnd;bool reached=false;var seen=new HashSet<IntPtr>();
         for(int depth=0;depth<32&&ancestor!=IntPtr.Zero&&seen.Add(ancestor);depth++){
-            Native.GetWindowThreadProcessId(ancestor,out uint ancestorPid);IntPtr next=Native.GetParent(ancestor);
-            ancestry.Add(new{depth,hwnd=ancestor.ToInt64(),pid=ancestorPid,parent=next.ToInt64()});if(ancestor==Launcher.Handle)reached=true;ancestor=next;
+            Native.GetWindowThreadProcessId(ancestor,out uint ancestorPid);IntPtr next=Native.GetAncestor(ancestor,1);
+            ancestry.Add(new{depth,hwnd=ancestor.ToInt64(),pid=ancestorPid,parent=next.ToInt64(),getParent=Native.GetParent(ancestor).ToInt64(),owner=Native.GetWindow(ancestor,4).ToInt64()});if(ancestor==Launcher.Handle)reached=true;ancestor=next;
         }
         Rectangle childBounds=Rectangle.Empty,panelBounds=panel.RectangleToScreen(panel.ClientRectangle);string boundsError=null;
         try{childBounds=Native.Bounds(hwnd);}catch(Exception error){boundsError=error.Message;}
         var facts=EmbeddingEvidence.Create(new Dictionary<string,object>{
             ["timeMs"]=wall.ElapsedMilliseconds,["phase"]=current,["state"]=hwnd==IntPtr.Zero||!declaredEmbedded?"not_ready":"declared_embedded",
             ["childHwnd"]=hwnd.ToInt64(),["windowExists"]=windowExists,["thread"]=thread,["pid"]=pid,["expectedPid"]=child.Id,["parent"]=parent.ToInt64(),["expectedPanel"]=panel.Handle.ToInt64(),
-            ["style"]=style,["hasChildStyle"]=(style&0x40000000)!=0,["nativeVisible"]=visible,["declaredEmbedded"]=declaredEmbedded,["topLevel"]=host.TopLevel,["hostVisible"]=host.Visible,
+            ["style"]=style,["styleUnsigned"]=unchecked((uint)style),["styleHex"]=unchecked((uint)style).ToString("X8"),["hasPopupStyle"]=(unchecked((uint)style)&0x80000000)!=0,["getParent"]=Native.GetParent(hwnd).ToInt64(),["owner"]=Native.GetWindow(hwnd,4).ToInt64(),["root"]=Native.GetAncestor(hwnd,2).ToInt64(),["rootOwner"]=Native.GetAncestor(hwnd,3).ToInt64(),["isPanelChild"]=Native.IsChild(panel.Handle,hwnd),["childDpi"]=Native.DpiEvidence(hwnd),["panelDpi"]=Native.DpiEvidence(panel.Handle),["hostDpi"]=Native.DpiEvidence(host.Handle),["launcherDpi"]=Native.DpiEvidence(Launcher.Handle),["productionAttempt"]=host.LastEmbeddingAttempt,["hasChildStyle"]=(style&0x40000000)!=0,["nativeVisible"]=visible,["declaredEmbedded"]=declaredEmbedded,["topLevel"]=host.TopLevel,["hostVisible"]=host.Visible,
             ["hostHwnd"]=host.Handle.ToInt64(),["findFormType"]=found?.GetType().FullName,["findFormHwnd"]=found?.Handle.ToInt64(),["findFormIsHost"]=found==host,
             ["managedContains"]=managedContains,["launcherHwnd"]=Launcher.Handle.ToInt64(),["ancestry"]=ancestry,["reachedLauncher"]=reached,["ancestryTruncated"]=ancestor!=IntPtr.Zero,
             ["childBounds"]=childBounds,["panelBounds"]=panelBounds,["boundsError"]=boundsError,["geometryContained"]=boundsError==null&&panelBounds.Contains(childBounds),["launcherState"]=Launcher.WindowState.ToString(),
-            ["sourceTiming"]="TryEmbed HWND/parent/style/flag/resize synchronous UI timer; no readiness delay justified",
+            ["sourceTiming"]="TryEmbed normalizes CHILD without POPUP before SetParent; verifies parent/identity before bridge/flag synchronously on UI timer",
             ["findFormContract"]="WinForms v10.0.0 Control.FindForm starts this and stops first Form"
         });
         events.Add(new{kind="embedding-facts",facts});Write("embedding-current.json",facts);Write("observations.json",events);
         var invalid=new List<string>();
         if(!windowExists)invalid.Add("HWND does not exist");if(pid!=child.Id)invalid.Add("PID mismatch");if(parent!=panel.Handle)invalid.Add("parent differs from gamePanel");
-        if((style&0x40000000)==0)invalid.Add("WS_CHILD missing");if(!visible)invalid.Add("native window invisible");if(host.TopLevel)invalid.Add("host is TopLevel");
+        if((style&0x40000000)==0)invalid.Add("WS_CHILD missing");if((unchecked((uint)style)&0x80000000)!=0)invalid.Add("WS_POPUP present");if(!Native.IsChild(panel.Handle,hwnd))invalid.Add("IsChild(panel) false");if(!visible)invalid.Add("native window invisible");if(host.TopLevel)invalid.Add("host is TopLevel");
         if(found!=host)invalid.Add("FindForm not host");if(!managedContains)invalid.Add("host absent from Launcher descendants");if(!reached)invalid.Add("native ancestry does not reach Launcher");
         if(!declaredEmbedded)invalid.Add("production has not declared embedding complete");
         if(boundsError!=null)invalid.Add("bounds unavailable: "+boundsError);else if(childBounds.Width<=0||childBounds.Height<=0||!panelBounds.Contains(childBounds))invalid.Add("child client bounds empty/outside panel");
@@ -375,6 +379,13 @@ internal static class EmbeddingEvidence
         return facts;
     }
     internal static void VerifyContract(){
+        var traceConstructor=typeof(GameHostForm.EmbeddingAttemptTrace).GetConstructors().Single();
+        var traceArguments=traceConstructor.GetParameters().Select(parameter=>parameter.ParameterType.IsValueType?Activator.CreateInstance(parameter.ParameterType):null).ToArray();
+        var trace=(GameHostForm.EmbeddingAttemptTrace)traceConstructor.Invoke(traceArguments);
+        trace=trace with{Success=true,OriginalStyle=0x96000000,RequestedStyle=0x56000000,ParentAfter=123};
+        using(var serializedTrace=JsonDocument.Parse(JsonSerializer.Serialize(trace))){
+            if(!serializedTrace.RootElement.GetProperty("Success").GetBoolean()||serializedTrace.RootElement.GetProperty("RequestedStyle").GetUInt32()!=0x56000000||serializedTrace.RootElement.GetProperty("ParentAfter").GetInt64()!=123)throw new InvalidDataException("production immutable embedding trace serialization contract failed");
+        }
         var facts=Create(new Dictionary<string,object>{["nativeVisible"]=true,["hostVisible"]=false,["childBounds"]=new Rectangle(1,2,240,160),["ancestry"]=new[]{new{depth=0,hwnd=123L,pid=12u,parent=456L}},["boundsError"]=null});
         using var document=JsonDocument.Parse(JsonSerializer.Serialize(new{kind="embedding-facts",facts}));
         var data=document.RootElement.GetProperty("facts");

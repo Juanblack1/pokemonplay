@@ -20,6 +20,11 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr hwnd,ref Point point);
     [DllImport("user32.dll")] internal static extern int GetWindowLong(IntPtr hwnd,int index);
     [DllImport("user32.dll")] internal static extern uint GetDpiForWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] internal static extern IntPtr GetWindow(IntPtr hwnd,uint command);
+    [DllImport("user32.dll")] static extern IntPtr GetWindowDpiAwarenessContext(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern int GetAwarenessFromDpiAwarenessContext(IntPtr context);
+    [DllImport("user32.dll")] static extern IntPtr GetThreadDpiAwarenessContext();
+    internal static object DpiEvidence(IntPtr hwnd){IntPtr context=GetWindowDpiAwarenessContext(hwnd),thread=GetThreadDpiAwarenessContext();return new{windowContext=context.ToInt64(),windowAwareness=GetAwarenessFromDpiAwarenessContext(context),threadContext=thread.ToInt64(),threadAwareness=GetAwarenessFromDpiAwarenessContext(thread),dpi=GetDpiForWindow(hwnd)};}
     [StructLayout(LayoutKind.Sequential)] struct GuiThreadInfo {public uint Size,Flags;public IntPtr Active,Focus,Capture,MenuOwner,MoveSize,Caret;public Rect CaretRect;}
     [DllImport("user32.dll",SetLastError=true)] static extern bool GetGUIThreadInfo(uint thread,ref GuiThreadInfo info);
     [DllImport("user32.dll")] static extern IntPtr GetFocus();
