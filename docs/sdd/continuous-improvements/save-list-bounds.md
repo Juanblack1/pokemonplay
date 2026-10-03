@@ -1,0 +1,7 @@
+# Ciclo 10 — lista de saves limitada e leitura parcial visível
+
+Problema: Meus saves usa GetFiles recursivo na lista e no resumo de perfis. Pastas com junctions podem repetir entradas; coleções grandes criam controles sem limite. Limitar somente a lista deixaria o resumo fazendo a mesma recursão.
+
+Critérios: R1 no máximo 512 linhas e aviso quando a verificação fica incompleta; exatamente 512 arquivos normais não gera falso aviso; R2 não atravessar links de diretório descendentes nem duplicar arquivos; R3 arquivos acessíveis permanecem visíveis em leitura parcial, sem declarar pasta vazia; R4 resumo do perfil usa a lista já verificada, evitando outra recursão, e não afirma contagem completa quando parcial; R5 abrir pasta e selecionar outro perfil/jogo continuam possíveis, ações que dependem de dados completos ficam desabilitadas enquanto a tela identifica leitura parcial; R6 bytes de saves/perfis permanecem intactos, atualização após remover link/limite recupera os controles; R7 suíte completa, renderização do aviso e publicação ao finalizar.
+
+Plano: reaproveitar o scanner limitado com opção para preservar reparse points de arquivos (links de diretório continuam ignorados); serviço de lista de saves com lookahead para limite512; classificação de saves compatíveis em lista fornecida, usada somente por Meus saves neste ciclo. A escolha de saves nas outras telas e o algoritmo de criar/restaurar backups ficam como investigação posterior; este ciclo não afirma suporte real a OneDrive.
