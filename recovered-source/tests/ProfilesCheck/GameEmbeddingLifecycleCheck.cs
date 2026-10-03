@@ -52,8 +52,14 @@ internal static class GameEmbeddingLifecycleCheck
     }
     static Identity ReadIdentity(string directory)
     {
-        PumpUntil(()=>File.Exists(Path.Combine(directory,"ready.json")),8000,"Child did not become ready");
-        return JsonSerializer.Deserialize<Identity>(File.ReadAllText(Path.Combine(directory,"ready.json")));
+        string path=Path.Combine(directory,"ready.json"); Identity value=null; Exception last=null;
+        PumpUntil(()=>{
+            if(!File.Exists(path)) return false;
+            try { value=JsonSerializer.Deserialize<Identity>(File.ReadAllText(path)); return value!=null; }
+            catch(IOException error) { last=error; return false; }
+            catch(JsonException error) { last=error; return false; }
+        },8000,"Child did not become ready"+(last==null?string.Empty:"; identity read failed: "+last.Message));
+        return value;
     }
     static bool Matches(Process process, Identity identity)
     {
