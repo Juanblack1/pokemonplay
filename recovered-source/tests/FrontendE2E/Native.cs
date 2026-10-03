@@ -14,6 +14,7 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] internal static extern IntPtr GetParent(IntPtr hwnd);
+    [DllImport("user32.dll")] internal static extern IntPtr GetDesktopWindow();
     [DllImport("user32.dll")] internal static extern IntPtr WindowFromPoint(Point point);
     [DllImport("user32.dll")] internal static extern IntPtr GetAncestor(IntPtr hwnd,uint flags);
     [DllImport("user32.dll")] internal static extern bool IsChild(IntPtr parent,IntPtr child);
