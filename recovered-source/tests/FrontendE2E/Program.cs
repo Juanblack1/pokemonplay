@@ -200,7 +200,7 @@ internal sealed class FrontendRun:IDisposable
             }
             hwnd=Field<IntPtr>(host,"embeddedWindowHandle");if(hwnd==IntPtr.Zero)return;
             var bridge=Field<GameInputBridge>(host,"inputBridge");
-            Write("input-delivery-current.json",new{phase=current,timeMs=wall.ElapsedMilliseconds,poll=bridge.LastInputTrace,injections=bridge.RecentInjectionAttempts,foregroundAttempt=host.LastForegroundAttempt});
+            Write("input-delivery-current.json",new{phase=current,timeMs=wall.ElapsedMilliseconds,poll=bridge.LastInputTrace,injections=bridge.RecentInjectionAttempts});
             if(bridge.LastInjectionTrace!=null&&bridge.LastInjectionTrace.Sequence!=lastObservedInjection){
                 lastObservedInjection=bridge.LastInjectionTrace.Sequence;
                 events.Add(new{kind="actual-input-delivery",phase=current,timeMs=wall.ElapsedMilliseconds,poll=bridge.LastInputTrace,injections=bridge.RecentInjectionAttempts});
