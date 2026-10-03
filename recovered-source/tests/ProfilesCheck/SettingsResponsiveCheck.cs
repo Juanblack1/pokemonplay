@@ -81,6 +81,7 @@ internal static class SettingsResponsiveCheck
                 workbench.GetType().GetMethod("CancelCapture",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(workbench,null);
             }
             Exception dialogFailure=null;
+            bool dialogChecked=false;
             host.BeginInvoke(new Action(()=>
             {
                 ConsoleTestForm dialog=null;
@@ -96,9 +97,15 @@ internal static class SettingsResponsiveCheck
                     Assert(toggle.Text=="Pausar teste"&&(bool)dialog.GetType().GetField("running",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(dialog),"native diagnostic resume action restores input testing");
                 }
                 catch(Exception ex){dialogFailure=ex;}
-                finally{dialog?.Close();}
+                finally
+                {
+                    dialogChecked=true;
+                    foreach(var owned in Application.OpenForms.OfType<ConsoleTestForm>().Where(window=>window.Owner==host).ToArray())owned.Close();
+                    dialog?.Close();
+                }
             }));
             typeof(Control).GetMethod("OnClick",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(Field(workbench,"test"),new object[]{EventArgs.Empty});
+            Assert(dialogChecked,"settings diagnostic interaction actually entered its modal UI");
             if(dialogFailure!=null)throw new Exception("Settings diagnostic interaction failed.",dialogFailure);
             Assert(File.ReadAllBytes(preferences).SequenceEqual(original), "responsive layout preserves preference bytes");
         }
