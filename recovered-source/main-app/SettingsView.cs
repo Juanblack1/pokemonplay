@@ -142,18 +142,20 @@ internal sealed class SettingsView : BufferedPanel
 
  private void LayoutCards(int available,int height)
  {
-  int width=Math.Max(850,available-20);canvas.Width=width;
-  int cardWidth=(width-72)/2;
-  int controlHeight=Math.Max(370,height-32);
+  int width=Math.Max(620,available-20);canvas.Width=width;
+  bool narrow=width<850;
+  int cardWidth=narrow?width-48:(width-72)/2;
+  int controlHeight=Math.Max(narrow?540:370,height-32);
   controlsCard.SetBounds(24,16,width-48,controlHeight);
   dsCard.SetBounds(24,controlHeight+40,cardWidth,320);
-  audioCard.SetBounds(48+cardWidth,controlHeight+40,cardWidth,320);
-  retroArchCard.SetBounds(24,controlHeight+376,width-48,380);
-  canvas.Height=controlHeight+852;
+  audioCard.SetBounds(narrow?24:48+cardWidth,controlHeight+(narrow?384:40),cardWidth,320);
+  retroArchCard.SetBounds(24,controlHeight+(narrow?728:376),width-48,380);
+  canvas.Height=retroArchCard.Bottom+24;
   screens.Width=cardWidth-48;
   volume.Width=Math.Max(150,cardWidth-116);volumeValue.Left=cardWidth-74;
   retroArchExecutablePath.Width=retroArchGbaCorePath.Width=retroArchDsCorePath.Width=Math.Max(200,retroArchCard.ClientSize.Width-272);
   foreach(Control c in dsCard.Controls)if(c is Label && c.Top==166)c.Width=cardWidth-48;
+  foreach(Control card in new Control[]{audioCard,retroArchCard})foreach(Control c in card.Controls)if(c is Label && c.Top==270){c.AutoSize=false;c.Width=card.ClientSize.Width-48;c.Height=48;}
  }
  private void UpdateMapping(){controlsCard?.UpdateRows();}
 

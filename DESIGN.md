@@ -1,5 +1,9 @@
 # Sistema visual — Pokemons Play v26 · Pixel
 
+## Configurações — largura disponível
+
+O canvas acompanha a área visível. Em áreas estreitas, as ações de controle ocupam uma segunda linha e os cartões de telas DS e áudio ficam empilhados. O cabeçalho, os textos auxiliares e os caminhos respeitam a largura de seus cartões. As atribuições mantêm sua própria rolagem vertical para os 12 botões do DS; os botões de salvar e restaurar ficam no rodapé. Capturar uma atribuição reserva espaço para cancelar sem cobrir o diagnóstico. Mantém paleta, tipografia e desenho Pixel existentes.
+
 ## Biblioteca — ROMs locais e hacks Pokémon
 
 ### Recuperar ROM movida
