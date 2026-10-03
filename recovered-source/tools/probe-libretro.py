@@ -25,8 +25,13 @@ DS_OPTIONS = {
     "melonds_show_cursor": b"disabled",
 }
 
+# Hardware bit order is independent of the optional mutated frontend mapper.
+DS_BUTTONS = (("a", 8), ("b", 0), ("select", 2), ("start", 3),
+              ("right", 7), ("left", 6), ("up", 4), ("down", 5),
+              ("r", 11), ("l", 10), ("x", 9), ("y", 1))
 
-def ds_frame_sample(frame, output, phase, expected):
+
+def ds_frame_regions(frame, expected_mask):
     if frame["format"] != 1 or (frame["width"], frame["height"]) != (256, 384):
         raise RuntimeError("DS oracle requires the declared XRGB8888 256x384 layout")
     pitch, data = frame["pitch"], frame["bytes"]
@@ -35,16 +40,39 @@ def ds_frame_sample(frame, output, phase, expected):
     def rgb(x, y):
         value = struct.unpack_from("<I", data, y * pitch + x * 4)[0]
         return [(value >> 16) & 255, (value >> 8) & 255, value & 255]
-    samples = [rgb(x, y) for x in (64, 128, 192) for y in (64, 96, 128)]
-    active = 0 if expected == "red" else 2
-    passed = all(pixel[active] >= 240 and all(pixel[channel] <= 16 for channel in range(3) if channel != active) for pixel in samples)
+    regions, observed_mask = [], 0
+    for bit, (name, _) in enumerate(DS_BUTTONS):
+        x, y = 16 + 56 * (bit % 4), 16 + 56 * (bit // 4)
+        samples = [rgb(x + dx, y + dy) for dx in (3, 8, 12) for dy in (3, 8, 12)]
+        def color(active):
+            return all(pixel[active] >= 240 and all(pixel[channel] <= 16 for channel in range(3) if channel != active) for pixel in samples)
+        red, blue = color(0), color(2)
+        if red:
+            observed_mask |= 1 << bit
+        regions.append({"button": name, "expected": "red" if expected_mask & (1 << bit) else "blue",
+                        "samples_rgb": samples, "passed": red if expected_mask & (1 << bit) else blue,
+                        "observed": "red" if red else "blue" if blue else "invalid"})
+    return {"serial": frame["serial"], "expected_mask": expected_mask, "observed_mask": observed_mask,
+            "regions": regions, "passed": all(region["passed"] for region in regions)}
+
+
+def ds_frame_sample(frames, output, phase, expected_mask):
+    if len(frames) != 2 or frames[0]["serial"] + 1 != frames[1]["serial"]:
+        raise RuntimeError("DS phase requires two fresh consecutive software frames")
+    checks = [ds_frame_regions(frame, expected_mask) for frame in frames]
+    frame = frames[-1]
+    pitch, data = frame["pitch"], frame["bytes"]
+    def rgb(x, y):
+        value = struct.unpack_from("<I", data, y * pitch + x * 4)[0]
+        return [(value >> 16) & 255, (value >> 8) & 255, value & 255]
     # Save original synthetic frames without requiring Pillow/numpy on the runner.
     scanlines = b"".join(b"\0" + bytes(channel for x in range(256) for channel in rgb(x, y)) for y in range(384))
     def chunk(kind, body):
         return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
     png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">2I5B", 256, 384, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b"")
     (output / (phase + ".png")).write_bytes(png)
-    return {"phase": phase, "expected": expected, "samples_rgb": samples, "passed": passed}
+    return {"phase": phase, "expected_mask": expected_mask, "frames": checks,
+            "passed": all(check["passed"] for check in checks)}
 
 
 class Variable(C.Structure):
@@ -113,15 +141,20 @@ def probe(args):
     if not rom.is_file():
         raise FileNotFoundError(rom)
     core_path = Path(args.core).resolve()
+    digests = {"rom_sha256": hashlib.sha256(rom.read_bytes()).hexdigest(),
+               "core_sha256": hashlib.sha256(core_path.read_bytes()).hexdigest(),
+               "generator_sha256": hashlib.sha256(Path(__file__).with_name("original_ds_test.py").read_bytes()).hexdigest() if args.system == "ds" else None}
     directory_handles = []
     if os.name == "nt":
         for directory in (core_path.parent, core_path.parent.parent):
             directory_handles.append(os.add_dll_directory(str(directory)))
     core = C.CDLL(str(core_path))
     options, buffers, native_logs, configuration_errors = {}, {}, [], []
-    stats = {"video_calls": 0, "input_queries": 0, "positive_input_queries": 0, "audio_frames": 0}
-    frame = {"bytes": None, "width": 0, "height": 0, "pitch": 0, "format": 0}
+    stats = {"video_calls": 0, "video_callbacks": 0, "input_queries": 0, "positive_input_queries": 0, "audio_frames": 0}
+    frame = {"bytes": None, "width": 0, "height": 0, "pitch": 0, "format": 0, "serial": 0}
+    recent_frames = []
     pressed = set()
+    sticky_pressed = set()
 
     def set_option(key, default, choices):
         key = key.decode()
@@ -200,9 +233,14 @@ def probe(args):
     video_type = C.CFUNCTYPE(None, C.c_void_p, C.c_uint, C.c_uint, C.c_size_t)
     @video_type
     def video(data, width, height, pitch):
+        stats["video_callbacks"] += 1
         if data and data != C.c_void_p(-1).value and pitch * height <= 16 * 1024 * 1024:
             frame.update(bytes=C.string_at(data, pitch * height), width=width, height=height, pitch=pitch)
             stats["video_calls"] += 1
+            frame["serial"] = stats["video_callbacks"]
+            recent_frames.append(dict(frame))
+            if len(recent_frames) > 2:
+                del recent_frames[0]
 
     audio_type = C.CFUNCTYPE(None, C.c_int16, C.c_int16)
     @audio_type
@@ -226,7 +264,16 @@ def probe(args):
         stats["input_queries"] += 1
         value = 0
         if port == 0 and device == 1 and not args.suppress_input:
-            value = sum(1 << b for b in pressed) if button == 256 else int(button in pressed)
+            mapped = set(pressed)
+            if args.system == "ds":
+                if args.sticky_ds_input:
+                    sticky_pressed.update(mapped)
+                    mapped.update(sticky_pressed)
+                if args.swap_ds_ab:
+                    mapped = {0 if item == 8 else 8 if item == 0 else item for item in mapped}
+                if args.suppress_ds_extended:
+                    mapped.difference_update((9, 1))
+            value = sum(1 << b for b in mapped) if button == 256 else int(button in mapped)
         if value:
             stats["positive_input_queries"] += 1
         return value
@@ -265,6 +312,7 @@ def probe(args):
             raise RuntimeError("Core rejected ROM; see native log formats in evidence.")
         core.retro_set_controller_port_device(0, 1)
         def run(count, buttons):
+            recent_frames.clear()
             pressed.clear()
             pressed.update(buttons)
             for _ in range(count):
@@ -280,13 +328,17 @@ def probe(args):
         guest_input = []
         size = core.retro_serialize_size() if args.system == "gba" else 0
         if args.system == "ds":
-            guest_input.append(ds_frame_sample(frame, output, "released-before", "blue"))
-            run(args.frames, [8])
-            guest_input.append(ds_frame_sample(frame, output, "a-held", "red"))
-            run(args.frames, [])
-            guest_input.append(ds_frame_sample(frame, output, "released-after", "blue"))
-            if not all(phase["passed"] for phase in guest_input):
-                raise RuntimeError("DS guest framebuffer did not follow released/A/released input")
+            def record(phase, expected_mask):
+                check = ds_frame_sample(recent_frames, output, phase, expected_mask)
+                guest_input.append(check)
+                if not check["passed"]:
+                    raise RuntimeError("DS keypad oracle rejected " + phase)
+            record("released-before", 0)
+            for bit, (name, libretro_id) in enumerate(DS_BUTTONS):
+                run(args.frames, [libretro_id])
+                record(name + "-held", 1 << bit)
+                run(args.frames, [])
+                record(name + "-released", 0)
         elif 0 < size <= 128 * 1024 * 1024:
             saved = C.create_string_buffer(size)
             if core.retro_serialize(saved, size):
@@ -323,9 +375,7 @@ def probe(args):
             pass
         return {"result": "passed", "core": info.name.decode(), "core_version": info.version.decode(),
                 "rom_name": rom.name, "original_diagnostic_rom": not bool(args.rom),
-                "rom_sha256": hashlib.sha256(rom.read_bytes()).hexdigest(), "seed_frame_hash": seed_hash,
-                "core_sha256": hashlib.sha256(core_path.read_bytes()).hexdigest(),
-                "generator_sha256": hashlib.sha256(Path(__file__).with_name("original_ds_test.py").read_bytes()).hexdigest() if args.system == "ds" else None,
+                **digests, "seed_frame_hash": seed_hash,
                 "width": frame["width"], "height": frame["height"], "frames": args.frames,
                 "seconds": time.monotonic() - started, "stats": stats, "state_comparison": comparison,
                 "guest_input": guest_input,
@@ -334,6 +384,7 @@ def probe(args):
     except Exception as error:
         (output / "native-failure.json").write_text(json.dumps({
             "result": "failed", "error": str(error), "stats": stats,
+            **digests,
             "guest_input": locals().get("guest_input", []),
             "options": {key: (value or b"").decode() for key, value in options.items()},
             "native_log_formats": native_logs}, indent=2), encoding="utf-8")
@@ -350,11 +401,18 @@ if __name__ == "__main__":
     parser.add_argument("--rom")
     parser.add_argument("--system", choices=("gba", "ds"), default="gba")
     parser.add_argument("--suppress-input", action="store_true", help="Negative control: withhold all guest input")
+    parser.add_argument("--swap-ds-ab", action="store_true", help="Negative control: swap only frontend A/B mapping")
+    parser.add_argument("--sticky-ds-input", action="store_true", help="Negative control: retain pressed DS buttons after release")
+    parser.add_argument("--suppress-ds-extended", action="store_true", help="Negative control: withhold only X/Y")
     parser.add_argument("--output", required=True)
-    parser.add_argument("--frames", type=int, default=1800)
+    parser.add_argument("--frames", type=int)
     args = parser.parse_args()
+    if args.frames is None:
+        args.frames = 30 if args.system == "ds" else 1800
     if args.system == "ds" and args.rom:
         parser.error("DS guest input verification uses only the original generated diagnostic ROM")
+    if args.system != "ds" and (args.swap_ds_ab or args.sticky_ds_input or args.suppress_ds_extended):
+        parser.error("DS negative controls require --system ds")
     if not 1 <= args.frames <= 10000:
         parser.error("--frames must be between 1 and 10000")
     try:
