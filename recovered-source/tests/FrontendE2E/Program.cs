@@ -109,9 +109,7 @@ internal sealed class FrontendRun:IDisposable
             Progress("library");Launcher.Navigate("library");await Task.Delay(250);
             GameCard card=Descendants(Launcher).OfType<GameCard>().Single(c=>Field<GameInfo>(c,"game").IsImported&&Path.GetFullPath(Field<GameInfo>(c,"game").RomPath).Equals(Path.Combine(root,"roms","diagnostic.gba"),StringComparison.OrdinalIgnoreCase));
             if(!Field<string>(card,"root").Equals(root,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("root_identity: card root differs");
-            if(card.Parent is ScrollableControl scroll)scroll.ScrollControlIntoView(card);
-            mousePoint=card.PointToScreen(new Point(card.Width/2,card.Height-32));
-            if(!card.Visible||!card.RectangleToScreen(card.ClientRectangle).Contains(mousePoint))throw new InvalidDataException("boot: Play card not visible");
+            await PreparePlayClick(card);
             events.Add(new{kind="play-ui",point=mousePoint,card=card.AccessibleName});
             Native.MouseAt(mousePoint,true);await Task.Delay(80);Native.MouseAt(mousePoint,false);
             sampler.Start();await Until(()=>host!=null&&child!=null&&hwnd!=IntPtr.Zero,30000,"boot");
@@ -143,6 +141,34 @@ internal sealed class FrontendRun:IDisposable
             try{await Cleanup();}catch(Exception error){Passed=false;Set("cleanup","failed",error.ToString());}
             Write("observations.json",events);Write("result.json",Result());sampler.Stop();
             if(Passed)Launcher.Close();else{host?.Dispose();Launcher.Dispose();Application.ExitThread();}
+        }
+    }
+    async Task PreparePlayClick(GameCard card)
+    {
+        var ancestors=new List<Control>();for(Control ancestor=card.Parent;ancestor!=null;ancestor=ancestor.Parent)ancestors.Add(ancestor);
+        var scrolling=new List<object>();long deadline=wall.ElapsedMilliseconds+2000;
+        try{
+            foreach(Control ancestor in ancestors){
+                if(ancestor is not ScrollableControl scroll||!scroll.AutoScroll)continue;
+                if(wall.ElapsedMilliseconds>=deadline)throw new TimeoutException("boot: bounded Play scrolling deadline");
+                Point before=scroll.AutoScrollPosition;scroll.ScrollControlIntoView(card);scroll.PerformLayout();
+                await Task.Delay(100);
+                scrolling.Add(new{type=scroll.GetType().Name,hwnd=scroll.Handle.ToInt64(),before,after=scroll.AutoScrollPosition});
+            }
+            Launcher.PerformLayout();await Task.Delay(100);
+        }finally{
+            mousePoint=card.PointToScreen(new Point(card.Width/2,card.Height-32));
+            Rectangle desktop=SystemInformation.VirtualScreen;string imageError=null;
+            try{using var image=new Bitmap(desktop.Width,desktop.Height);using(var graphics=Graphics.FromImage(image))graphics.CopyFromScreen(desktop.Location,Point.Empty,desktop.Size,CopyPixelOperation.SourceCopy);image.Save(Path.Combine(evidence,"pre-play-desktop.png"));}
+            catch(Exception error){imageError=error.Message;}
+            IntPtr hit=Native.WindowFromPoint(mousePoint);Native.GetWindowThreadProcessId(hit,out uint hitPid);
+            var clips=ancestors.Select(control=>new{type=control.GetType().Name,hwnd=control.Handle.ToInt64(),visible=control.Visible,enabled=control.Enabled,clientClip=control.RectangleToScreen(control.ClientRectangle),containsPoint=control.RectangleToScreen(control.ClientRectangle).Contains(mousePoint)}).ToArray();
+            bool screenContains=Screen.AllScreens.Any(screen=>screen.Bounds.Contains(mousePoint));
+            bool ownedCardHit=hit!=IntPtr.Zero&&hitPid==Environment.ProcessId&&(hit==card.Handle||Native.IsChild(card.Handle,hit))&&Native.GetAncestor(hit,2)==Launcher.Handle;
+            Write("pre-play-geometry.json",new{point=mousePoint,desktop,screens=Screen.AllScreens.Select(screen=>new{screen.Bounds,screen.WorkingArea}),cardHwnd=card.Handle.ToInt64(),cardClip=card.RectangleToScreen(card.ClientRectangle),card.Visible,card.Enabled,scrolling,clips,hitHwnd=hit.ToInt64(),hitPid,rootHwnd=Native.GetAncestor(hit,2).ToInt64(),ownedCardHit,screenContains,imageError});
+            if(imageError!=null)throw new InvalidDataException("boot: pre-Play desktop evidence capture failed: "+imageError);
+            if(!card.Visible||!card.Enabled||!card.RectangleToScreen(card.ClientRectangle).Contains(mousePoint)||!screenContains||clips.Any(clip=>!clip.visible||!clip.enabled||!clip.containsPoint)||!ownedCardHit)
+                throw new InvalidDataException("boot: Play point is clipped/offscreen or native hit does not reach owned card; inspect pre-play geometry/desktop");
         }
     }
     void Sample()
@@ -293,7 +319,7 @@ internal sealed class FrontendRun:IDisposable
     }
     void Set(string key,string status,string reason)=>checks[key]=new{status,reason};
     void Progress(string phase){current=phase;Write("progress.json",new{schema=1,scenario,phase,timeMs=wall.ElapsedMilliseconds,identity,checks});Write("result.json",Result());}
-    object Result()=>new{schema=1,scenario,commit,passed=Passed,checks,identity,config=configEvidence,evidence=new[]{"observations.json","launch.json","hashes.json","session-original.cfg","session-final.cfg"}};
+    object Result()=>new{schema=1,scenario,commit,passed=Passed,checks,identity,config=configEvidence,evidence=Directory.GetFiles(evidence,"*",SearchOption.AllDirectories).Where(path=>!path.EndsWith(".tmp",StringComparison.OrdinalIgnoreCase)&&Path.GetFileName(path) is not ("result.json" or "progress.json")).Select(path=>Path.GetRelativePath(evidence,path)).OrderBy(path=>path,StringComparer.Ordinal).ToArray()};
     void Write(string name,object value){string path=Path.Combine(evidence,name);File.WriteAllText(path+".tmp",JsonSerializer.Serialize(value,JsonOptions));File.Move(path+".tmp",path,true);}
     public void Dispose(){sampler.Dispose();foreach(var item in ring)item.Image.Dispose();}
 }

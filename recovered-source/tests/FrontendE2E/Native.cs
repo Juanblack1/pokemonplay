@@ -9,6 +9,9 @@ internal static class Native
     [DllImport("user32.dll",SetLastError=true)] static extern uint SendInput(uint count,Input[] input,int size);
     [DllImport("user32.dll")] static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] internal static extern IntPtr GetParent(IntPtr hwnd);
+    [DllImport("user32.dll")] internal static extern IntPtr WindowFromPoint(Point point);
+    [DllImport("user32.dll")] internal static extern IntPtr GetAncestor(IntPtr hwnd,uint flags);
+    [DllImport("user32.dll")] internal static extern bool IsChild(IntPtr parent,IntPtr child);
     [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr hwnd,out uint pid);
     [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr hwnd);
