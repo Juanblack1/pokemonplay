@@ -4,9 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
 
 internal static class SettingsResponsiveCheck
 {
+    [StructLayout(LayoutKind.Sequential)] struct NativeRect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll",SetLastError=true)] static extern bool GetClientRect(IntPtr window,out NativeRect rectangle);
+    [DllImport("user32.dll",SetLastError=true)] static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
     static Control Field(object target, string name) => (Control)target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(target);
     static void Assert(bool value, string message) { if (!value) throw new Exception(message); Console.WriteLine("PASS " + message); }
     internal static void Run(string root)
@@ -31,8 +35,12 @@ internal static class SettingsResponsiveCheck
         {
             host.MinimumSize=new Size(width+borderWidth,host.Height);
             host.ClientSize = new Size(width, 720); mode.SelectedIndex = inputMode;
+            // Resize only this owned test window; skip its screen-size clamp, not the product layout.
+            // NOMOVE | NOZORDER | NOACTIVATE | NOSENDCHANGING. Native client rect is the oracle.
+            if(!SetWindowPos(host.Handle,IntPtr.Zero,0,0,width+borderWidth,host.Height,0x416))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             host.PerformLayout(); view.PerformLayout(); Application.DoEvents();
-            Assert(host.ClientSize.Width==width && view.Width==width && host.Width==width+borderWidth,"native settings viewport and outer bounds match requested width "+width);
+            if(!GetClientRect(host.Handle,out NativeRect native))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            Assert(native.Right-native.Left==width && host.ClientSize.Width==width && view.Width==width && host.Width==width+borderWidth,"native settings viewport and outer bounds match requested width "+width+" (native="+(native.Right-native.Left)+", outer="+host.Width+", view="+view.Width+")");
             foreach(string name in new[]{"restoreButton","saveButton"})
             {
                 var button=Field(view,name);
