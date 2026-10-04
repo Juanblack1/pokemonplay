@@ -58,7 +58,7 @@ internal static class GuestDecoder
         using(var graphics=Graphics.FromImage(scaled)){graphics.InterpolationMode=System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;graphics.PixelOffsetMode=System.Drawing.Drawing2D.PixelOffsetMode.Half;graphics.DrawImage(source,new Rectangle(0,0,scaled.Width,scaled.Height));}
         GuestFrame gpu=Decode(scaled,false,true);
         if(gpu.Mask!=raw.Mask||gpu.Counter!=raw.Counter||gpu.Viewport.Width!=439||gpu.Viewport.Height!=293)throw new InvalidDataException("guest_decode: scaled GPU viewport contract mismatch");
-        using(var graphics=Graphics.FromImage(scaled))graphics.FillRectangle(Brushes.Black,15,15,8,8);
+        using(var graphics=Graphics.FromImage(scaled))graphics.FillRectangle(Brushes.Black,35,35,20,20);
         try{Decode(scaled,false,true);throw new InvalidDataException("guest_decode: mixed scaled GPU viewport was accepted");}
         catch(InvalidDataException error) when(error.Message=="guest_decode: invalid/mixed region pixels"){}
     }
