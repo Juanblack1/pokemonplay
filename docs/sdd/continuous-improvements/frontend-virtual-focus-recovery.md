@@ -6,7 +6,7 @@ With RetroArch hosted as a top-level popup, pressing a virtual control activates
 
 ## Behavior
 
-- While a virtual action is physically held and the emulator uses a top-level window, retry the existing focus transfer from the input poll.
+- While a raw virtual-control action is physically held and the emulator uses a top-level window, retry the existing focus transfer from the input poll, even when an input filter suppresses the mapped action.
 - Re-read the foreground process after each attempt. Route keyboard input only after the emulator process owns foreground.
 - Keep embedded emulator focus behavior unchanged and never send a virtual key into another foreground window when recovery fails.
 - Stop retrying automatically when the virtual hold ends.

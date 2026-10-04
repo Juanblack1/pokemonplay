@@ -24,9 +24,9 @@ internal static class InputActionResolver
 internal static class VirtualFocusRecovery
 {
     internal static uint RestoreForHeldVirtualAction(uint targetPid,uint foregroundPid,bool emulatorTopLevel,
-        bool[] virtualActions,Action focus,Func<uint> readForegroundPid)
+        bool virtualActionHeld,Action focus,Func<uint> readForegroundPid)
     {
-        if(!emulatorTopLevel||targetPid==0||foregroundPid==targetPid||virtualActions==null||!virtualActions.Any(action=>action))return foregroundPid;
+        if(!emulatorTopLevel||targetPid==0||foregroundPid==targetPid||!virtualActionHeld)return foregroundPid;
         focus();
         return readForegroundPid();
     }
