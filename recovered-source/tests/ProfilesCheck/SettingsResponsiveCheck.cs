@@ -15,12 +15,26 @@ internal static class SettingsResponsiveCheck
     static void Assert(bool value, string message) { if (!value) throw new Exception(message); Console.WriteLine("PASS " + message); }
     internal static void Run(string root)
     {
+        string unreadableRoot = Path.Combine(root, "settings-unreadable");
+        string unreadablePreferences = Path.Combine(unreadableRoot, "Settings", "input-presets.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(unreadablePreferences));
+        File.WriteAllText(unreadablePreferences, "1\n0\n72\nfalse\nfalse\ntrue\n");
+        byte[] unreadableOriginal = File.ReadAllBytes(unreadablePreferences);
+        using (File.Open(unreadablePreferences, FileMode.Open, FileAccess.Read, FileShare.None))
+        using (var unreadableView = new SettingsView(unreadablePreferences))
+        {
+            var warning = (Label)Field(unreadableView, "status");
+            Assert(warning.Text.Contains("Não foi possível carregar as preferências salvas"), "unreadable settings show an explicit warning instead of silently using fallback values");
+            Assert(warning.AccessibleDescription == warning.Text, "settings read warning is exposed to assistive technology");
+        }
+        Assert(File.ReadAllBytes(unreadablePreferences).SequenceEqual(unreadableOriginal), "opening settings after a read failure never rewrites the saved preferences");
         string install = Path.Combine(root, "settings-responsive");
         Directory.CreateDirectory(Path.Combine(install, "Settings"));
         string preferences = Path.Combine(install, "Settings", "input-presets.txt");
         File.WriteAllText(preferences, "1\n0\n100\nfalse\nfalse\ntrue\n");
         byte[] original = File.ReadAllBytes(preferences);
         using var view = new SettingsView(preferences);
+        Assert(((Label)Field(view, "status")).Text == "Suas preferências ficam salvas neste computador.", "legacy partial preference files load without a read warning");
         using var host = new Form { MaximumSize = new Size(2000, 1600), ClientSize = new Size(760, 720) };
         host.Controls.Add(view); host.Show(); Application.DoEvents();
         int borderWidth=host.Width-host.ClientSize.Width;
