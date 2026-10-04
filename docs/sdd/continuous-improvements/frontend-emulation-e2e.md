@@ -4,7 +4,7 @@
 
 Prove that visible Library → Play launches the real bundled RetroArch inside the real launcher and that the application's virtual controls reach guest pixels. Use an original CC0 GBA diagnostic. Observe both RetroArch's internal frame and actual desktop pixels of its incorporated child window. Core-only/unembedded results remain diagnostics. Physical controllers, commercial/personal ROMs, audio and touch are not proven by this gate.
 
-Research/reviews: output/frontend-emulation-research.md, output/frontend-e2e-architecture.md and output/frontend-e2e-qa-review.md. Sources pin RetroArch 1.22.2 at 69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576 and mGBA at 26b7884bc25a5933960f3cdcd98bac1ae14d42e2. No frontend/guest execution evidence yet.
+Research/reviews: output/frontend-emulation-research.md, output/frontend-e2e-architecture.md and output/frontend-e2e-qa-review.md. Sources pin RetroArch 1.22.2 at 69a4f0ea1e8aaf442ae4858f2e7f2b31a1776576 and mGBA at 26b7884bc25a5933960f3cdcd98bac1ae14d42e2. Native frontend/guest execution evidence is recorded for exact commit `e68b8ae1a5ec8abff4acfa35e12cf89a1a4b6c7c` in workflows `37173525452` (positive and valid suppressed-A negative) and `37173525449` (full Windows verification); ongoing requirements below remain scoped to their stated acceptance criteria.
 
 ## Requirements and acceptance
 
@@ -34,7 +34,7 @@ Reproduce any product defect with focused red native evidence before fixing the 
 
 ## Owned tasks and state
 
-C22 stable frontend screenshot capture is specified in `frontend-e2e-stable-gpu-capture.md`; it addresses the repeated mixed-pixel failure without retrying captures or weakening the decoder. C23 foreground-settling input delivery is specified in `frontend-virtual-focus-settling.md`; native confirmation is pending.
+C22 stable frontend screenshot capture is accepted on tested commit `e68b8ae1a5ec8abff4acfa35e12cf89a1a4b6c7c`; both native positive/negative E2E and the full Windows package verification passed (workflows `37173525452` and `37173525449`). It addresses the repeated mixed-pixel failure without retrying captures or weakening the decoder. C23 foreground-settling input delivery passed those same exact-head positive/negative and full verification gates. Both changes are in main at merge `5dc1020cdbe4d8071d6cfa75d837eedbffcf4dd3`.
 
 S1 implemented and locally verified (library_research, independently checked by root): only tools/original_gba_frontend_test.py and tools/test_original_gba_frontend.py. Generator + pure independent oracle; meaningful A+B/invalid/stale/wrap/regression/ambiguous-counter tests. Python construction/oracle success proves no ARM execution; real guest frames require CI.
 S2 architecture accepted, exact whitelist statically verified (installer owns read-only output architecture report). Close table and implement owned harness/supervisor after review; no product hooks for convenience. Root owns this spec and eventual CI/supervisor; source ownership will be assigned explicitly.

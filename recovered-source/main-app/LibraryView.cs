@@ -556,8 +556,9 @@ internal sealed class LibraryView : BufferedPanel
 		if (!flag)
 		{
 			bool hasMeasuredPlayTime = recentGames.Values.Any(entry => entry.TotalPlayTimeSeconds > 0);
-			string emptyTitle = recentOnly ? "Nenhum jogo recente" : favoritesOnly ? "Nenhum favorito ainda" : mostPlayedOnly && !hasMeasuredPlayTime ? "Ainda sem tempo jogado" : "Nenhum jogo encontrado";
-			string emptyDescription = recentOnly ? "Os jogos que você abrir aparecerão aqui, começando pelo mais recente." : favoritesOnly ? "Marque a estrela no cartão de um jogo para encontrá-lo aqui." : mostPlayedOnly && !hasMeasuredPlayTime ? "Jogue um título e encerre o emulador para começar a registrar o tempo total." : "Tente outra busca ou selecione Todos os sistemas para ver a coleção completa.";
+			bool savedFavoritesAreFilteredOut = favoritesOnly && favorites.Count > 0;
+			string emptyTitle = savedFavoritesAreFilteredOut ? "Nenhum favorito encontrado" : recentOnly ? "Nenhum jogo recente" : favoritesOnly ? "Nenhum favorito ainda" : mostPlayedOnly && !hasMeasuredPlayTime ? "Ainda sem tempo jogado" : "Nenhum jogo encontrado";
+			string emptyDescription = savedFavoritesAreFilteredOut ? "Nenhum favorito corresponde à busca e aos filtros atuais. Ajuste a busca ou escolha outro sistema." : recentOnly ? "Os jogos que você abrir aparecerão aqui, começando pelo mais recente." : favoritesOnly ? "Marque a estrela no cartão de um jogo para encontrá-lo aqui." : mostPlayedOnly && !hasMeasuredPlayTime ? "Jogue um título e encerre o emulador para começar a registrar o tempo total." : "Tente outra busca ou selecione Todos os sistemas para ver a coleção completa.";
 			string emptyAction = recentOnly || favoritesOnly || alphabeticalOnly || mostPlayedOnly ? "MOSTRAR TODOS" : "LIMPAR BUSCA";
 			content.Controls.Add(new EmptyStatePanel(emptyTitle, emptyDescription, emptyAction, (object param0, EventArgs param1) =>
 			{
