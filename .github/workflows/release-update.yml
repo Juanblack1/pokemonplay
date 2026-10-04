@@ -11,6 +11,22 @@ jobs:
       - uses: actions/checkout@v7
         with:
           lfs: false
+      - name: Exigir tag no HEAD da branch padrão
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          $defaultBranch = gh api "repos/$env:RELEASE_REPOSITORY" --jq .default_branch
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($defaultBranch)) { throw 'Não foi possível resolver a branch padrão do repositório.' }
+          $defaultRef = "refs/heads/$defaultBranch"
+          $remoteHead = git ls-remote origin $defaultRef
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($remoteHead)) { throw "Não foi possível resolver $defaultRef." }
+          $defaultSha = ($remoteHead -split "`t")[0].Trim()
+          $tagCommit = (git rev-parse "$env:RELEASE_SHA^{commit}").Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tagCommit)) { throw 'A tag de release não aponta para um commit.' }
+          ./recovered-source/tools/verify-release-tag.ps1 -TagCommit $tagCommit -DefaultBranchCommit $defaultSha -DefaultBranch $defaultBranch
       - name: Bloquear publicação enquanto a auditoria estiver pendente
         shell: pwsh
         run: |
