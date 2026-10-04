@@ -20,4 +20,4 @@ With Favorites enabled, a query or other active filter can hide every saved favo
 
 ## Scope and verification boundary
 
-Only empty-state copy selection changes. Search matching, favorite persistence, result ordering, and the Favorites toggle remain unchanged. This cycle prepares a reviewable PR; current thread instructions prohibit creating a release tag or publishing a release.
+Only empty-state copy selection changes. Search matching, favorite persistence, result ordering, and the Favorites toggle remain unchanged. This cycle prepares a reviewable PR and follows the user instruction to publish each completed cycle as a GitHub release after its checks pass.
