@@ -32,6 +32,20 @@ internal static class FirstUseCheck
             Assert(picker.AccessibleName.Contains("compatível") && dialog.AcceptButton is Button button && button.Text == "Adicionar", "import dialog exposes its system restriction and action accessibly");
         }
 
+        string longRom = Path.Combine(fixture, new string('A', 79) + "😀.gba");
+        object longIdentity = Activator.CreateInstance(identityType, new object[] { "POKEMON", "FireRed", 3, true });
+        using (var longDialog = (Form)Activator.CreateInstance(dialogType, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { longRom, longIdentity, null }, null))
+        {
+            var suggestedTitle = (TextBox)Field(longDialog, "titleInput");
+            Assert(suggestedTitle.Text == new string('A', 79), "long ROM title suggestion stays within 80 characters and avoids a split surrogate pair");
+            longDialog.Show();
+            Application.DoEvents();
+            ((Button)longDialog.AcceptButton).PerformClick();
+            Application.DoEvents();
+            object imported = dialogType.GetProperty("Result", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(longDialog);
+            Assert(imported != null && (string)imported.GetType().GetProperty("RomPath").GetValue(imported) == Path.GetFullPath(longRom), "accepting a shortened title preserves the selected ROM path");
+        }
+
         Type libraryType = app.GetType("LibraryView");
         using (var library = (Control)Activator.CreateInstance(libraryType, new object[] { null, fixture }))
         {
