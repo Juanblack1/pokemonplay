@@ -5,8 +5,8 @@ internal class PixelHeader : BufferedPanel
 {
  private readonly string title;
  private string subtitle;
- public PixelHeader(string title,string subtitle,int height){this.title=title;this.subtitle=subtitle;Height=Math.Max(100,height);Dock=DockStyle.Top;BackColor=AppTheme.Surface;SetStyle(ControlStyles.ResizeRedraw,true);}
- protected void SetSubtitle(string value){subtitle=value??string.Empty;Invalidate();}
+ public PixelHeader(string title,string subtitle,int height){this.title=title;this.subtitle=subtitle;AccessibleName=title;AccessibleDescription=subtitle;Height=Math.Max(100,height);Dock=DockStyle.Top;BackColor=AppTheme.Surface;SetStyle(ControlStyles.ResizeRedraw,true);}
+ protected void SetSubtitle(string value){subtitle=value??string.Empty;AccessibleDescription=subtitle;Invalidate();}
  protected override void OnPaint(PaintEventArgs e)
  {
   base.OnPaint(e);var g=e.Graphics;g.Clear(AppTheme.Surface);
