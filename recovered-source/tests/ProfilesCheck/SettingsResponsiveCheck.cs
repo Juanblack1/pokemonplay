@@ -20,14 +20,30 @@ internal static class SettingsResponsiveCheck
         Directory.CreateDirectory(Path.GetDirectoryName(unreadablePreferences));
         File.WriteAllText(unreadablePreferences, "1\n0\n72\nfalse\nfalse\ntrue\n");
         byte[] unreadableOriginal = File.ReadAllBytes(unreadablePreferences);
+        SettingsView unreadableView;
         using (File.Open(unreadablePreferences, FileMode.Open, FileAccess.Read, FileShare.None))
-        using (var unreadableView = new SettingsView(unreadablePreferences))
         {
+            unreadableView = new SettingsView(unreadablePreferences);
             var warning = (Label)Field(unreadableView, "status");
             Assert(warning.Text.Contains("Não foi possível carregar as preferências salvas"), "unreadable settings show an explicit warning instead of silently using fallback values");
             Assert(warning.AccessibleDescription == warning.Text, "settings read warning is exposed to assistive technology");
         }
-        Assert(File.ReadAllBytes(unreadablePreferences).SequenceEqual(unreadableOriginal), "opening settings after a read failure never rewrites the saved preferences");
+        using (unreadableView)
+        {
+            var confirmation = typeof(SettingsView).GetProperty("UnreadableSettingsOverwriteConfirmation", BindingFlags.Instance | BindingFlags.NonPublic);
+            int promptCount = 0;
+            confirmation.SetValue(unreadableView, new Func<DialogResult>(() => { promptCount++; return DialogResult.No; }));
+            typeof(SettingsView).GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(unreadableView, null);
+            Assert(promptCount == 1 && File.ReadAllBytes(unreadablePreferences).SequenceEqual(unreadableOriginal), "declining the overwrite prompt preserves unreadable preference bytes");
+            Assert(((Label)Field(unreadableView, "status")).Text == "As preferências salvas não foram substituídas.", "declining overwrite reports that the original settings remain");
+            confirmation.SetValue(unreadableView, new Func<DialogResult>(() => { promptCount++; return DialogResult.Yes; }));
+            typeof(SettingsView).GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(unreadableView, null);
+            Assert(promptCount == 2 && !File.ReadAllBytes(unreadablePreferences).SequenceEqual(unreadableOriginal), "confirming explicitly replaces the unreadable settings with current values");
+            confirmation.SetValue(unreadableView, new Func<DialogResult>(() => throw new Exception("confirmation should be cleared after a successful save")));
+            typeof(SettingsView).GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(unreadableView, null);
+            Assert(promptCount == 2 && ((Label)Field(unreadableView, "status")).Text.Contains("Configurações salvas"), "successful recovery clears the overwrite guard for later saves");
+        }
+        Assert(File.ReadAllBytes(unreadablePreferences).Length > 0, "confirmed preference recovery leaves a complete file");
         string install = Path.Combine(root, "settings-responsive");
         Directory.CreateDirectory(Path.Combine(install, "Settings"));
         string preferences = Path.Combine(install, "Settings", "input-presets.txt");
@@ -35,6 +51,17 @@ internal static class SettingsResponsiveCheck
         byte[] original = File.ReadAllBytes(preferences);
         using var view = new SettingsView(preferences);
         Assert(((Label)Field(view, "status")).Text == "Suas preferências ficam salvas neste computador.", "legacy partial preference files load without a read warning");
+        var legacyConfirmation = typeof(SettingsView).GetProperty("UnreadableSettingsOverwriteConfirmation", BindingFlags.Instance | BindingFlags.NonPublic);
+        legacyConfirmation.SetValue(view, new Func<DialogResult>(() => throw new Exception("legacy settings should not request overwrite confirmation")));
+        typeof(SettingsView).GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(view, null);
+        Assert(((Label)Field(view, "status")).Text.Contains("Configurações salvas"), "legacy partial preference files save without overwrite confirmation");
+        string missingPreferences = Path.Combine(root, "settings-missing", "Settings", "input-presets.txt");
+        using (var missingView = new SettingsView(missingPreferences))
+        {
+            legacyConfirmation.SetValue(missingView, new Func<DialogResult>(() => throw new Exception("missing settings should not request overwrite confirmation")));
+            typeof(SettingsView).GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(missingView, null);
+            Assert(File.Exists(missingPreferences) && ((Label)Field(missingView, "status")).Text.Contains("Configurações salvas"), "missing preference files are created without overwrite confirmation");
+        }
         using var host = new Form { MaximumSize = new Size(2000, 1600), ClientSize = new Size(760, 720) };
         host.Controls.Add(view); host.Show(); Application.DoEvents();
         int borderWidth=host.Width-host.ClientSize.Width;

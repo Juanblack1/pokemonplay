@@ -49,6 +49,8 @@ internal sealed class SettingsView : BufferedPanel
 	private readonly ThemeButton retroArchSupportButton;
 
 	private RetroArchSettings retroArchSettings;
+	private bool settingsLoadFailed;
+	internal Func<DialogResult> UnreadableSettingsOverwriteConfirmation { get; set; }
 	internal Func<ProcessStartInfo, Process> RetroArchProcessStarter { get; set; } = startInfo => Process.Start(startInfo);
 	internal Action<string> RetroArchBrowserOpener { get; set; } = url => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 	private const string RetroArchSupportUrl = "https://docs.retroachievements.org/general/emulator-support-and-issues.html";
@@ -207,6 +209,7 @@ internal sealed class SettingsView : BufferedPanel
 		}
 		catch (Exception)
 		{
+			settingsLoadFailed = true;
 			const string warning = "Não foi possível carregar as preferências salvas. Confira antes de salvar para preservar as configurações.";
 			status.ForeColor = AppTheme.Red;
 			status.Text = warning;
@@ -315,8 +318,22 @@ internal sealed class SettingsView : BufferedPanel
 		status.Text = "Padrão restaurado. Salve para manter as alterações.";
 	}
 
+	private DialogResult ConfirmUnreadableSettingsOverwrite()
+	{
+		if (UnreadableSettingsOverwriteConfirmation != null) return UnreadableSettingsOverwriteConfirmation();
+		const string message = "O arquivo de preferências não pôde ser lido. Se continuar, os valores exibidos substituirão as configurações salvas. Deseja continuar?";
+		return MessageBox.Show(this, message, "Substituir preferências", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+	}
+
 	private void Save()
 	{
+		if (settingsLoadFailed && ConfirmUnreadableSettingsOverwrite() != DialogResult.Yes)
+		{
+			status.ForeColor = AppTheme.Red;
+			status.Text = "As preferências salvas não foram substituídas.";
+			status.AccessibleDescription = status.Text;
+			return;
+		}
 		try
 		{
 			Directory.CreateDirectory(Path.GetDirectoryName(settingsFile));
@@ -331,6 +348,7 @@ internal sealed class SettingsView : BufferedPanel
 			list2.AddRange(customKeys);
 			controlsCard.Profile.Save(InputDeviceProfile.PathFor(settingsFile));
             File.WriteAllLines(settingsFile, list2.ToArray());
+			settingsLoadFailed = false;
 			retroArchSettings.UseForGba=retroArchGba.Checked;retroArchSettings.UseForDs=retroArchDs.Checked;
 			string retroArchError=RetroArchSettingsService.ValidationError(retroArchSettings);
 			if(retroArchError==null)RetroArchSettingsService.Save(root,retroArchSettings);
