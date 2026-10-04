@@ -36,9 +36,11 @@ internal sealed class GameInputBridge : IDisposable
     private readonly Func<int> emulatorPid;
     private readonly Func<bool> hostFocused;
     private readonly Func<bool[]> virtualActions;
-    public GameInputBridge(string root, Func<int> emulatorPid, Func<bool> hostFocused, Func<bool[]> virtualActions, Action focusGame)
+    private readonly Func<bool> emulatorTopLevel;
+    private readonly Action focusGame;
+    public GameInputBridge(string root, Func<int> emulatorPid, Func<bool> hostFocused, Func<bool[]> virtualActions, Action focusGame, Func<bool> emulatorTopLevel)
     {
-        this.emulatorPid=emulatorPid;this.hostFocused=hostFocused;this.virtualActions=virtualActions;
+        this.emulatorPid=emulatorPid;this.hostFocused=hostFocused;this.virtualActions=virtualActions;this.emulatorTopLevel=emulatorTopLevel;this.focusGame=focusGame;
         profile=InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json"));
         var custom=new[] { "W","S","A","D","Z","X","Q","E","Enter","Backspace" };int preset=1;
         var file=Path.Combine(root,"Settings","input-presets.txt");
@@ -51,16 +53,19 @@ internal sealed class GameInputBridge : IDisposable
     private void Poll()
     {
         long sequence=++pollSequence,started=Stopwatch.GetTimestamp();
-        InputReader.GetWindowThreadProcessId(InputReader.GetForegroundWindow(),out uint foregroundPid);
-        int pid=emulatorPid();bool? eligible=pid>0&&foregroundPid!=pid?hostFocused():null;
-        bool focused=pid>0&&(foregroundPid==pid||eligible==true);
+        uint foregroundPid=ReadForegroundProcessId();int pid=emulatorPid();var supplied=virtualActions();
+        bool topLevel=emulatorTopLevel();
+        if(profile.Mode==3)foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction((uint)Math.Max(0,pid),foregroundPid,topLevel,supplied,focusGame,ReadForegroundProcessId);
+        bool? eligible=pid>0&&foregroundPid!=pid?hostFocused():null;
+        bool focused=VirtualFocusRecovery.CanRoute(pid,foregroundPid,topLevel,eligible==true);
         var pad=focused&&profile.Mode==2?InputReader.ReadPad(profile.ControllerSlot,profile.DeadZone):new InputSnapshot();
-        var supplied=virtualActions();string suppliedSnapshot=Bits(supplied);
+        string suppliedSnapshot=Bits(supplied);
         var resolved=InputActionResolver.Resolve(profile,pad,supplied,focused);string heldBefore=dispatcher.HeldKeysSnapshot;
         dispatcher.Update(resolved);
         LastInputTrace=new(sequence,started,Stopwatch.GetTimestamp(),Stopwatch.Frequency,profile.Mode,pid,foregroundPid,eligible,focused,keyMap,suppliedSnapshot,Bits(resolved),heldBefore,dispatcher.HeldKeysSnapshot,injectionSequence);
     }
     private readonly string keyMap;
+    private static uint ReadForegroundProcessId(){InputReader.GetWindowThreadProcessId(InputReader.GetForegroundWindow(),out uint pid);return pid;}
     private static string Bits(bool[] actions)=>actions==null?"null":string.Concat(actions.Select(value=>value?'1':'0'));
     private static InputFocusTrace ReadInputFocus(){IntPtr foreground=InputReader.GetForegroundWindow();uint thread=InputReader.GetWindowThreadProcessId(foreground,out uint pid);return new(foreground.ToInt64(),pid,thread,GetFocus().ToInt64());}
     private bool Inject(Keys key,bool down)

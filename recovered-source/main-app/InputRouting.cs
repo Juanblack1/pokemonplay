@@ -21,6 +21,20 @@ internal static class InputActionResolver
     }
 }
 
+internal static class VirtualFocusRecovery
+{
+    internal static uint RestoreForHeldVirtualAction(uint targetPid,uint foregroundPid,bool emulatorTopLevel,
+        bool[] virtualActions,Action focus,Func<uint> readForegroundPid)
+    {
+        if(!emulatorTopLevel||targetPid==0||foregroundPid==targetPid||virtualActions==null||!virtualActions.Any(action=>action))return foregroundPid;
+        focus();
+        return readForegroundPid();
+    }
+
+    internal static bool CanRoute(int targetPid,uint foregroundPid,bool emulatorTopLevel,bool hostEligible)
+        =>targetPid>0&&(foregroundPid==(uint)targetPid||!emulatorTopLevel&&hostEligible);
+}
+
 internal sealed class InputKeyDispatcher
 {
     private readonly Keys[] keys;
