@@ -383,7 +383,7 @@ internal sealed class GameHostForm : Form
         embeddedWindowHandle=mainWindowHandle;
         emulatorTopLevel=keepForegroundWindow;
         inputBridge=new GameInputBridge(AppPaths.Root,GetEmulatorProcessId,()=>IsInputHostFocused,
-            ()=>virtualPad?.VirtualActions??new bool[12],FocusEmulator,()=>emulatorTopLevel);
+            ()=>virtualPad?.VirtualActions??new bool[12],()=>virtualPad!=null&&virtualPad.Capture&&virtualPad.Actions.Any(action=>action),FocusEmulator,()=>emulatorTopLevel);
         if(emulatorTopLevel&&virtualPad!=null)virtualPad.MouseDown+=(_,eventArgs)=>{if(eventArgs.Button==MouseButtons.Left)FocusEmulator();};
         emulatorEmbedded=true;ResizeEmbedded();Resize+=(_,_)=>ResizeEmbedded();Move+=(_,_)=>ResizeEmbedded();VisibleChanged+=(_,_)=>ResizeEmbedded();
         if(emulatorTopLevel&&Visible&&WindowState!=FormWindowState.Minimized)SetForegroundWindow(mainWindowHandle);

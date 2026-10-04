@@ -36,11 +36,12 @@ internal sealed class GameInputBridge : IDisposable
     private readonly Func<int> emulatorPid;
     private readonly Func<bool> hostFocused;
     private readonly Func<bool[]> virtualActions;
+    private readonly Func<bool> virtualActionHeld;
     private readonly Func<bool> emulatorTopLevel;
     private readonly Action focusGame;
-    public GameInputBridge(string root, Func<int> emulatorPid, Func<bool> hostFocused, Func<bool[]> virtualActions, Action focusGame, Func<bool> emulatorTopLevel)
+    public GameInputBridge(string root, Func<int> emulatorPid, Func<bool> hostFocused, Func<bool[]> virtualActions, Func<bool> virtualActionHeld, Action focusGame, Func<bool> emulatorTopLevel)
     {
-        this.emulatorPid=emulatorPid;this.hostFocused=hostFocused;this.virtualActions=virtualActions;this.emulatorTopLevel=emulatorTopLevel;this.focusGame=focusGame;
+        this.emulatorPid=emulatorPid;this.hostFocused=hostFocused;this.virtualActions=virtualActions;this.virtualActionHeld=virtualActionHeld;this.emulatorTopLevel=emulatorTopLevel;this.focusGame=focusGame;
         profile=InputDeviceProfile.Load(Path.Combine(root,"Settings","input-device.json"));
         var custom=new[] { "W","S","A","D","Z","X","Q","E","Enter","Backspace" };int preset=1;
         var file=Path.Combine(root,"Settings","input-presets.txt");
@@ -55,7 +56,7 @@ internal sealed class GameInputBridge : IDisposable
         long sequence=++pollSequence,started=Stopwatch.GetTimestamp();
         uint foregroundPid=ReadForegroundProcessId();int pid=emulatorPid();var supplied=virtualActions();
         bool topLevel=emulatorTopLevel();
-        if(profile.Mode==3)foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction((uint)Math.Max(0,pid),foregroundPid,topLevel,supplied,focusGame,ReadForegroundProcessId);
+        if(profile.Mode==3)foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction((uint)Math.Max(0,pid),foregroundPid,topLevel,virtualActionHeld(),focusGame,ReadForegroundProcessId);
         bool? eligible=pid>0&&foregroundPid!=pid?hostFocused():null;
         bool focused=VirtualFocusRecovery.CanRoute(pid,foregroundPid,topLevel,eligible==true);
         var pad=focused&&profile.Mode==2?InputReader.ReadPad(profile.ControllerSlot,profile.DeadZone):new InputSnapshot();
