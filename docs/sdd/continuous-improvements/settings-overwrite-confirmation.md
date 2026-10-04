@@ -11,7 +11,7 @@ O ciclo anterior passou a avisar quando `input-presets.txt` não pode ser lido, 
 - R3: Confirmar permite salvar preferências e perfis normalmente.
 - R4: Depois de uma gravação bem-sucedida, as gravações seguintes não repetem a confirmação.
 - R5: Arquivos ausentes e arquivos legados legíveis continuam salvando sem confirmação.
-- R6: A tag v2.0.0 é oferecida às instalações da linha v171 e a comparação das versões v2 continua monotônica após atualizar.
+- R6: A atualização pública v2.0.0 usa uma tag técnica crescente (v172.0.0) para alcançar os binários antigos da linha v171; o código novo mantém a ordenação da linha 2.x. Testar o serviço novo com uma versão antiga como parâmetro não prova que o binário antigo entende a tag v2.0.0.
 
 ## Plano de implementação
 
