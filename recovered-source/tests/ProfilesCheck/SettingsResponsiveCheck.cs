@@ -52,9 +52,15 @@ internal static class SettingsResponsiveCheck
         using var view = new SettingsView(preferences);
         Assert(((Label)Field(view, "status")).Text == "Suas preferências ficam salvas neste computador.", "legacy partial preference files load without a read warning");
         var legacyConfirmation = typeof(SettingsView).GetProperty("UnreadableSettingsOverwriteConfirmation", BindingFlags.Instance | BindingFlags.NonPublic);
-        legacyConfirmation.SetValue(view, new Func<DialogResult>(() => throw new Exception("legacy settings should not request overwrite confirmation")));
-        typeof(SettingsView).GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(view, null);
-        Assert(((Label)Field(view, "status")).Text.Contains("Configurações salvas"), "legacy partial preference files save without overwrite confirmation");
+        string legacySavePreferences = Path.Combine(root, "settings-legacy-save", "Settings", "input-presets.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(legacySavePreferences));
+        File.WriteAllText(legacySavePreferences, "1\n0\n100\nfalse\nfalse\ntrue\n");
+        using (var legacySaveView = new SettingsView(legacySavePreferences))
+        {
+            legacyConfirmation.SetValue(legacySaveView, new Func<DialogResult>(() => throw new Exception("legacy settings should not request overwrite confirmation")));
+            typeof(SettingsView).GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(legacySaveView, null);
+            Assert(((Label)Field(legacySaveView, "status")).Text.Contains("Configurações salvas"), "legacy partial preference files save without overwrite confirmation");
+        }
         string missingPreferences = Path.Combine(root, "settings-missing", "Settings", "input-presets.txt");
         using (var missingView = new SettingsView(missingPreferences))
         {
