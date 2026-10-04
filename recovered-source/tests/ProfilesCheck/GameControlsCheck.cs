@@ -64,6 +64,15 @@ internal static class GameControlsCheck
             Assert(!InputActionResolver.Resolve(profile,pad,null,true).Any(value=>value),"controller disconnect releases stale pressed input");
             profile.Mode=3;
             Assert(InputActionResolver.Resolve(profile,pad,new[]{true},true)[0]&&!InputActionResolver.Resolve(profile,pad,new[]{true},false)[0],"virtual controls are gated by game focus and tolerate a short snapshot");
+            uint foregroundPid=0;int focusAttempts=0;
+            foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction(42,foregroundPid,true,new[]{true},()=>focusAttempts++,()=>foregroundPid);
+            Assert(foregroundPid!=42&&focusAttempts==1&&!VirtualFocusRecovery.CanRoute(42,foregroundPid,true,true)&&!InputActionResolver.Resolve(profile,pad,new[]{true},VirtualFocusRecovery.CanRoute(42,foregroundPid,true,true)).Any(value=>value),"failed foreground recovery never routes virtual keys into another window");
+            foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction(42,foregroundPid,true,new[]{true},()=>{focusAttempts++;foregroundPid=42;},()=>foregroundPid);
+            Assert(foregroundPid==42&&focusAttempts==2&&VirtualFocusRecovery.CanRoute(42,foregroundPid,true,false)&&InputActionResolver.Resolve(profile,pad,new[]{true},VirtualFocusRecovery.CanRoute(42,foregroundPid,true,false))[0],"held virtual input retries top-level emulator focus before routing");
+            Assert(VirtualFocusRecovery.CanRoute(42,0,false,true),"embedded emulator still accepts an eligible focused host");
+            foregroundPid=0;focusAttempts=0;
+            VirtualFocusRecovery.RestoreForHeldVirtualAction(42,foregroundPid,false,new[]{true},()=>focusAttempts++,()=>foregroundPid);
+            Assert(focusAttempts==0,"embedded emulator does not repeatedly steal foreground for virtual input");
 
             var events=new List<(Keys,bool)>();int focuses=0;
             var dispatcher=new InputKeyDispatcher(new[]{Keys.Z,Keys.Z},(key,down)=>{events.Add((key,down));return true;},()=>focuses++);
