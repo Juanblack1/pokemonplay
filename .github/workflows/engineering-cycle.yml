@@ -44,6 +44,21 @@ jobs:
           Get-Content -LiteralPath $stdout
           Get-Content -LiteralPath $stderr
           if ($process.ExitCode -ne 0) { throw 'Accessibility checks failed.' }
+      - name: Verificar feedback de tecla reservada
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $check = (Resolve-Path './recovered-source/tests/ProfilesCheck/bin/Release/net10.0-windows/Check.exe').Path
+          $stdout = Join-Path '${{ runner.temp }}' 'reserved-key.stdout.log'
+          $stderr = Join-Path '${{ runner.temp }}' 'reserved-key.stderr.log'
+          $process = Start-Process -FilePath $check -ArgumentList '--reserved-key-feedback' -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (-not $process.WaitForExit(120000)) {
+            if (-not $process.HasExited) { $process.Kill(); $null = $process.WaitForExit(5000) }
+            throw 'Owned reserved-key check exceeded its deadline.'
+          }
+          Get-Content -LiteralPath $stdout
+          Get-Content -LiteralPath $stderr
+          if ($process.ExitCode -ne 0) { throw 'Reserved-key checks failed.' }
       - name: Compilar e testar aplicação e atualizador
         shell: pwsh
         env:
@@ -58,6 +73,8 @@ jobs:
         with:
           name: engineering-cycle-evidence
           path: |
+            ${{ runner.temp }}/reserved-key.stdout.log
+            ${{ runner.temp }}/reserved-key.stderr.log
             ${{ runner.temp }}/checks.log
             ${{ runner.temp }}/controls-preview/*.png
             ${{ runner.temp }}/library-preview/*.png

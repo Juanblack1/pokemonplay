@@ -17,9 +17,10 @@ internal sealed class KeyCaptureDialog : Form
 		BackColor = AppTheme.Surface;
 		ForeColor = AppTheme.Text;
 		KeyPreview = true;
+		string instruction = "Pressione a tecla para: " + action + "\n(Esc cancela)";
 		Label value = new Label
 		{
-			Text = "Pressione a tecla para: " + action + "\n(Esc cancela)",
+			Text = instruction,
 			Font = AppTheme.Body,
 			ForeColor = AppTheme.Text,
 			AutoSize = false,
@@ -34,7 +35,13 @@ internal sealed class KeyCaptureDialog : Form
 				DialogResult = DialogResult.Cancel;
 				Close();
 			}
-			else if(e.KeyCode != Keys.F12 && e.KeyCode != Keys.None)
+			else if (e.KeyCode == Keys.F12)
+			{
+				value.Text = instruction + "\n\nF12 está reservado para voltar ao menu. Escolha outra tecla.";
+				e.Handled = true;
+				e.SuppressKeyPress = true;
+			}
+			else if(e.KeyCode != Keys.None)
 			{
 				CapturedKey = DisplayKey(e.KeyCode);
 				DialogResult = DialogResult.OK;
