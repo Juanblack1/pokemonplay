@@ -23,4 +23,3 @@ O ciclo anterior passou a avisar quando `input-presets.txt` não pode ser lido, 
 ## Limites
 
 A automação testa as decisões da confirmação por injeção determinística; a ordem padrão da caixa de diálogo é definida explicitamente como Não.
-
