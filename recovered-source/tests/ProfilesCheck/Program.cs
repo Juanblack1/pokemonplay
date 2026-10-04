@@ -15,6 +15,11 @@ class Check {
  static void Assert(bool value,string name){if(!value)throw new Exception(name);Console.WriteLine("PASS "+name);}
  static void DeleteTemporaryFixture(string path){string resolved=Path.GetFullPath(path);string temporary=Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);if(!string.Equals(Path.GetDirectoryName(resolved),temporary,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Fixture cleanup must remain inside the temporary directory.");if(Directory.Exists(resolved))Directory.Delete(resolved,true);}
  [STAThread] static void Main(string[] args){
+  if(args.Length>0&&args[0]=="--backup-restore-confirmation") {
+   string confirmationRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-backup-confirmation-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(confirmationRoot);
+   try{BackupRestoreConfirmationCheck.Run(confirmationRoot);}finally{DeleteTemporaryFixture(confirmationRoot);}
+   return;
+  }
   if(args.Length==2&&args[0]=="--embedding-layout-child") { GameEmbeddingLifecycleCheck.LayoutChild(args[1]);return; }
   if(args.Length>0&&args[0]=="--embedding-layout") { GameEmbeddingLifecycleCheck.RunLayout(args.Length==2?args[1]:Path.Combine(Path.GetTempPath(),"pokemonplay-embedding-layout-"+Guid.NewGuid().ToString("N")));return; }
   if(args.Length==2&&args[0]=="--embedding-lifecycle-child") { GameEmbeddingLifecycleCheck.Child(args[1]);return; }
@@ -105,6 +110,7 @@ class Check {
   GameControlsCheck.Run(root);
   RomDiscoveryCheck.Run(root);
   LibrarySearchCheck.Run(root);
+  BackupRestoreConfirmationCheck.Run(root);
   ImportedAvailabilityCheck.Run(root);
   ProfileLibraryRecoveryCheck.Run(root);SaveManagerRecoveryCheck.Run(root);SaveActionsRecoveryCheck.Run(root);SaveListBoundsCheck.Run(root);SaveRowRecoveryCheck.Run(root);
   AtomicArchiveCheck.Run(root,app);BankFiltersCheck.Run(root,app);AppUpdatesCheck.Run(root);GameLaunchHistoryCheck.Run(root,app);RetroAchievementsCheck.Run(root,app);FirstUseCheck.Run(root,app);AzaharSessionCheck.Run(app,root);ImportedRomRecoveryCheck.Run(root,app);PokemonBasesCheck.Run(root,app);SpriteResilienceCheck.Run(root,app);BundledEmulatorsCheck.Run(root,app);EmulatorSettingsRecoveryCheck.Run(root,app);SettingsResponsiveCheck.Run(root);KeyBindingCaptureCheck.Run(root);KeyBindingAccessibilityCheck.Run(root);
