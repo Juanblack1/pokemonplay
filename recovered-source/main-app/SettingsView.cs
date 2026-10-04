@@ -205,8 +205,12 @@ internal sealed class SettingsView : BufferedPanel
 				}
 			}
 		}
-		catch
+		catch (Exception)
 		{
+			const string warning = "Não foi possível carregar as preferências salvas. Confira antes de salvar para preservar as configurações.";
+			status.ForeColor = AppTheme.Red;
+			status.Text = warning;
+			status.AccessibleDescription = warning;
 		}
 	}
 
