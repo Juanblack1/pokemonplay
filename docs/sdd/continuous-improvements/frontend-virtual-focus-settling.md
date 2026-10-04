@@ -9,7 +9,7 @@ The trace does not prove why the guest missed that input. It makes a narrow timi
 ## Behavior
 
 - Only apply the settling gate in mode3 for a raw held virtual action and a top-level emulator.
-- When the poll begins outside the owned emulator PID and its focus recovery returns the emulator PID, record `FocusSettling=true` and resolve no virtual actions for that poll.
+- On the first bridge poll of a raw virtual hold, or when an ongoing hold restores focus within the poll, record `FocusSettling=true` and resolve no virtual actions for that poll. This covers focus changes that finish between bridge samples as well as changes observed during a sample.
 - On the next poll, route the currently supplied action only if the emulator still owns foreground. Keep input suppression effective and keep retrying focus while the hold remains.
 - Do not change embedded-window routing, physical controller input, key bindings, focus policy, window activation rules, or release behavior.
 

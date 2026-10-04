@@ -24,8 +24,8 @@ internal static class InputActionResolver
 internal static class VirtualFocusRecovery
 {
     internal static bool ShouldDeferFirstFocusedPoll(uint foregroundBefore,uint foregroundAfter,uint targetPid,
-        bool emulatorTopLevel,bool virtualActionHeld)
-        =>emulatorTopLevel&&virtualActionHeld&&targetPid!=0&&foregroundBefore!=targetPid&&foregroundAfter==targetPid;
+        bool emulatorTopLevel,bool virtualActionHeld,bool virtualActionWasHeld)
+        =>emulatorTopLevel&&virtualActionHeld&&targetPid!=0&&(!virtualActionWasHeld||foregroundBefore!=targetPid&&foregroundAfter==targetPid);
 
     internal static uint RestoreForHeldVirtualAction(uint targetPid,uint foregroundPid,bool emulatorTopLevel,
         bool virtualActionHeld,Action focus,Func<uint> readForegroundPid)

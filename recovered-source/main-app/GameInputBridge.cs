@@ -29,6 +29,7 @@ internal sealed class GameInputBridge : IDisposable
     internal InjectionTrace[] RecentInjectionAttempts => injectionHistory.ToArray();
     private long pollSequence,injectionSequence;
     private readonly Dictionary<Keys,(ushort ScanCode,bool Extended)> heldScanCodes=new();
+    private bool virtualActionWasHeld;
     private readonly InputDeviceProfile profile;
     private readonly InputKeyDispatcher dispatcher;
     private bool disposed;
@@ -55,9 +56,10 @@ internal sealed class GameInputBridge : IDisposable
     {
         long sequence=++pollSequence,started=Stopwatch.GetTimestamp();
         uint foregroundBefore=ReadForegroundProcessId(),foregroundPid=foregroundBefore;int pid=emulatorPid();var supplied=virtualActions();
-        bool topLevel=emulatorTopLevel();
-        if(profile.Mode==3)foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction((uint)Math.Max(0,pid),foregroundPid,topLevel,virtualActionHeld(),focusGame,ReadForegroundProcessId);
-        bool focusSettling=profile.Mode==3&&VirtualFocusRecovery.ShouldDeferFirstFocusedPoll(foregroundBefore,foregroundPid,(uint)Math.Max(0,pid),topLevel,virtualActionHeld());
+        bool topLevel=emulatorTopLevel(),rawVirtualHold=virtualActionHeld();
+        if(profile.Mode==3)foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction((uint)Math.Max(0,pid),foregroundPid,topLevel,rawVirtualHold,focusGame,ReadForegroundProcessId);
+        bool focusSettling=profile.Mode==3&&VirtualFocusRecovery.ShouldDeferFirstFocusedPoll(foregroundBefore,foregroundPid,(uint)Math.Max(0,pid),topLevel,rawVirtualHold,virtualActionWasHeld);
+        virtualActionWasHeld=rawVirtualHold;
         bool? eligible=pid>0&&foregroundPid!=pid?hostFocused():null;
         bool focused=!focusSettling&&VirtualFocusRecovery.CanRoute(pid,foregroundPid,topLevel,eligible==true);
         var pad=focused&&profile.Mode==2?InputReader.ReadPad(profile.ControllerSlot,profile.DeadZone):new InputSnapshot();
