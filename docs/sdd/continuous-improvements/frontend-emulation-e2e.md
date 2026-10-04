@@ -34,7 +34,7 @@ Reproduce any product defect with focused red native evidence before fixing the 
 
 ## Owned tasks and state
 
-C22 stable frontend screenshot capture is specified in `frontend-e2e-stable-gpu-capture.md`; it addresses the repeated mixed-pixel failure without retrying captures or weakening the decoder.
+C22 stable frontend screenshot capture is specified in `frontend-e2e-stable-gpu-capture.md`; it addresses the repeated mixed-pixel failure without retrying captures or weakening the decoder. C23 foreground-settling input delivery is specified in `frontend-virtual-focus-settling.md`; native confirmation is pending.
 
 S1 implemented and locally verified (library_research, independently checked by root): only tools/original_gba_frontend_test.py and tools/test_original_gba_frontend.py. Generator + pure independent oracle; meaningful A+B/invalid/stale/wrap/regression/ambiguous-counter tests. Python construction/oracle success proves no ARM execution; real guest frames require CI.
 S2 architecture accepted, exact whitelist statically verified (installer owns read-only output architecture report). Close table and implement owned harness/supervisor after review; no product hooks for convenience. Root owns this spec and eventual CI/supervisor; source ownership will be assigned explicitly.

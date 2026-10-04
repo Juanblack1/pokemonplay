@@ -23,4 +23,4 @@ The session config had `video_gpu_screenshot=false`. At the pinned RetroArch sou
 
 ## Scope and status
 
-This changes only test-session screenshot acquisition and the decoder's viewport normalization. It does not alter production RetroArch settings, controller/input mapping, rendering driver, guest protocol or acceptance thresholds. Status: implementation candidate; native runtime evidence pending.
+This changes only test-session screenshot acquisition and the decoder's viewport normalization. It does not alter production RetroArch settings, controller/input mapping, rendering driver, guest protocol or acceptance thresholds. Native run `37172920731` produced three neutral captures at `439x293` that decoded with full mask/counter and paired against advancing desktop frames; its later A-held input check failed, so complete positive/negative runtime acceptance remains pending.
