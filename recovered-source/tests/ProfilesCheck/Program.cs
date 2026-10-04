@@ -15,6 +15,10 @@ class Check {
  static void Assert(bool value,string name){if(!value)throw new Exception(name);Console.WriteLine("PASS "+name);}
  static void DeleteTemporaryFixture(string path){string resolved=Path.GetFullPath(path);string temporary=Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);if(!string.Equals(Path.GetDirectoryName(resolved),temporary,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Fixture cleanup must remain inside the temporary directory.");if(Directory.Exists(resolved))Directory.Delete(resolved,true);}
  [STAThread] static void Main(string[] args){
+  if(args.Length==2&&args[0]=="--embedding-layout-child") { GameEmbeddingLifecycleCheck.LayoutChild(args[1]);return; }
+  if(args.Length>0&&args[0]=="--embedding-layout") { GameEmbeddingLifecycleCheck.RunLayout(args.Length==2?args[1]:Path.Combine(Path.GetTempPath(),"pokemonplay-embedding-layout-"+Guid.NewGuid().ToString("N")));return; }
+  if(args.Length==2&&args[0]=="--embedding-lifecycle-child") { GameEmbeddingLifecycleCheck.Child(args[1]);return; }
+  if(args.Length>0&&args[0]=="--embedding-lifecycle") { string fixture=args.Length==2?args[1]:Path.Combine(Path.GetTempPath(),"pokemonplay-embedding-lifecycle-"+Guid.NewGuid().ToString("N"));GameEmbeddingLifecycleCheck.Run(fixture);return; }
   if(args.Length>0&&args[0]=="--keybinding-accessibility") {
    Application.EnableVisualStyles();
    string accessibilityRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-keybinding-accessibility-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(accessibilityRoot);

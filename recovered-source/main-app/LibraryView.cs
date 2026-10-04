@@ -484,6 +484,7 @@ internal sealed class LibraryView : BufferedPanel
 			content.Controls.Add(gettingStarted);
 		}
 		bool flag = false;
+		int matchingGameCount = 0;
 		for (int i = 3; i <= 6; i++)
 		{
 			if (recentOnly || alphabeticalOnly || mostPlayedOnly ? i != 3 : generationFilter != 0 && generationFilter != i)
@@ -511,6 +512,7 @@ internal sealed class LibraryView : BufferedPanel
 					.ThenBy(game => game.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
 			else if (alphabeticalOnly)
 				list = list.OrderBy(game => game.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+			matchingGameCount += list.Count;
 			if (!favoritesOnly && list.Count == 0 && i == 6 && generationFilter != 6 && string.IsNullOrEmpty(text) && num == 0 && GameCatalog.HasAzahar(root))
 			{
 				if (recentOnly) AddRecentHeader(); else if (alphabeticalOnly) AddAlphabeticalHeader(); else if (mostPlayedOnly) AddMostPlayedHeader(); else AddGenerationHeader(i);
@@ -549,6 +551,8 @@ internal sealed class LibraryView : BufferedPanel
 				content.Controls.Add(flowLayoutPanel2);
 			}
 		}
+		bool hasActiveFilters = generationFilter != 0 || favoritesOnly || recentOnly || alphabeticalOnly || mostPlayedOnly || num != 0 || text.Length > 0;
+		heroBanner.UpdateVisibleGameCount(matchingGameCount, hasActiveFilters);
 		if (!flag)
 		{
 			bool hasMeasuredPlayTime = recentGames.Values.Any(entry => entry.TotalPlayTimeSeconds > 0);
