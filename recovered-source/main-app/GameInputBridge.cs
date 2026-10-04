@@ -22,13 +22,14 @@ internal sealed class GameInputBridge : IDisposable
     [DllImport("user32.dll")] private static extern IntPtr GetFocus();
     internal sealed record InputFocusTrace(long ForegroundHwnd,uint ForegroundPid,uint ForegroundThread,long CallingThreadFocusHwnd);
     internal sealed record InjectionTrace(long Sequence,long PollSequence,long AtQpc,long QpcFrequency,int VirtualKey,int ScanCode,bool Down,uint Flags,uint InsertedCount,int Win32Error,InputFocusTrace Before,InputFocusTrace After);
-    internal sealed record InputPollTrace(long Sequence,long StartedQpc,long CompletedQpc,long QpcFrequency,int Mode,int EmulatorPid,uint ForegroundPid,bool? HostEligible,bool Focused,string KeyMap,string SuppliedActions,string ResolvedActions,string HeldBefore,string HeldAfter,long LastInjectionSequence);
+    internal sealed record InputPollTrace(long Sequence,long StartedQpc,long CompletedQpc,long QpcFrequency,int Mode,int EmulatorPid,uint ForegroundPid,bool? HostEligible,bool Focused,bool FocusSettling,string KeyMap,string SuppliedActions,string ResolvedActions,string HeldBefore,string HeldAfter,long LastInjectionSequence);
     internal InputPollTrace LastInputTrace { get; private set; }
     internal InjectionTrace LastInjectionTrace { get; private set; }
     private readonly Queue<InjectionTrace> injectionHistory=new();
     internal InjectionTrace[] RecentInjectionAttempts => injectionHistory.ToArray();
     private long pollSequence,injectionSequence;
     private readonly Dictionary<Keys,(ushort ScanCode,bool Extended)> heldScanCodes=new();
+    private bool virtualActionWasHeld;
     private readonly InputDeviceProfile profile;
     private readonly InputKeyDispatcher dispatcher;
     private bool disposed;
@@ -54,16 +55,18 @@ internal sealed class GameInputBridge : IDisposable
     private void Poll()
     {
         long sequence=++pollSequence,started=Stopwatch.GetTimestamp();
-        uint foregroundPid=ReadForegroundProcessId();int pid=emulatorPid();var supplied=virtualActions();
-        bool topLevel=emulatorTopLevel();
-        if(profile.Mode==3)foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction((uint)Math.Max(0,pid),foregroundPid,topLevel,virtualActionHeld(),focusGame,ReadForegroundProcessId);
+        uint foregroundBefore=ReadForegroundProcessId(),foregroundPid=foregroundBefore;int pid=emulatorPid();var supplied=virtualActions();
+        bool topLevel=emulatorTopLevel(),rawVirtualHold=virtualActionHeld();
+        if(profile.Mode==3)foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction((uint)Math.Max(0,pid),foregroundPid,topLevel,rawVirtualHold,focusGame,ReadForegroundProcessId);
+        bool focusSettling=profile.Mode==3&&VirtualFocusRecovery.ShouldDeferFirstFocusedPoll(foregroundBefore,foregroundPid,(uint)Math.Max(0,pid),topLevel,rawVirtualHold,virtualActionWasHeld);
+        virtualActionWasHeld=rawVirtualHold;
         bool? eligible=pid>0&&foregroundPid!=pid?hostFocused():null;
-        bool focused=VirtualFocusRecovery.CanRoute(pid,foregroundPid,topLevel,eligible==true);
+        bool focused=!focusSettling&&VirtualFocusRecovery.CanRoute(pid,foregroundPid,topLevel,eligible==true);
         var pad=focused&&profile.Mode==2?InputReader.ReadPad(profile.ControllerSlot,profile.DeadZone):new InputSnapshot();
         string suppliedSnapshot=Bits(supplied);
         var resolved=InputActionResolver.Resolve(profile,pad,supplied,focused);string heldBefore=dispatcher.HeldKeysSnapshot;
         dispatcher.Update(resolved);
-        LastInputTrace=new(sequence,started,Stopwatch.GetTimestamp(),Stopwatch.Frequency,profile.Mode,pid,foregroundPid,eligible,focused,keyMap,suppliedSnapshot,Bits(resolved),heldBefore,dispatcher.HeldKeysSnapshot,injectionSequence);
+        LastInputTrace=new(sequence,started,Stopwatch.GetTimestamp(),Stopwatch.Frequency,profile.Mode,pid,foregroundPid,eligible,focused,focusSettling,keyMap,suppliedSnapshot,Bits(resolved),heldBefore,dispatcher.HeldKeysSnapshot,injectionSequence);
     }
     private readonly string keyMap;
     private static uint ReadForegroundProcessId(){InputReader.GetWindowThreadProcessId(InputReader.GetForegroundWindow(),out uint pid);return pid;}

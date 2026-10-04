@@ -13,7 +13,7 @@ internal static class Program
     {
         string root=null;
         try{
-            if(args.Length==1&&args[0]=="--verify-evidence-contract"){EmbeddingEvidence.VerifyContract();HoldAcquisition.VerifyContract();TopLevelProbePhaseContract.Verify();ComposedFramePairing.VerifyContract();Console.WriteLine("Evidence serialization, hold acquisition, composed-frame pairing and phase contracts passed");return 0;}
+            if(args.Length==1&&args[0]=="--verify-evidence-contract"){EmbeddingEvidence.VerifyContract();HoldAcquisition.VerifyContract();TopLevelProbePhaseContract.Verify();ComposedFramePairing.VerifyContract();GuestDecoder.VerifyCaptureContract();Console.WriteLine("Evidence serialization, hold acquisition, composed-frame pairing, phase and screenshot decoding contracts passed");return 0;}
             var options=new Dictionary<string,string>();if(args.Length!=8)throw new ArgumentException("Expected --root --scenario --port --commit");
             for(int i=0;i<args.Length;i+=2)options.Add(args[i],args[i+1]);
             root=Path.TrimEndingDirectorySeparator(Path.GetFullPath(options["--root"]));
@@ -389,13 +389,13 @@ internal sealed class FrontendRun:IDisposable
         Progress(phase);object endpoint=Native.UdpOwner(port,child.Id);Set("capture_identity","passed","UDP endpoint belongs to spawned identity");
         if(child.StartTime.ToUniversalTime()!=childStart||child.HasExited)throw new InvalidDataException("process_identity: lost owned process");
         string inbox=Path.Combine(root,"captures","inbox");if(Directory.EnumerateFiles(inbox).Any())throw new InvalidDataException("capture_ambiguous: inbox not empty");
-        string request=Guid.NewGuid().ToString("N");string prefix=phase+"-"+request;long sent=wall.ElapsedMilliseconds;lastRequest=sent;
+        string request=Guid.NewGuid().ToString("N");string prefix=phase+"-"+request;long sent=wall.ElapsedMilliseconds;lastRequest=sent;int imageWidth=0,imageHeight=0;
         using(var udp=new UdpClient()){byte[] data=System.Text.Encoding.ASCII.GetBytes("SCREENSHOT\n");await udp.SendAsync(data,new IPEndPoint(IPAddress.Loopback,port));}
         string path=null;GuestFrame frame=default;long arrival=0;
         while(wall.ElapsedMilliseconds<deadline){
             CheckFailures();var files=Directory.GetFiles(inbox);if(files.Length>1)throw new InvalidDataException("capture_ambiguous: multiple arrivals");
             if(files.Length==1){
-                try{using var stream=new FileStream(files[0],FileMode.Open,FileAccess.Read,FileShare.None);using var image=new Bitmap(stream);frame=GuestDecoder.Decode(image,false);path=files[0];arrival=wall.ElapsedMilliseconds;break;}
+                try{using var stream=new FileStream(files[0],FileMode.Open,FileAccess.Read,FileShare.None);using var image=new Bitmap(stream);frame=GuestDecoder.Decode(image,false,true);imageWidth=image.Width;imageHeight=image.Height;path=files[0];arrival=wall.ElapsedMilliseconds;break;}
                 catch(IOException){}catch(ArgumentException){}
                 catch(InvalidDataException error){
                     string rejected=prefix+"-undecoded-internal.png";File.Copy(files[0],Path.Combine(evidence,rejected));
@@ -407,7 +407,7 @@ internal sealed class FrontendRun:IDisposable
         if(path==null)throw new TimeoutException("capture_timeout: run invalidated; no retry");
         // Preserve the actual fresh response and decoded frame before pairing can fail.
         string internalPng=prefix+"-internal.png";File.Move(path,Path.Combine(evidence,internalPng));
-        events.Add(new{kind="capture-received",phase,request,sentMs=sent,arrivalMs=arrival,internalFrame=frame,internalPng,endpoint,focus=Focus(),desktopDecodeAttempts,desktopDecodeFailures,lastDesktopDecodeError,decodedCandidates=ring.Select(candidate=>new{timeMs=candidate.Time,timeDeltaMs=arrival-candidate.Time,counterDistance=GuestDecoder.Distance(frame.Counter,candidate.Frame.Counter),candidate.Frame.Mask,candidate.Frame.Counter,candidate.Frame.Viewport}).ToArray()});
+        events.Add(new{kind="capture-received",phase,request,sentMs=sent,arrivalMs=arrival,internalSize=new{width=imageWidth,height=imageHeight},internalFrame=frame,internalPng,endpoint,focus=Focus(),desktopDecodeAttempts,desktopDecodeFailures,lastDesktopDecodeError,decodedCandidates=ring.Select(candidate=>new{timeMs=candidate.Time,timeDeltaMs=arrival-candidate.Time,counterDistance=GuestDecoder.Distance(frame.Counter,candidate.Frame.Counter),candidate.Frame.Mask,candidate.Frame.Counter,candidate.Frame.Viewport}).ToArray()});
         Write("observations.json",events);
         var match=await ComposedFramePairing.WaitForMatch(()=>ring.ToArray(),phaseStarted,arrival,frame,Math.Min(deadline,arrival+500),()=>wall.ElapsedMilliseconds,CheckFailures);
         if(!match.HasValue)throw new InvalidDataException("frame_missing_or_stale: no composed pair within 12 frames/500ms; decoded candidates="+ring.Count+"; last desktop rejection="+(lastDesktopDecodeError??"none"));
