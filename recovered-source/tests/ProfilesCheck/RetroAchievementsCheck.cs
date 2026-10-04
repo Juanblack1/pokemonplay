@@ -2,6 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows.Forms;
 using PKHeX.Core;
 
@@ -25,6 +28,55 @@ internal static class RetroAchievementsCheck
     private static string ActiveFolder(Assembly app, string root, string game)
         => (string)Call(app.GetType("SaveProfileService"), "ActiveFolder", null, root, game);
 
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window,out uint processId);
+    record SyntheticIdentity(int Pid,long StartUtcTicks,string Executable,long Hwnd);
+    static void PumpUntil(Func<bool> condition,int limit,string reason)
+    {
+        var deadline=Stopwatch.StartNew();
+        while(!condition()) { if(deadline.ElapsedMilliseconds>limit) throw new TimeoutException(reason);Application.DoEvents();System.Threading.Thread.Sleep(10); }
+    }
+    static void ObserveSyntheticActiveTime(LauncherForm launcher,Form host,Stopwatch sessionClock,string directory,string executable)
+    {
+        var observations=new System.Collections.Generic.List<object>();
+        var identity=JsonSerializer.Deserialize<SyntheticIdentity>(File.ReadAllText(Path.Combine(directory,"ready.json")));
+        using var child=Process.GetProcessById(identity.Pid);
+        void Record(string phase) {
+            IntPtr foreground=GetForegroundWindow();GetWindowThreadProcessId(foreground,out uint foregroundPid);
+            observations.Add(new {phase,foreground=foreground.ToInt64(),foregroundPid,launcher=launcher.Handle.ToInt64(),hostVisible=host.Visible,launchFailed=(bool)Get(host,"launchFailed"),clockRunning=sessionClock.IsRunning,elapsedMilliseconds=sessionClock.ElapsedMilliseconds});
+        }
+        try {
+            Assert(!child.HasExited&&child.StartTime.ToUniversalTime().Ticks==identity.StartUtcTicks&&string.Equals(child.MainModule.FileName,identity.Executable,StringComparison.OrdinalIgnoreCase)&&string.Equals(identity.Executable,executable,StringComparison.OrdinalIgnoreCase),"synthetic active-time transition verifies owned child PID, start time and executable");
+            GetWindowThreadProcessId(new IntPtr(identity.Hwnd),out uint windowPid);
+            Assert(windowPid==identity.Pid,"synthetic active-time transition verifies owned child HWND");
+            Record("after-child-ready");
+            bool childForegroundRequested=SetForegroundWindow(new IntPtr(identity.Hwnd));
+            PumpUntil(()=>GetForegroundWindow()==new IntPtr(identity.Hwnd)&&!sessionClock.IsRunning,5000,"Owned child foreground did not pause actual launcher session clock");
+            Record("owned-child-foreground-clock-stopped");
+            Call(host.GetType(),"ReturnToMenu",host);
+            Call(launcher.GetType(),"ResumeGameSession",launcher);
+            launcher.Activate();bool launcherForegroundRequested=SetForegroundWindow(launcher.Handle);
+            PumpUntil(()=>GetForegroundWindow()==launcher.Handle&&host.Visible&&sessionClock.IsRunning,5000,"Real launcher activation/resume did not restart actual visible session clock");
+            Record("launcher-foreground-resumed");
+            long start=sessionClock.ElapsedMilliseconds;
+            var wall=Stopwatch.StartNew();
+            while(sessionClock.ElapsedMilliseconds-start<1200) {
+                Application.DoEvents();
+                AssertClockForeground();
+                if(wall.ElapsedMilliseconds>5000) throw new TimeoutException("Actual active clock did not accumulate 1200ms under launcher foreground");
+                System.Threading.Thread.Sleep(10);
+            }
+            Record("launcher-foreground-active-interval-complete");
+            observations.Add(new {childForegroundRequested,launcherForegroundRequested,activeElapsedMilliseconds=sessionClock.ElapsedMilliseconds-start,wallElapsedMilliseconds=wall.ElapsedMilliseconds});
+            void AssertClockForeground() {
+                if(GetForegroundWindow()!=launcher.Handle||!sessionClock.IsRunning||!host.Visible) throw new Exception("Synthetic active-time interval lost launcher foreground, running clock or visible session");
+            }
+        } finally {
+            Record("final");
+            File.WriteAllText(Path.Combine(directory,"active-time-observations.json"),JsonSerializer.Serialize(observations,new JsonSerializerOptions {WriteIndented=true}));
+        }
+    }
     internal static void Run(string root, Assembly app)
     {
         Type settingsType = app.GetType("RetroArchSettings");
@@ -107,9 +159,9 @@ internal static class RetroAchievementsCheck
             .Single(constructor => constructor.GetParameters().Length == 8);
         Type historyType = app.GetType("GameLaunchHistoryService");
         Call(historyType, "TryRecordLaunch", null, uiRoot, "FireRed", DateTimeOffset.UtcNow);
-        var host = (Form)hostConstructor.Invoke(new object[] { "missing-retroarch.exe", "retroarch", string.Empty, "FireRed", "Principal", uiRoot, Path.Combine(root, "session.cfg"), 0 });
-        var sessionClock = System.Diagnostics.Stopwatch.StartNew();
-        hostType.GetField("sessionClock", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(host, sessionClock);
+        string syntheticDirectory=Path.Combine(root,"synthetic-active-session-"+Guid.NewGuid().ToString("N"));
+        string syntheticExecutable=GameEmbeddingLifecycleCheck.PrepareSyntheticExecutable(syntheticDirectory);
+        var host = (Form)hostConstructor.Invoke(new object[] { syntheticExecutable, Path.GetFileNameWithoutExtension(syntheticExecutable), "--embedding-lifecycle-child \""+syntheticDirectory+"\"", "FireRed", "Principal", uiRoot, Path.Combine(root, "session.cfg"), 0 });
         using (var launcher = new LauncherForm(root) { UpdatesEnabled = false })
         {
             launcher.Show();
@@ -117,9 +169,11 @@ internal static class RetroAchievementsCheck
             Application.DoEvents();
             Control libraryPage = ((Control)Get(launcher, "contentHost")).Controls[0];
             Call(launcher.GetType(), "RegisterGameSession", launcher, host);
+            using var syntheticChild=new GameEmbeddingLifecycleCheck.AttachedChild(host,syntheticDirectory,syntheticExecutable);
+            var sessionClock=(System.Diagnostics.Stopwatch)Get(host,"sessionClock");
             var contentHost = (Control)Get(launcher, "contentHost");
             Assert(!host.TopLevel && ReferenceEquals(host.Parent, contentHost) && host.Visible && launcher.Controls.OfType<Panel>().Any(panel => panel.Dock == DockStyle.Top && panel.Visible) && launcher.Controls.OfType<Panel>().Any(panel => panel.Dock == DockStyle.Bottom && panel.Visible),
-                "RetroArch runs inside the launcher while the app top bar and navigation remain visible");
+                "synthetic active session host sits inside the launcher while the app top bar and navigation remain visible");
             Label pageTitle = (Label)Get(launcher, "pageTitle");
             string longGameTitle = "Pokémon Mystery Dungeon: Explorers of Sky — Special Edition";
             pageTitle.Text = longGameTitle;
@@ -129,7 +183,7 @@ internal static class RetroAchievementsCheck
             var updateButton = topbar.Controls.OfType<UpdateNoticeButton>().Single();
             Assert(pageTitle.Visible && pageTitle.AutoEllipsis && pageTitle.Width >= 80 && pageTitle.Right + 16 <= updateButton.Left,
                 "active long game title stays visible before the top-bar actions");
-            System.Threading.Thread.Sleep(1100);
+            ObserveSyntheticActiveTime(launcher,host,sessionClock,syntheticDirectory,syntheticExecutable);
             Call(hostType, "ReturnToMenu", host);
             var resumeButton = (ThemeButton)Get(launcher, "resumeGameButton");
             var endButton = (ThemeButton)Get(launcher, "endGameButton");
@@ -147,28 +201,29 @@ internal static class RetroAchievementsCheck
                 "long paused-game title remains available to accessibility while the page title yields space to its controls");
             object historyEntry = ((System.Collections.IEnumerable)Call(historyType, "Load", null, uiRoot)).Cast<object>().Single();
             long recordedSeconds = (long)historyEntry.GetType().GetProperty("TotalPlayTimeSeconds").GetValue(historyEntry);
-            Assert(recordedSeconds >= 1, "returning to the launcher persists the active session time without waiting for emulator exit");
+            Assert(recordedSeconds >= 1, "returning to the launcher persists synthetic active session time while its owned child remains alive");
             Call(launcher.GetType(), "ResumeGameSession", launcher);
             Application.DoEvents();
-            Assert(host.Visible && !resumeButton.Visible && !endButton.Visible && sessionClock.IsRunning, "resuming the RetroArch session hides launcher actions, restores the game host and restarts active play time");
+            Assert(host.Visible && !resumeButton.Visible && !endButton.Visible && sessionClock.IsRunning, "resuming the synthetic active session hides launcher actions, restores the game host and restarts active play time");
             Call(launcher.GetType(), "Navigate", launcher, "settings");
             Assert(!host.Visible && resumeButton.Visible && ((Label)Get(launcher, "pageTitle")).Text == "Configurações",
-                "using launcher navigation pauses the embedded RetroArch session and keeps a resume action in the app bar");
+                "using launcher navigation pauses the synthetic active session and keeps a resume action in the app bar");
             Call(launcher.GetType(), "ResumeGameSession", launcher);
             Application.DoEvents();
             Call(hostType, "ReturnToMenu", host);
             Assert(!sessionClock.IsRunning, "returning to the launcher stops active play-time counting");
-            Call(launcher.GetType(), "EndGameSession", launcher);
-            Assert(host.IsDisposed && !resumeButton.Visible && !endButton.Visible, "ending a paused RetroArch session closes the host and clears its launcher actions");
+            syntheticChild.ConfirmRegisteredClose(host,()=>Call(launcher.GetType(), "EndGameSession", launcher));
+            Assert(host.IsDisposed && !resumeButton.Visible && !endButton.Visible, "ending a paused synthetic active session normally exits its owned child, closes the host and clears its launcher actions");
 
             var exitHost = (Form)hostConstructor.Invoke(new object[] { "missing-retroarch.exe", "retroarch", string.Empty, "FireRed", "Principal", uiRoot, Path.Combine(root, "exit-session.cfg"), 0 });
             Call(launcher.GetType(), "RegisterGameSession", launcher, exitHost);
             exitHost.Show();
             Application.DoEvents();
             Call(hostType, "ReturnToMenu", exitHost);
+            Assert((bool)Get(exitHost,"launchFailed") && Get(exitHost,"emulator")==null && !resumeButton.Visible && !endButton.Visible, "real failed startup cannot become a resumable synthetic active session");
             launcher.Close();
             Application.DoEvents();
-            Assert(exitHost.IsDisposed && launcher.IsDisposed, "exiting the launcher closes its paused failed session and completes the original exit action");
+            Assert(exitHost.IsDisposed && launcher.IsDisposed, "exiting the launcher closes its failed startup session and completes the original exit action");
         }
 
         string tempDirectory = Path.Combine(root, "retroarch-session-fixtures");

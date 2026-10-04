@@ -8,6 +8,6 @@ Manter a lista compacta. Na confirmação, exibir explicitamente o nome completo
 - R2: confirmação conserva resumo/tamanho/data/tipo do backup, nome do perfil, aviso de substituição e aviso da cópia automática de segurança.
 - R3: nomes curtos continuam corretos e nomes longos não são truncados no campo explícito do nome completo.
 - R4: os arquivos sintéticos usados na confirmação são somente lidos e permanecem byte a byte inalterados.
-- R5: teste primeiro reproduz colisão real nas confirmações geradas; correção passa teste focalizado e suíte/pacote/verificador de instalação no Windows CI. PR fica pronto para revisão.
+- R5: teste primeiro reproduz colisão real nas confirmações geradas; correção passa teste focalizado e suíte/pacote/verificador de instalação no Windows CI. PR fica pronto para revisão. Depois da integração, publicar a próxima versão autorizada pelo usuário e verificar release, assets e hashes públicos.
 
-O fluxo de restauração continua sem publicação de release nova: a instrução atual do usuário proíbe criar tags e publicar pacotes. Não há teste com saves reais de usuário, payloads de ROM, dados pessoais ou escrita no destino. A restauração em produção não será executada pelo teste.
+O usuário autorizou a publicação de uma atualização ao fim de cada ciclo concluído. Não há teste com saves reais de usuário, payloads de ROM, dados pessoais ou escrita no destino. A restauração em produção não será executada pelo teste.

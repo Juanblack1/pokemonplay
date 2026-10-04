@@ -64,6 +64,19 @@ internal static class GameControlsCheck
             Assert(!InputActionResolver.Resolve(profile,pad,null,true).Any(value=>value),"controller disconnect releases stale pressed input");
             profile.Mode=3;
             Assert(InputActionResolver.Resolve(profile,pad,new[]{true},true)[0]&&!InputActionResolver.Resolve(profile,pad,new[]{true},false)[0],"virtual controls are gated by game focus and tolerate a short snapshot");
+            uint foregroundPid=0;int focusAttempts=0;
+            bool[] suppressedVirtualAction={false};
+            foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction(42,foregroundPid,true,true,()=>focusAttempts++,()=>foregroundPid);
+            Assert(foregroundPid!=42&&focusAttempts==1&&!VirtualFocusRecovery.CanRoute(42,foregroundPid,true,true)&&!InputActionResolver.Resolve(profile,pad,suppressedVirtualAction,VirtualFocusRecovery.CanRoute(42,foregroundPid,true,true)).Any(value=>value),"failed foreground recovery never routes virtual keys into another window");
+            foregroundPid=VirtualFocusRecovery.RestoreForHeldVirtualAction(42,foregroundPid,true,true,()=>{focusAttempts++;foregroundPid=42;},()=>foregroundPid);
+            Assert(foregroundPid==42&&focusAttempts==2&&VirtualFocusRecovery.CanRoute(42,foregroundPid,true,false)&&!InputActionResolver.Resolve(profile,pad,suppressedVirtualAction,VirtualFocusRecovery.CanRoute(42,foregroundPid,true,false)).Any(value=>value),"raw virtual hold retries top-level focus while the suppressed key remains blocked");
+            bool focusSettling=VirtualFocusRecovery.ShouldDeferFirstFocusedPoll(42,42,42,true,true,false);
+            Assert(focusSettling&&!InputActionResolver.Resolve(profile,pad,new[]{true},!focusSettling)[0]&&InputActionResolver.Resolve(profile,pad,new[]{true},true)[0]&&!VirtualFocusRecovery.ShouldDeferFirstFocusedPoll(42,42,42,true,true,true)&&VirtualFocusRecovery.ShouldDeferFirstFocusedPoll(0,42,42,true,true,true)&&!VirtualFocusRecovery.ShouldDeferFirstFocusedPoll(0,42,42,false,true,false),"new top-level hold and restored foreground each settle for one bridge poll before a held virtual key routes");
+            Assert(InputActionResolver.Resolve(profile,pad,new[]{true},VirtualFocusRecovery.CanRoute(42,foregroundPid,true,false))[0],"restored foreground routes an unsuppressed virtual action");
+            Assert(VirtualFocusRecovery.CanRoute(42,0,false,true),"embedded emulator still accepts an eligible focused host");
+            foregroundPid=0;focusAttempts=0;
+            VirtualFocusRecovery.RestoreForHeldVirtualAction(42,foregroundPid,false,true,()=>focusAttempts++,()=>foregroundPid);
+            Assert(focusAttempts==0,"embedded emulator does not repeatedly steal foreground for virtual input");
 
             var events=new List<(Keys,bool)>();int focuses=0;
             var dispatcher=new InputKeyDispatcher(new[]{Keys.Z,Keys.Z},(key,down)=>{events.Add((key,down));return true;},()=>focuses++);

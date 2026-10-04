@@ -20,6 +20,10 @@ class Check {
    try{BackupRestoreConfirmationCheck.Run(confirmationRoot);}finally{DeleteTemporaryFixture(confirmationRoot);}
    return;
   }
+  if(args.Length==2&&args[0]=="--embedding-layout-child") { GameEmbeddingLifecycleCheck.LayoutChild(args[1]);return; }
+  if(args.Length>0&&args[0]=="--embedding-layout") { GameEmbeddingLifecycleCheck.RunLayout(args.Length==2?args[1]:Path.Combine(Path.GetTempPath(),"pokemonplay-embedding-layout-"+Guid.NewGuid().ToString("N")));return; }
+  if(args.Length==2&&args[0]=="--embedding-lifecycle-child") { GameEmbeddingLifecycleCheck.Child(args[1]);return; }
+  if(args.Length>0&&args[0]=="--embedding-lifecycle") { string fixture=args.Length==2?args[1]:Path.Combine(Path.GetTempPath(),"pokemonplay-embedding-lifecycle-"+Guid.NewGuid().ToString("N"));GameEmbeddingLifecycleCheck.Run(fixture);return; }
   if(args.Length>0&&args[0]=="--keybinding-accessibility") {
    Application.EnableVisualStyles();
    string accessibilityRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-keybinding-accessibility-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(accessibilityRoot);

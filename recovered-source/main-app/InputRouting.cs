@@ -21,12 +21,31 @@ internal static class InputActionResolver
     }
 }
 
+internal static class VirtualFocusRecovery
+{
+    internal static bool ShouldDeferFirstFocusedPoll(uint foregroundBefore,uint foregroundAfter,uint targetPid,
+        bool emulatorTopLevel,bool virtualActionHeld,bool virtualActionWasHeld)
+        =>emulatorTopLevel&&virtualActionHeld&&targetPid!=0&&(!virtualActionWasHeld||foregroundBefore!=targetPid&&foregroundAfter==targetPid);
+
+    internal static uint RestoreForHeldVirtualAction(uint targetPid,uint foregroundPid,bool emulatorTopLevel,
+        bool virtualActionHeld,Action focus,Func<uint> readForegroundPid)
+    {
+        if(!emulatorTopLevel||targetPid==0||foregroundPid==targetPid||!virtualActionHeld)return foregroundPid;
+        focus();
+        return readForegroundPid();
+    }
+
+    internal static bool CanRoute(int targetPid,uint foregroundPid,bool emulatorTopLevel,bool hostEligible)
+        =>targetPid>0&&(foregroundPid==(uint)targetPid||!emulatorTopLevel&&hostEligible);
+}
+
 internal sealed class InputKeyDispatcher
 {
     private readonly Keys[] keys;
     private readonly Func<Keys,bool,bool> send;
     private readonly Action focus;
     private readonly HashSet<Keys> held=new();
+    internal string HeldKeysSnapshot => string.Join(",",held.OrderBy(key=>(int)key));
     internal InputKeyDispatcher(Keys[] keys,Func<Keys,bool,bool> send,Action focus)
     {this.keys=(Keys[])keys.Clone();this.send=send;this.focus=focus;}
     internal void Update(bool[] actions)

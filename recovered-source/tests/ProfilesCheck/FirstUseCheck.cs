@@ -32,13 +32,42 @@ internal static class FirstUseCheck
             Assert(picker.AccessibleName.Contains("compatível") && dialog.AcceptButton is Button button && button.Text == "Adicionar", "import dialog exposes its system restriction and action accessibly");
         }
 
+        string longRom = Path.Combine(fixture, new string('A', 79) + "😀.gba");
+        object longIdentity = Activator.CreateInstance(identityType, new object[] { "POKEMON", "FireRed", 3, true });
+        using (var longDialog = (Form)Activator.CreateInstance(dialogType, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { longRom, longIdentity, null }, null))
+        {
+            var suggestedTitle = (TextBox)Field(longDialog, "titleInput");
+            Assert(suggestedTitle.Text == new string('A', 79), "long ROM title suggestion stays within 80 characters and avoids a split surrogate pair");
+            longDialog.Show();
+            Application.DoEvents();
+            ((Button)longDialog.AcceptButton).PerformClick();
+            Application.DoEvents();
+            object imported = dialogType.GetProperty("Result", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(longDialog);
+            Assert(imported != null && (string)imported.GetType().GetProperty("RomPath").GetValue(imported) == Path.GetFullPath(longRom), "accepting a shortened title preserves the selected ROM path");
+        }
+
         Type libraryType = app.GetType("LibraryView");
         using (var library = (Control)Activator.CreateInstance(libraryType, new object[] { null, fixture }))
         {
+            var hero = (Control)Field(library, "heroBanner");
+            Assert(hero.AccessibleDescription == "10 jogos prontos para jogar · selecione uma aventura", "library banner exposes the full catalog count before filtering");
             Assert(Descendants(library).Count(control => Equals(control.Tag, "library-getting-started")) == 1, "clean library provides actionable first-use guidance");
             ((Control)Field(library, "search")).Text = "not-a-game";
+            Assert(hero.AccessibleDescription == "Exibindo 0 de 10 jogos encontrados", "library banner announces zero search results");
             Assert(!Descendants(library).Any(control => Equals(control.Tag, "library-getting-started")), "first-use guidance does not replace filtered empty states");
+            ((Control)Field(library, "search")).Text = "Emerald";
+            Assert(hero.AccessibleDescription == "Exibindo 1 de 10 jogos encontrados", "library banner announces the count for one matching game");
             ((Control)Field(library, "search")).Text = "";
+            Assert(hero.AccessibleDescription == "10 jogos prontos para jogar · selecione uma aventura", "clearing search restores the unfiltered library summary");
+            libraryType.GetField("generationFilter", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(library, 3);
+            libraryType.GetMethod("Rebuild", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(library, null);
+            Assert(hero.AccessibleDescription == "Exibindo 3 de 10 jogos encontrados", "library banner counts a generation filter across its cards");
+            libraryType.GetField("generationFilter", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(library, 0);
+            libraryType.GetMethod("Rebuild", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(library, null);
+            ((Button)Field(library, "favoriteFilter")).PerformClick();
+            Assert(hero.AccessibleDescription == "Exibindo 0 de 10 jogos encontrados", "library banner counts an empty favorites filter");
+            ((Button)Field(library, "favoriteFilter")).PerformClick();
+            Assert(hero.AccessibleDescription == "10 jogos prontos para jogar · selecione uma aventura", "removing filters restores the unfiltered library summary");
             Assert(Descendants(library).Any(control => Equals(control.Tag, "library-getting-started")), "clearing search restores first-use guidance");
             using var host = new Form { Width = 1000, Height = 840 };
             library.Dock = DockStyle.Fill;
