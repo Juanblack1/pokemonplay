@@ -22,4 +22,4 @@ The trace does not prove why the guest missed that input. It makes a narrow timi
 
 ## Scope and status
 
-This adds one input-poll of latency only when a top-level foreground transition was just recovered during a raw virtual hold. It leaves the production foreground guard intact. Status: implementation candidate; native confirmation pending.
+This adds a one-poll settle on the first top-level virtual hold and after foreground recovery during a raw virtual hold. It leaves the production foreground guard intact. Exact final PR #41 commit `e68b8ae1a5ec8abff4acfa35e12cf89a1a4b6c7c` passed both native positive and suppressed-A frontend E2E runs in workflow `37173525452`, plus `ProfilesCheck` and full Windows package/installer/updater verification in `37173525449`. Status: accepted on that exact tested commit; it is now included in main by merge `5dc1020cdbe4d8071d6cfa75d837eedbffcf4dd3`.
