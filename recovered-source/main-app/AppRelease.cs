@@ -12,4 +12,14 @@ internal static class AppRelease
         string[] parts=text.Split('.');
         return new Version(int.Parse(parts[0]),parts.Length>1?int.Parse(parts[1]):0,parts.Length>2?int.Parse(parts[2]):0,parts.Length>3?int.Parse(parts[3]):0);
     }
+    internal static bool IsNewer(string tag,Version current)
+    {
+        return ForUpdateComparison(ParseVersion(tag))>ForUpdateComparison(current);
+    }
+    private static Version ForUpdateComparison(Version version)
+    {
+        // v2 is the product's new public version line; map it after the legacy v171 line
+        // only for ordering so users on v171 can receive v2.0.0 through the updater.
+        return version.Major==2?new Version(172,version.Minor,version.Build,version.Revision):version;
+    }
 }

@@ -62,7 +62,7 @@ internal sealed class AppUpdateService : IDisposable
     internal static AppUpdate ParseRelease(JsonElement release,string repo,Version current)
     {
         if(release.GetProperty("draft").GetBoolean()||release.GetProperty("prerelease").GetBoolean())return null;
-        string tag=release.GetProperty("tag_name").GetString();if(AppRelease.ParseVersion(tag)<=current)return null;
+        string tag=release.GetProperty("tag_name").GetString();if(!AppRelease.IsNewer(tag,current))return null;
         JsonElement asset=release.GetProperty("assets").EnumerateArray().FirstOrDefault(a=>a.GetProperty("name").GetString()==AssetName);
         if(asset.ValueKind==JsonValueKind.Undefined)throw new InvalidDataException("Esta release ainda não tem o pacote de atualização do Windows.");
         string url=asset.GetProperty("browser_download_url").GetString();

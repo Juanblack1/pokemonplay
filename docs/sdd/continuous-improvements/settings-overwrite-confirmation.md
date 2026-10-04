@@ -11,12 +11,14 @@ O ciclo anterior passou a avisar quando `input-presets.txt` não pode ser lido, 
 - R3: Confirmar permite salvar preferências e perfis normalmente.
 - R4: Depois de uma gravação bem-sucedida, as gravações seguintes não repetem a confirmação.
 - R5: Arquivos ausentes e arquivos legados legíveis continuam salvando sem confirmação.
+- R6: A tag v2.0.0 é oferecida às instalações da linha v171 e a comparação das versões v2 continua monotônica após atualizar.
 
 ## Plano de implementação
 
 1. Marcar a falha de leitura no `SettingsView`.
 2. Pedir confirmação conservadora antes de salvar quando essa marca estiver ativa.
-3. Testar Não, Sim, a limpeza da marca após sucesso e a preservação byte a byte.
+3. Comparar a nova linha v2 depois da v171 legada sem alterar a versão exibida no app.
+4. Testar Não, Sim, a limpeza da marca após sucesso e a preservação byte a byte.
 
 ## Limites
 

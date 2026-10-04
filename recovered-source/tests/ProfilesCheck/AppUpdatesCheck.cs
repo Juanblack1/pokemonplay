@@ -20,12 +20,14 @@ internal static class AppUpdatesCheck
         string nextTag=$"v{AppRelease.Version.Major+1}";
         string dottedNextTag=$"v{AppRelease.Version.Major}.{AppRelease.Version.Minor+1}.0";
         Assert(AppRelease.ParseVersion(AppRelease.Tag)==AppRelease.Version&&AppRelease.ParseVersion(nextTag)>AppRelease.Version&&AppRelease.ParseVersion(dottedNextTag)>AppRelease.Version,"app assembly version and release comparison support integer and dotted tags");
+        Assert(AppRelease.IsNewer("v2.0.0",new Version(171,10,16,0))&&!AppRelease.IsNewer("v2.0.0",new Version(2,0,0,0))&&AppRelease.IsNewer("v2.0.1",new Version(2,0,0,0)),"v2 release line upgrades legacy v171 installs and keeps v2 patch ordering");
         Assert(AppUpdateService.NormalizeRepository("https://github.com/owner/repository.git")=="owner/repository","update source accepts GitHub repository URLs");
         Reject(()=>AppUpdateService.NormalizeRepository("https://evil.example/owner/repository"),"update source rejects arbitrary servers");
         Reject(()=>AppRelease.ParseVersion(AppRelease.Tag+"-beta"),"stable updater rejects ambiguous prerelease version strings");
         JsonElement Release(string tag=null,bool prerelease=false,string digest=null,string host="github.com")
         {tag??=nextTag;return JsonSerializer.SerializeToElement(new{tag_name=tag,draft=false,prerelease,body="Novidades",assets=new[]{new{name=AppUpdateService.AssetName,size=1,browser_download_url="https://"+host+"/owner/repository/releases/download/"+tag+"/"+AppUpdateService.AssetName,digest=digest??"sha256:"+new string('a',64)}}});}
         Assert(AppUpdateService.ParseRelease(Release(),"owner/repository",AppRelease.Version).Tag==nextTag,"stable GitHub release provides the expected update asset");
+        Assert(AppUpdateService.ParseRelease(Release(tag:"v2.0.0"),"owner/repository",new Version(171,10,16,0)).Tag=="v2.0.0"&&AppUpdateService.ParseRelease(Release(tag:"v2.0.0"),"owner/repository",new Version(2,0,0,0))==null,"v2.0.0 is offered to legacy installs but not repeatedly offered to the updated app");
         Assert(AppUpdateService.ParseRelease(Release("v1"),"owner/repository",AppRelease.Version)==null&&AppUpdateService.ParseRelease(Release(prerelease:true),"owner/repository",AppRelease.Version)==null,"updater ignores old releases and prereleases");
         Reject(()=>AppUpdateService.ParseRelease(Release(host:"evil.example"),"owner/repository",AppRelease.Version),"release asset URL must belong to the configured GitHub repository");
         Reject(()=>AppUpdateService.ParseRelease(Release(digest:"sha256:bad"),"owner/repository",AppRelease.Version),"updater rejects missing or malformed integrity metadata");
