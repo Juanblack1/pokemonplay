@@ -40,6 +40,9 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - name: Verificar proteção contra tags de release desatualizadas
+        shell: pwsh
+        run: ./recovered-source/tests/verify-release-tag.ps1
       - name: Preparar emuladores e fontes oficiais
         if: ${{ !inputs.reuseEmulators }}
         shell: pwsh
