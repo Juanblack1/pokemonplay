@@ -9,7 +9,7 @@ using PKHeX.Core;
 internal static class BankEditorCheck
 {
     private static void Assert(bool condition, string name) { if(!condition)throw new Exception(name);Console.WriteLine("PASS "+name); }
-    private static Control Field(PokemonEditorDialog dialog, string name)
+    internal static Control Field(PokemonEditorDialog dialog, string name)
     {
         var bindings=(System.Collections.IEnumerable)typeof(PokemonEditorDialog).GetField("bindings",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         foreach(var b in bindings)if(((PropertyInfo)b.GetType().GetProperty("Property").GetValue(b)).Name==name)return (Control)b.GetType().GetProperty("Control").GetValue(b);
@@ -92,6 +92,15 @@ internal static class BankEditorCheck
                     Assert(lastRejected,"last party Pokemon remains protected when moving");
                     for(int i=0;i<29;i++){var pk=PokemonEditorService.Blank(3,version:GameVersion.LG);pk.Species=(ushort)new[]{1,4,7,25,133,150,151,6,9,3}[i%10];pk.Nickname=SpeciesName.GetSpeciesNameGeneration(pk.Species,pk.Language,3);pk.IsNicknamed=false;pk.PID=0x12345678;pk.TID16=1234;pk.RefreshAbility(0);pk.CurrentLevel=(byte)(5+i);opened.SetBoxSlotAtIndex(pk,0,i);}
                     var boxes=(ThemeSelect)typeof(PokemonBankView).GetField("boxPicker",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(bank);boxes.SelectedIndex=0;
+                    typeof(PokemonBankView).GetMethod("SelectSlot",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(bank,new object[]{29});
+                    int initialPartyCount=opened.PartyCount;
+                    bank.TransferToParty(true);
+                    Assert(opened.PartyCount==initialPartyCount+1&&opened.GetBoxSlotAtIndex(0,29).Species!=0,"copy from box to team preserves its original box slot");
+                    typeof(PokemonBankView).GetMethod("SelectSlot",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(bank,new object[]{29});
+                    bank.TransferToParty(false);
+                    Assert(opened.PartyCount==initialPartyCount+2&&opened.GetBoxSlotAtIndex(0,29).Species==0,"move from box to team appends the Pokemon and clears only its source");
+                    opened.SetBoxSlotAtIndex(opened.GetPartySlotAtIndex(0).Clone(),0,29);
+
                     for(int i=0;i<20;i++){Application.DoEvents();System.Threading.Thread.Sleep(50);}
                     foreach(var size in new[]{new Size(1000,560),new Size(1000,700),new Size(1280,800),new Size(1920,1000)})
                     {

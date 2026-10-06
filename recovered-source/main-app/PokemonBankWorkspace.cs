@@ -89,7 +89,7 @@ internal sealed partial class PokemonBankView
     private string InspectorText(PKM pk)
     {
         var strings=PKHeX.Core.GameInfo.GetStrings("en");
-        string destination=IsBank?(save==null?"Carregue um save para copiar para uma caixa.":pk.GetType()==save.PKMType?"Pode copiar para o save aberto.":"Formato diferente do save aberto."):"Mudanças ficam pendentes até Salvar alterações.";
+        string destination=IsBank?(save==null?"Carregue um save para copiar para uma caixa.":pk.GetType()==save.PKMType?$"Save aberto: Gen {save.Generation}.\nPode copiar para o save aberto.":$"Save aberto: Gen {save.Generation}.\nTransferência bloqueada: formato PK{pk.Format} diferente do save."):"Mudanças ficam pendentes até Salvar alterações.";
         string captureDate=pk.MetDate is DateOnly metDate?$"Data de captura: {metDate:dd/MM/yyyy}\n":string.Empty;
         return $"{PokemonLabel(pk)} · Nv. {pk.CurrentLevel}\n{GenderLabel(pk.Gender)}{(pk.IsShiny?" · Shiny":"")} · PK{pk.Format}\n\nNatureza  {strings.Natures[(int)pk.Nature]}\nHabilidade  {strings.Ability[pk.Ability]}\nItem  {strings.Item[pk.HeldItem]}\n\nIVs  {pk.IV_HP} / {pk.IV_ATK} / {pk.IV_DEF}\n        {pk.IV_SPA} / {pk.IV_SPD} / {pk.IV_SPE}\nEVs  {pk.EVTotal} / 510\n\nTreinador  {pk.OriginalTrainerName}\nOrigem  {PKHeX.Core.GameInfo.GetVersionName(pk.Version)}\n{captureDate}\n{destination}";
     }
