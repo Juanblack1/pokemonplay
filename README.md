@@ -2,6 +2,18 @@
 
 Um launcher Windows para organizar jogos Pokémon, saves, perfis, controles, banco Pokémon e integrações com emuladores.
 
+Copyright (C) 2026 Juanblack1 e colaboradores. O código próprio é distribuído
+sob [GNU GPL versão 3](LICENSE), sem garantia. Componentes, imagens e marcas de
+terceiros conservam seus direitos e licenças; a licença do projeto não concede
+direitos sobre ROMs ou conteúdo Pokémon de terceiros.
+
+## Code signing policy
+
+A candidatura à assinatura gratuita da SignPath Foundation está em preparação.
+O projeto ainda não foi aprovado e os downloads v172.0.5 continuam sem assinatura.
+Consulte a [política de assinatura](CODE_SIGNING.md), a [privacidade](PRIVACY.md)
+e a [preparação da candidatura](docs/signpath-application.md).
+
 ## Baixar e abrir
 
 1. Abra [Releases](https://github.com/Juanblack1/pokemonplay/releases/latest) e baixe `pokemon-play-win-x64-setup.exe`.

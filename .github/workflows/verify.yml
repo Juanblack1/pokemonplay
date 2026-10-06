@@ -11,6 +11,15 @@ on:
 permissions:
   contents: read
 jobs:
+  signing-scope:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: false
+      - name: Verificar escopo de assinatura sem credenciais
+        shell: pwsh
+        run: ./recovered-source/tools/test-signing-scope.ps1
   firestore-rules:
     if: ${{ !inputs.reuseEmulators }}
     runs-on: ubuntu-latest

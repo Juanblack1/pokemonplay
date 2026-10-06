@@ -42,6 +42,9 @@ try{
     if(@(Get-ChildItem -LiteralPath $taskLauncher -Filter '*.dll' -File).Count -gt 0){throw 'O iniciador portátil não foi publicado como executável single-file.'}
     @{version=$Tag;repository=$Repository} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRuntime 'app-release.json') -Encoding utf8
     @{repository=$Repository} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRuntime 'UpdateSource.json') -Encoding utf8
+    foreach($taskNotice in @('LICENSE','PRIVACY.md','CODE_SIGNING.md')){
+        Copy-Item -LiteralPath (Join-Path $taskWorkspace $taskNotice) -Destination $taskRuntime
+    }
     $taskSigningRequested=$env:POKEMONPLAY_REQUIRE_SIGNING -eq 'true' -or ![string]::IsNullOrWhiteSpace($env:POKEMONPLAY_SIGNING_PFX_BASE64) -or ![string]::IsNullOrWhiteSpace($env:POKEMONPLAY_SIGNING_PFX_PASSWORD)
     if($taskSigningRequested){
         & (Join-Path $PSScriptRoot 'sign-windows-package.ps1') -Directory $taskBuild
@@ -89,7 +92,7 @@ try{
     Set-Content -LiteralPath ($taskPortableZip+'.sha256') -Value ($taskPortableDigest+'  pokemon-play-win-x64-portable.zip') -Encoding ascii
     & (Join-Path $PSScriptRoot 'build-installer.ps1') -RuntimeDirectory $taskRuntime -Version $taskVersion -OutputDirectory $taskOutput -CompilerPath $InstallerCompilerPath
     if ($taskSigningRequested) {
-        & (Join-Path $PSScriptRoot 'sign-windows-package.ps1') -Directory $taskOutput
+        & (Join-Path $PSScriptRoot 'sign-windows-package.ps1') -Directory $taskOutput -Kind Installer
         if ($LASTEXITCODE -ne 0) { throw 'A assinatura do instalador falhou.' }
         $taskSetup=Join-Path $taskOutput 'pokemon-play-win-x64-setup.exe'
         $taskSetupDigest=(Get-FileHash -LiteralPath $taskSetup -Algorithm SHA256).Hash.ToLowerInvariant()
