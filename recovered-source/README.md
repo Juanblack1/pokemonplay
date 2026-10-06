@@ -1,5 +1,11 @@
 ﻿# Código recuperado de Pokemons Play
 
+O mantenedor confirmou ser o autor do aplicativo original. A reconstrução a
+partir de seu próprio executável documentada abaixo faz parte da história do
+projeto. O código próprio é publicado sob [GNU GPL versão 3](../LICENSE);
+componentes de terceiros mantêm suas licenças originais.
+
+
 ## Perfis de save v47
 
 Na v49, o **Banco Pokémon** permite escolher jogo e perfil e clicar em **Abrir perfil**, sem localizar o arquivo manualmente. Se houver mais de um save compatível, a lista de arquivos permite escolher qual abrir. O contexto do save aberto fica visível; selecionar outro perfil no banco não muda o perfil escolhido para jogar. Perfis vazios orientam a salvar dentro do jogo. Ao trocar um save com alterações pendentes, é possível salvar, descartar ou cancelar.
