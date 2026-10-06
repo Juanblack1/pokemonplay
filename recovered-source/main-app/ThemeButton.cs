@@ -14,7 +14,11 @@ internal class ThemeButton : Button
   SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);
  }
  public override Size GetPreferredSize(Size proposedSize) {var text=TextRenderer.MeasureText(Text??"",Font??AppTheme.BodyBold,Size.Empty,TextFormatFlags.NoPadding);return new Size(Math.Max(80,text.Width+32),Math.Max(AppTheme.ControlHeight,text.Height+18));}
- protected virtual Rectangle TextBounds=>new Rectangle(12,3,Math.Max(1,Width-24),Math.Max(1,Height-6));
+ protected virtual Rectangle TextBounds=>new Rectangle(Width<=Height?4:12,3,Math.Max(1,Width-(Width<=Height?8:24)),Math.Max(1,Height-6));
+ protected virtual void DrawButtonText(Graphics graphics, Rectangle bounds)
+ {
+  TextRenderer.DrawText(graphics,Text,Font,bounds,Enabled?ForeColor:AppTheme.TextMuted,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPadding|TextFormatFlags.PreserveGraphicsClipping);
+ }
  protected override void OnMouseEnter(EventArgs e){hover=true;Invalidate();base.OnMouseEnter(e);}
  protected override void OnMouseLeave(EventArgs e){hover=pressed=false;Invalidate();base.OnMouseLeave(e);}
  protected override void OnMouseDown(MouseEventArgs e){pressed=true;Invalidate();base.OnMouseDown(e);}
@@ -34,6 +38,6 @@ internal class ThemeButton : Button
   using(var brush=new SolidBrush(fill))PaintTools.FillRounded(e.Graphics,brush,rect,AppTheme.Radius);
   using(var pen=new Pen(Focused?AppTheme.Focus:border,Focused?2f:1f))PaintTools.DrawRounded(e.Graphics,pen,rect,AppTheme.Radius);
   var textRect=TextBounds;
-  TextRenderer.DrawText(e.Graphics,Text,Font,textRect,Enabled?ForeColor:AppTheme.TextMuted,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPadding);
+  DrawButtonText(e.Graphics,textRect);
  }
 }

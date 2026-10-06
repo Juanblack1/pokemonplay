@@ -15,6 +15,7 @@ class Check {
  static void Assert(bool value,string name){if(!value)throw new Exception(name);Console.WriteLine("PASS "+name);}
  static void DeleteTemporaryFixture(string path){string resolved=Path.GetFullPath(path);string temporary=Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);if(!string.Equals(Path.GetDirectoryName(resolved),temporary,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Fixture cleanup must remain inside the temporary directory.");if(Directory.Exists(resolved))Directory.Delete(resolved,true);}
  [STAThread] static void Main(string[] args){
+  if(args.Length>0&&args[0]=="--app-updates"){string fixture=Path.Combine(Path.GetTempPath(),"pokemonplay-updates-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(fixture);try{AppUpdatesCheck.Run(fixture);}finally{DeleteTemporaryFixture(fixture);}return;}
   if(args.Length>0&&args[0]=="--reserved-key-feedback") {
    Application.EnableVisualStyles();
    string reservedRoot=Path.Combine(Path.GetTempPath(),"pokemonplay-reserved-key-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(reservedRoot);

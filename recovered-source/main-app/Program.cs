@@ -18,6 +18,13 @@ internal static class Program
 	{
 		Application.EnableVisualStyles();
 		Application.SetCompatibleTextRenderingDefault(defaultValue: false);
+		#if STARTUP_PLAYBACK_PROBE
+		if (args.Length == 4 && args[0] == "--diagnose-gba")
+		{
+			StartupPlaybackProbe.Run(args[1], args[2], args[3]);
+			return;
+		}
+		#endif
 		if (args.Length == 3 && args[0] == "--render-previews")
 		{
 			Directory.CreateDirectory(args[2]);
@@ -25,6 +32,7 @@ internal static class Program
             if (int.TryParse(Environment.GetEnvironmentVariable("POKEMONPLAY_PREVIEW_WIDTH"), out int previewWidth)) form.Width = Math.Max(1000, previewWidth);
             if (int.TryParse(Environment.GetEnvironmentVariable("POKEMONPLAY_PREVIEW_HEIGHT"), out int previewHeight)) form.Height = Math.Max(720, previewHeight);
 			form.Show();
+			Application.DoEvents(); // Finish the initial Shown navigation before capturing a requested page.
 			foreach (string page in new[] { "library", "saves", "pokemon", "settings" })
 			{
 				form.Navigate(page);
@@ -49,6 +57,7 @@ internal static class Program
 				if (page == "settings" || page == "saves" || page == "library")
 				{
 					ScrollPreview(form);
+					File.WriteAllText(Path.Combine(args[2],page+"-scroll-layout.txt"), DescribeLayout(form));
 					Application.DoEvents();
 					using var scrolled = new System.Drawing.Bitmap(form.Width, form.Height);
 					form.DrawToBitmap(scrolled, new System.Drawing.Rectangle(0, 0, form.Width, form.Height));
@@ -85,6 +94,16 @@ internal static class Program
             string candidate=Path.GetFullPath(args[1]);string name=Path.GetFileName(candidate);
             if(string.Equals(Path.GetDirectoryName(candidate),Path.GetFullPath(AppPaths.Root),StringComparison.OrdinalIgnoreCase)&&name.StartsWith(".pokemonplay-update-",StringComparison.Ordinal)&&Guid.TryParseExact(name.Substring(20),"N",out _)&&Directory.Exists(candidate)) updateStage=candidate;
         }
+        if(updateStage==null)
+        {
+            try
+            {
+                using var updates=new AppUpdateService(AppPaths.Root);
+                string pending=PendingAppUpdate.Find(AppPaths.Root,updates.Repository);
+                if(pending!=null){SaveProfileService.EnsureEmulatorsClosed();PendingAppUpdate.Start(AppPaths.Root,pending);return;}
+            }
+            catch(Exception){/* Recovery or an active game must never block opening the launcher. */}
+        }
         if(updateStage!=null&&File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"emulators-runtime.zip")))
             UpdatePreparationForm.Prepare(AppDomain.CurrentDomain.BaseDirectory,AppPaths.Root,updateStage);
         else BundledEmulatorArchive.EnsureExtracted(AppDomain.CurrentDomain.BaseDirectory);
@@ -97,10 +116,18 @@ internal static class Program
 	{
 		foreach (Control child in parent.Controls)
 		{
-			if (child is Panel panel && panel.AutoScroll && panel.VerticalScroll.Visible) panel.AutoScrollPosition = new System.Drawing.Point(0, 10000);
+			if (child is Panel panel && panel.AutoScroll && panel.VerticalScroll.Visible)
+				panel.AutoScrollPosition = new System.Drawing.Point(0, Math.Max(0, panel.DisplayRectangle.Height - panel.ClientSize.Height));
 			else ScrollPreview(child);
 		}
 	}
+    private static string DescribeLayout(Control parent)
+    {
+        string result = parent.GetType().Name + " bounds=" + parent.Bounds +
+            (parent is ScrollableControl scroll ? " display=" + scroll.DisplayRectangle + " scroll=" + scroll.AutoScrollPosition : "") + "\n";
+        foreach(Control child in parent.Controls) result += DescribeLayout(child);
+        return result;
+    }
     private static InputWorkbench FindWorkbench(Control parent)
     {
         if(parent is InputWorkbench workbench)return workbench;

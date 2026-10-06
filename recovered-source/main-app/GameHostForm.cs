@@ -332,6 +332,10 @@ internal sealed class GameHostForm : Form
 	internal void NotifyApplicationActivated()
 	{
 		if (!closing && !launchFailed && Visible) sessionClock?.Start();
+		// This form is a child of LauncherForm, so its Activated event does not
+		// restore focus to RetroArch's separate top-level window.
+		if (emulatorTopLevel && !closing && !launchFailed && Visible && IsHandleCreated)
+			BeginInvoke((Action)(() => { if (Visible && !closing && !launchFailed) FocusEmulator(); }));
 	}
 
 	internal void RequestClose() => CloseWithConfirmation();
@@ -370,7 +374,11 @@ internal sealed class GameHostForm : Form
             if (closeInProgress) return;
             RecordSessionPlayTime();closing=true;timer?.Stop();Close();return;
         }
-        if (emulatorEmbedded){ResizeEmbedded();return;}
+        if (emulatorEmbedded){
+            ResizeEmbedded();
+            if(emulatorTopLevel && IsInputHostFocused) FocusEmulator();
+            return;
+        }
         if(emulator==null){timer?.Stop();ShowLaunchFailure(new InvalidOperationException("O processo iniciado não forneceu uma identidade para incorporar a janela."));return;}
         if(!TryGetMainWindowHandle(emulator,out IntPtr mainWindowHandle))return;
         bool keepForegroundWindow=string.Equals(processName,"retroarch",StringComparison.OrdinalIgnoreCase);
@@ -386,7 +394,7 @@ internal sealed class GameHostForm : Form
             ()=>virtualPad?.VirtualActions??new bool[12],()=>virtualPad!=null&&virtualPad.Capture&&virtualPad.Actions.Any(action=>action),FocusEmulator,()=>emulatorTopLevel);
         if(emulatorTopLevel&&virtualPad!=null)virtualPad.MouseDown+=(_,eventArgs)=>{if(eventArgs.Button==MouseButtons.Left)FocusEmulator();};
         emulatorEmbedded=true;ResizeEmbedded();Resize+=(_,_)=>ResizeEmbedded();Move+=(_,_)=>ResizeEmbedded();VisibleChanged+=(_,_)=>ResizeEmbedded();
-        if(emulatorTopLevel&&Visible&&WindowState!=FormWindowState.Minimized)SetForegroundWindow(mainWindowHandle);
+        if(emulatorTopLevel&&Visible&&WindowState!=FormWindowState.Minimized)BeginInvoke((Action)FocusEmulator);
     }
     private bool TryPrepareForegroundWindow(IntPtr window,out Exception failure)
     {
@@ -636,16 +644,19 @@ internal sealed class GameHostForm : Form
         get
         {
             if (!Visible || closing || launchFailed) return false;
+            Form activeHost = TopLevel ? this : Parent?.FindForm();
             InputReader.GetWindowThreadProcessId(InputReader.GetForegroundWindow(), out uint foregroundPid);
             return foregroundPid == Environment.ProcessId &&
-                ((Form.ActiveForm == this && ContainsFocus) || virtualPad?.Capture == true);
+                ((Form.ActiveForm == activeHost && activeHost?.ContainsFocus == true) || virtualPad?.Capture == true);
         }
     }
     private void FocusEmulator()
     {
         IntPtr hwnd=embeddedWindowHandle;
         if(hwnd==IntPtr.Zero&&!TryGetMainWindowHandle(emulator,out hwnd))return;
-        if(emulatorTopLevel)SetForegroundWindow(hwnd);
+        // Activating a top-level window already gives its thread keyboard focus.
+        // Joining the two UI queues is only needed for a genuinely embedded child.
+        if(emulatorTopLevel){SetForegroundWindow(hwnd);return;}
         uint target=InputReader.GetWindowThreadProcessId(hwnd,out _),current=GetCurrentThreadId();
         bool attached=target!=current&&AttachThreadInput(current,target,true);
         try{SetFocus(hwnd);}finally{if(attached)AttachThreadInput(current,target,false);}

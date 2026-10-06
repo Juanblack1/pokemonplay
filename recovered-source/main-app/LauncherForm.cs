@@ -34,14 +34,17 @@ internal sealed class LauncherForm : Form
     private readonly System.Windows.Forms.Timer updateTimer=new(){Interval=6*60*60*1000};
     private AppUpdate availableUpdate;
     private bool checkingUpdate;
+    private string automaticStage;
+    private readonly System.Threading.CancellationTokenSource updateLifetime=new();
     internal bool UpdatesEnabled {get;set;}=true;
     internal string UpdateReadyStage {get;set;}
 
-	public LauncherForm(string root)
+	public LauncherForm(string root):this(root,null){}
+    internal LauncherForm(string root,System.Net.Http.HttpClient updateClient)
 	{
 		LauncherForm launcherForm = this;
 		this.root = root;
-        updates=new AppUpdateService(root);
+        updates=new AppUpdateService(root,updateClient);
 		Text = "Pokemons Play · "+AppRelease.Tag+" · Pixel";
 		Width = 1280;
 		Height = 820;
@@ -64,10 +67,10 @@ internal sealed class LauncherForm : Form
         Shown+=async(_,_)=>
         {
             if(UpdateReadyStage!=null){File.WriteAllText(Path.Combine(UpdateReadyStage,"ready"),AppRelease.Tag);File.WriteAllText(Path.Combine(UpdateReadyStage,"prepared"),AppRelease.Tag);}
-            if(UpdatesEnabled){await CheckForUpdates();updateTimer.Start();await System.Threading.Tasks.Task.Delay(5000);CleanCompletedUpdates();}
+            if(UpdatesEnabled){await CheckForUpdates();if(IsDisposed)return;updateTimer.Start();await System.Threading.Tasks.Task.Delay(5000);CleanCompletedUpdates();}
         };
         updateTimer.Tick+=async(_,_)=>await CheckForUpdates();
-        FormClosed+=(_,_)=>{pageUnderGame?.Dispose();pageUnderGame=null;updateTimer.Dispose();updates.Dispose();};
+        FormClosed+=(_,_)=>{pageUnderGame?.Dispose();pageUnderGame=null;updateTimer.Dispose();updateLifetime.Cancel();updates.Dispose();};
 		FormClosing += async (_, e) =>
 		{
 			if (finishCloseAfterSession) return;
@@ -208,21 +211,42 @@ internal sealed class LauncherForm : Form
 
     private async System.Threading.Tasks.Task CheckForUpdates()
     {
-        if(checkingUpdate||updates.Repository.Length==0||IsDisposed)return;
+        if(checkingUpdate||automaticStage!=null||updates.Repository.Length==0||IsDisposed)return;
         checkingUpdate=true;
-        try{var result=await updates.CheckAsync();if(!IsDisposed){availableUpdate=result;ShowUpdateNotice();}}
-        catch(Exception){/* Offline checks leave the app usable; the manual dialog reports errors. */}
-        finally{checkingUpdate=false;}
+        updateNotice.Enabled=false;updateNotice.Text="Verificando…";
+        try
+        {
+            automaticStage=await System.Threading.Tasks.Task.Run(()=>PendingAppUpdate.Find(root,updates.Repository),updateLifetime.Token);
+            if(automaticStage==null)
+            {
+                availableUpdate=await updates.CheckAsync(updateLifetime.Token);
+                if(availableUpdate!=null)
+                {
+                    var progress=new Progress<int>(value=>{if(!IsDisposed)updateNotice.Text="Baixando · "+value+"%";});
+                    automaticStage=await updates.DownloadAsync(availableUpdate,progress,updateLifetime.Token);
+                    try{await System.Threading.Tasks.Task.Run(()=>PendingAppUpdate.Save(automaticStage,availableUpdate,updates.Repository));}
+                    catch{AppUpdateService.TryClean(automaticStage);automaticStage=null;throw;}
+                }
+            }
+        }
+        catch(Exception){/* Offline or cancelled downloads leave the current app usable. */}
+        finally{checkingUpdate=false;if(!IsDisposed){updateNotice.Enabled=true;ShowUpdateNotice();}}
     }
     private void ShowUpdateNotice()
     {
-        updateNotice.Available=availableUpdate!=null;updateNotice.Kind=availableUpdate!=null?ButtonKind.Primary:ButtonKind.Secondary;
-        updateNotice.Text=availableUpdate!=null?"Atualização disponível":"Atualizações";updateNotice.AccessibleName=availableUpdate!=null?"Atualização "+availableUpdate.Tag+" disponível; escolher se deseja atualizar":"Verificar atualizações do aplicativo";updateNotice.Invalidate();
+        updateNotice.Available=automaticStage!=null||availableUpdate!=null;updateNotice.Kind=automaticStage!=null||availableUpdate!=null?ButtonKind.Primary:ButtonKind.Secondary;
+        updateNotice.Text=automaticStage!=null?"Reiniciar e atualizar":availableUpdate!=null?"Atualização disponível":"Atualizações";updateNotice.AccessibleName=automaticStage!=null?"Atualização pronta; reiniciar e atualizar, ou instalar na próxima abertura":availableUpdate!=null?"Atualização "+availableUpdate.Tag+" disponível; escolher se deseja atualizar":"Verificar atualizações do aplicativo";updateNotice.Invalidate();
     }
     private void OpenUpdates()
     {
-        using var dialog=new AppUpdateDialog(updates,availableUpdate){BeforeRestart=()=>
-        {
+        if(checkingUpdate)return;
+        if(automaticStage!=null){if(BeforeUpdateRestart())StartPreparedUpdate(automaticStage);return;}
+        using var dialog=new AppUpdateDialog(updates,availableUpdate){BeforeRestart=BeforeUpdateRestart};
+        if(dialog.ShowDialog(this)!=DialogResult.OK||dialog.PreparedStage==null){availableUpdate=dialog.CurrentUpdate;ShowUpdateNotice();return;}
+        StartPreparedUpdate(dialog.PreparedStage);
+    }
+    private bool BeforeUpdateRestart()
+    {
             try
             {
                 SaveProfileService.EnsureEmulatorsClosed();
@@ -231,16 +255,11 @@ internal sealed class LauncherForm : Form
                 return true;
             }
             catch(Exception e){MessageBox.Show(this,e.Message,"Atualização",MessageBoxButtons.OK,MessageBoxIcon.Information);return false;}
-        }};
-        if(dialog.ShowDialog(this)!=DialogResult.OK||dialog.PreparedStage==null){availableUpdate=dialog.CurrentUpdate;ShowUpdateNotice();return;}
-        string stage=dialog.PreparedStage;
-        try
-        {
-            var start=new ProcessStartInfo(Path.Combine(stage,"PokemonPlayUpdater.exe")){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=stage};
-            start.ArgumentList.Add(Environment.ProcessId.ToString());start.ArgumentList.Add(Path.GetFullPath(root));start.ArgumentList.Add(stage);
-            if(Process.Start(start)==null)throw new IOException("Não foi possível iniciar o atualizador.");Close();
-        }
-        catch(Exception e){AppUpdateService.TryClean(stage);MessageBox.Show(this,e.Message,"Falha na atualização",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
+    }
+    private void StartPreparedUpdate(string stage)
+    {
+        try{PendingAppUpdate.Start(root,stage);Close();}
+        catch(Exception e){MessageBox.Show(this,e.Message,"Falha na atualização",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
     }
     private void CleanCompletedUpdates()
     {
