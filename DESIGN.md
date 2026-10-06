@@ -1,4 +1,8 @@
-# Sistema visual — Pokemons Play v26 · Pixel
+﻿# Sistema visual — Pokemons Play v26 · Pixel
+
+## Banco e editor v172.0.5 — feedback durante a edição
+
+Mantém a identidade Pixel e a paleta vigente. O editor reúne espécie, nível, natureza, habilidade, item, quatro golpes e seis pares EV/IV na seção Conjunto, inspirada na organização do teambuilder do Pokémon Showdown. As demais seções usam os mesmos botões do app em lugar das abas nativas brancas. Campos preservam edição e foco nativos, com moldura Pixel, busca por nome e número e erro junto ao campo. EVs mostram orçamento restante e limites por formato; exceder 510 ou o limite individual destaca vermelho e desativa aplicar. Valores inválidos importados permanecem visíveis para correção. A legalidade usa PKHeX automaticamente após 350 ms, com relatório completo acessível e resultados antigos descartados. Legalidade não comprova captura real. O banco mostra nomes quando há espaço, tooltip completo, limites de paginação, status automático de legalidade no inspector, alterações pendentes no cabeçalho, Ctrl+S e F2. A grade continua seis por cinco e os saves mantêm gravação explícita com backup.
 
 ## Banco v172.0.4 — caixas e inspector
 

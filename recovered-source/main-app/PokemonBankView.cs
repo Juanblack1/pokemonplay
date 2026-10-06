@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Collections.Generic;
@@ -717,6 +717,8 @@ internal sealed partial class PokemonBankView : BufferedPanel
             bankSpeciesSearch.Focus();
             return true;
         }
+        if(keyData==(Keys.Control|Keys.S)&&saveButton.Enabled){SaveChanges(this,EventArgs.Empty);return true;}
+        if(keyData==Keys.F2&&editButton.Enabled){EditPokemon(this,EventArgs.Empty);return true;}
         return base.ProcessCmdKey(ref message, keyData);
     }
 
@@ -936,11 +938,12 @@ internal sealed partial class PokemonBankView : BufferedPanel
             button.Click += (_, _) => SelectSlot(slotIndex);
             button.DoubleClick += (_, _) => {SelectSlot(slotIndex);if(occupied)EditPokemon(button,EventArgs.Empty);else CreatePokemon(button,EventArgs.Empty);};
             button.KeyDown += NavigateBankCards;
+            workspaceTips.SetToolTip(button,occupied?$"{PokemonLabel(pk)} · Nv. {pk.CurrentLevel} · PK{pk.Format}\nDuplo clique ou F2 para editar":$"Espaço {i+1} disponível · duplo clique para criar");
             slots.Controls.Add(button);
         }
         slots.ResumeLayout();
         LayoutBoxCells();
-        UpdateSelectedSpritePreview();
+        UpdateSelectedSpritePreview();SyncWorkspace();RefreshSelectionLegality();
     }
 
     private void NavigateBankCards(object sender, KeyEventArgs e)
@@ -1150,6 +1153,7 @@ internal sealed partial class PokemonBankView : BufferedPanel
     private void SelectSlot(int index)
     {
         selectedSlot = index;
+        RefreshSelectionLegality();
         var pk = GetSlot(index);
         if (IsBank)
         {
@@ -1452,10 +1456,12 @@ internal sealed class PokemonSlotButton : Button
   var g=e.Graphics;g.Clear(BackColor);
   var bounds=new Rectangle(1,1,Width-3,Height-3);using var pen=new Pen(Focused?AppTheme.Focus:FlatAppearance.BorderColor);g.DrawRectangle(pen,bounds);
   string position=(Text??"").Split('\n')[0].Split('·')[0].Trim();TextRenderer.DrawText(g,position,AppTheme.Caption,new Rectangle(6,3,Width-12,16),AppTheme.TextMuted,TextFormatFlags.Left|TextFormatFlags.EndEllipsis);
-  int art=Math.Min(64,Math.Min(Width-12,Height-38));var artBounds=new Rectangle((Width-art)/2,18,art,art);
+  bool showName=Width>=90&&Height>=88;
+  int art=Math.Max(8,Math.Min(64,Math.Min(Width-12,Height-(showName?56:38))));var artBounds=new Rectangle((Width-art)/2,18,art,art);
   if(Sprite!=null){g.InterpolationMode=System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;var ink=spriteInk.IsEmpty?new Rectangle(Point.Empty,Sprite.Size):spriteInk;double scale=Math.Min((double)artBounds.Width/ink.Width,(double)artBounds.Height/ink.Height);var draw=new Rectangle(artBounds.X+(artBounds.Width-(int)(ink.Width*scale))/2,artBounds.Y+(artBounds.Height-(int)(ink.Height*scale))/2,(int)(ink.Width*scale),(int)(ink.Height*scale));g.DrawImage(Sprite,draw,ink,GraphicsUnit.Pixel);}
   else if(PokemonName!=null||Title!=null)PaintTools.DrawPokeball(g,new Rectangle(Width/2-12,Height/2-8,24,24),AppTheme.Focus,AppTheme.Background);
   else {using var empty=new SolidBrush(AppTheme.BorderSoft);g.FillEllipse(empty,Width/2-3,Height/2-3,6,6);}
+  if(showName&&(PokemonName!=null||Title!=null))TextRenderer.DrawText(g,PokemonName??Title,AppTheme.Caption,new Rectangle(4,Height-34,Width-8,16),AppTheme.Text,TextFormatFlags.HorizontalCenter|TextFormatFlags.EndEllipsis);
   if(PokemonName!=null||Title!=null)TextRenderer.DrawText(g,Width<95?(Facts??"").Split('·')[0]:Facts,AppTheme.Caption,new Rectangle(4,Height-17,Width-8,15),AppTheme.TextSecondary,TextFormatFlags.HorizontalCenter|TextFormatFlags.EndEllipsis);
  }
  private static int TypeBadgeWidth(int type)

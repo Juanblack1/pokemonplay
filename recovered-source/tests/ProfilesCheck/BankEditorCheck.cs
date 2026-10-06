@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Drawing;
@@ -35,6 +35,19 @@ internal static class BankEditorCheck
             foreach(string stat in new[]{"EV_HP","EV_ATK","EV_DEF"})((NumericUpDown)Field(editor,stat)).Value=252;
             bool rejected=false;try{editor.ReadDraft();}catch(InvalidOperationException){rejected=true;}
             Assert(rejected,"PK"+generation+" rejects EV sum above 510");
+            Assert(!editor.CanApply&&editor.ValidationColor==AppTheme.Red&&editor.EvBudgetText.Contains("246"),"PK"+generation+" immediately marks excess EVs red and disables apply");
+            ((NumericUpDown)Field(editor,"EV_DEF")).Value=6;
+            Assert(editor.CanApply&&editor.ReadDraft().EVTotal==510&&editor.EvBudgetText.Contains("0 disponíveis"),"PK"+generation+" accepts exactly 510 EVs and restores apply after correction");
+            ((ComboBox)Field(editor,nameof(PKM.HeldItem))).Text="not an item";
+            Assert(!editor.CanApply,"PK"+generation+" cannot silently apply an unmatched typed choice");
+            ((ComboBox)Field(editor,nameof(PKM.HeldItem))).SelectedIndex=0;
+        }
+        var invalid=PokemonEditorService.Blank(6);invalid.EV_ATK=255;
+        using(var editor=new PokemonEditorDialog(invalid))
+        {
+            Assert(((NumericUpDown)Field(editor,"EV_ATK")).Value==255&&!editor.CanApply,"invalid imported EV remains visible and blocked instead of silently truncated");
+            ((NumericUpDown)Field(editor,"EV_ATK")).Value=252;
+            Assert(editor.CanApply&&editor.ReadDraft().EV_ATK==252&&invalid.EV_ATK==255,"imported invalid EV can be corrected without mutating source");
         }
         var probe=PokemonEditorService.Blank(3,version:GameVersion.LG);probe.Species=25;probe.CurrentLevel=20;
         var encounters=PokemonEditorService.Encounters(probe);
@@ -46,10 +59,29 @@ internal static class BankEditorCheck
         using(var editor=new PokemonEditorDialog(generated))
         {
             Assert(PokemonLegalityService.Analyze(editor.ReadDraft()).IsConsistent,"opening generated encounter preserves legality");
+            var live=editor.AnalyzeLive();while(!live.IsCompleted){Application.DoEvents();System.Threading.Thread.Sleep(10);}live.GetAwaiter().GetResult();
+            Assert(editor.LegalityStateText.Contains("Legal segundo"),"live PKHeX status is available without manually opening report");
+            var stale=editor.AnalyzeLive();
+            foreach(string name in new[]{"EV_HP","EV_ATK","EV_SPE"})((NumericUpDown)Field(editor,name)).Value=255;
+            while(!stale.IsCompleted){Application.DoEvents();System.Threading.Thread.Sleep(10);}stale.GetAwaiter().GetResult();
+            Assert(editor.LegalityStateText.Contains("Não é possível aplicar"),"late analysis cannot overwrite a newer invalid draft");
+            foreach(string name in new[]{"EV_HP","EV_ATK","EV_SPE"})((NumericUpDown)Field(editor,name)).Value=0;
             if(output!=null)
             {
                 editor.Show();Application.DoEvents();
-                using var bitmap=new Bitmap(editor.Width,editor.Height);editor.DrawToBitmap(bitmap,new Rectangle(Point.Empty,editor.Size));bitmap.Save(Path.Combine(output,"editor.png"));
+                var analysis=editor.AnalyzeLive();while(!analysis.IsCompleted){Application.DoEvents();System.Threading.Thread.Sleep(10);}analysis.GetAwaiter().GetResult();
+                Assert(editor.LegalityStateText.Contains("Legal segundo"),"live editor legality uses real PKHeX result");
+                foreach(var size in new[]{new Size(1000,700),new Size(1180,780)})
+                {
+                    editor.ClientSize=size;Application.DoEvents();
+                    using var bitmap=new Bitmap(editor.Width,editor.Height);editor.DrawToBitmap(bitmap,new Rectangle(Point.Empty,editor.Size));bitmap.Save(Path.Combine(output,"editor-"+size.Width+".png"));
+                }
+                ((NumericUpDown)Field(editor,"EV_HP")).Value=255;((NumericUpDown)Field(editor,"EV_ATK")).Value=255;((NumericUpDown)Field(editor,"EV_SPE")).Value=255;
+                using(var bitmap=new Bitmap(editor.Width,editor.Height)){editor.DrawToBitmap(bitmap,new Rectangle(Point.Empty,editor.Size));bitmap.Save(Path.Combine(output,"editor-invalid.png"));}
+                ((NumericUpDown)Field(editor,"EV_SPE")).Value=0;
+                analysis=editor.AnalyzeLive();while(!analysis.IsCompleted){Application.DoEvents();System.Threading.Thread.Sleep(10);}analysis.GetAwaiter().GetResult();
+                Assert(editor.LegalityStateText.Contains("Revisar legalidade"),"live legal status changes after an inconsistent edit");
+                ((NumericUpDown)Field(editor,"EV_HP")).Value=0;((NumericUpDown)Field(editor,"EV_ATK")).Value=0;
                 editor.ShowEncounters();
                 for(int i=0;i<20;i++){Application.DoEvents();System.Threading.Thread.Sleep(50);}
                 using var encounterImage=new Bitmap(editor.Width,editor.Height);editor.DrawToBitmap(encounterImage,new Rectangle(Point.Empty,editor.Size));encounterImage.Save(Path.Combine(output,"encounters.png"));

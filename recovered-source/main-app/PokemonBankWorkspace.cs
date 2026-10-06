@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -9,7 +9,11 @@ internal sealed partial class PokemonBankView
     private readonly ListBox boxList=new(){Dock=DockStyle.Fill,BorderStyle=BorderStyle.None,DrawMode=DrawMode.OwnerDrawFixed,ItemHeight=32,BackColor=AppTheme.Surface,ForeColor=AppTheme.Text,Font=AppTheme.Body};
     private readonly Label boxHeading=new(){Dock=DockStyle.Fill,Font=AppTheme.Section,ForeColor=AppTheme.Text,TextAlign=ContentAlignment.MiddleLeft,AutoEllipsis=true};
     private readonly Label workspaceHint=new(){Dock=DockStyle.Bottom,Height=28,Font=AppTheme.Caption,ForeColor=AppTheme.TextMuted,TextAlign=ContentAlignment.MiddleLeft};
-    private ThemeButton teamScope,bankScope;
+    private ThemeButton teamScope,bankScope,workspacePrevious,workspaceNext;
+    private readonly Label pendingChanges=new(){Dock=DockStyle.Right,Width=300,Font=AppTheme.Body,TextAlign=ContentAlignment.MiddleRight,ForeColor=AppTheme.Gold};
+    private readonly Label selectionLegality=new(){Dock=DockStyle.Top,Height=54,AutoSize=true,MinimumSize=new Size(216,48),MaximumSize=new Size(216,0),Font=AppTheme.Caption,ForeColor=AppTheme.TextMuted,Padding=new Padding(4,4,4,8)};
+    private readonly ToolTip workspaceTips=new(){AutoPopDelay=12000};
+    private int selectionRevision;
     private bool syncingWorkspace;
     private void BuildBankWorkspace(FlowLayoutPanel toolbar,FlowLayoutPanel profiles,Panel info,Panel body,Panel content,Panel side,Panel cloudBar,Button openProfile)
     {
@@ -37,6 +41,19 @@ internal sealed partial class PokemonBankView
         side.Width=256;side.BackColor=AppTheme.Surface;side.Padding=new Padding(12);details.Font=AppTheme.Body;details.MaximumSize=new Size(216,0);
         foreach(var action in new[]{editButton,moveButton,archiveButton,legalityButton,exportPokemonButton,removePokemonButton}){action.Width=220;action.Font=AppTheme.Body;}
         selectedSpritePreview.Height=88;
+        var selectionLayout=(TableLayoutPanel)details.Parent;
+        var actions=editButton.Parent;
+        selectionLayout.Controls.Remove(actions);selectionLayout.RowCount=4;selectionLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        selectionLayout.Controls.Add(selectionLegality,0,2);selectionLayout.Controls.Add(actions,0,3);
+        selectionLegality.Text="Selecione para verificar legalidade.";
+        selectionLegality.Click+=(_,_)=>{if(legalityButton.Enabled)AnalyzeSelectedPokemon(this,EventArgs.Empty);};
+        selectionLegality.Cursor=Cursors.Hand;
+        workspaceTips.SetToolTip(saveButton,"Gravar o save com backup · Ctrl+S");
+        workspaceTips.SetToolTip(createButton,"Criar um Pokémon no local selecionado");
+        workspaceTips.SetToolTip(bankScope,"Coleção deste PC, compartilhada entre todos os perfis");
+        workspaceTips.SetToolTip(savePicker,"Arquivo de save do perfil selecionado. Carregar save abre uma cópia para edição.");
+        workspaceTips.SetToolTip(teamScope,"Os seis espaços da equipe do save carregado");
+        Disposed+=(_,_)=>{selectionRevision++;workspaceTips.Dispose();};
         foreach(var picker in new[]{bankGenerationPicker,bankDexPicker}){var field=picker.Parent;bankNavigation.Controls.Remove(field);bankExtraFilters.Controls.Add(field);}
         bankSpeciesSearch.Width=144;bankSpeciesSearch.Parent.Width=156;bankSortPicker.Width=128;bankSortPicker.Parent.Width=140;
         foreach(Control action in bankNavigation.Controls){action.Font=AppTheme.Body;}
@@ -44,8 +61,8 @@ internal sealed partial class PokemonBankView
         var clear=bankNavigation.Controls.OfType<ThemeButton>().First(b=>b!=bankMoreFilters);clear.Text="Limpar";clear.AutoSize=false;clear.Width=66;
         
         var navigation=new Panel{Dock=DockStyle.Top,Height=54,BackColor=AppTheme.SurfaceRaised,Padding=new Padding(12,8,12,8)};
-        var previous=new ThemeButton("Anterior",ButtonKind.Secondary){Dock=DockStyle.Left,Width=88,Font=AppTheme.Body};previous.Click+=(_,_)=>ChangeWorkspaceBox(-1);
-        var next=new ThemeButton("Próxima",ButtonKind.Secondary){Dock=DockStyle.Right,Width=88,Font=AppTheme.Body};next.Click+=(_,_)=>ChangeWorkspaceBox(1);
+        var previous=workspacePrevious=new ThemeButton("Anterior",ButtonKind.Secondary){Dock=DockStyle.Left,Width=88,Font=AppTheme.Body};previous.Click+=(_,_)=>ChangeWorkspaceBox(-1);
+        var next=workspaceNext=new ThemeButton("Próxima",ButtonKind.Secondary){Dock=DockStyle.Right,Width=88,Font=AppTheme.Body};next.Click+=(_,_)=>ChangeWorkspaceBox(1);
         boxHeading.Padding=new Padding(14,0,14,0);navigation.Controls.Add(boxHeading);navigation.Controls.Add(next);navigation.Controls.Add(previous);
         content.Controls.Remove(side);body.Controls.Add(side);
         content.Controls.Add(workspaceHint);content.Controls.Add(navigation);
@@ -54,7 +71,7 @@ internal sealed partial class PokemonBankView
         var workspace=new Panel{Dock=DockStyle.Fill,BackColor=AppTheme.Background};workspace.Controls.Add(body);workspace.Controls.Add(toolbar);workspace.Controls.Add(cloudBar);workspace.Controls.Add(info);
         Controls.Add(workspace);Controls.Add(rail);
         var header=new Panel{Dock=DockStyle.Top,Height=52,BackColor=AppTheme.TopBar,Padding=new Padding(18,10,18,8)};
-        header.Controls.Add(new Label{Dock=DockStyle.Fill,Text="Banco Pokémon",Font=AppTheme.PageTitle,ForeColor=AppTheme.Text,TextAlign=ContentAlignment.MiddleLeft});Controls.Add(header);
+        header.Controls.Add(new Label{Dock=DockStyle.Fill,Text="Banco Pokémon",Font=AppTheme.PageTitle,ForeColor=AppTheme.Text,TextAlign=ContentAlignment.MiddleLeft});header.Controls.Add(pendingChanges);Controls.Add(header);
         profiles.Dispose();
         boxPicker.SelectedIndexChanged+=(_,_)=>SyncWorkspace();
         SyncWorkspace();
@@ -72,12 +89,16 @@ internal sealed partial class PokemonBankView
         syncingWorkspace=false;
         boxHeading.Text=IsBank?$"Coleção · {bankPage+1}/{Math.Max(1,(bankViewIndices.Length+29)/30)} · {bankViewIndices.Length} Pokémon":IsParty?$"Equipe · {save.PartyCount}/6":save==null?"Coleção global":$"{names[selectedBox]} · {Enumerable.Range(0,save.BoxSlotCount).Count(i=>save.GetBoxSlotAtIndex(selectedBox,i).Species!=0)}/{save.BoxSlotCount}";
         workspaceHint.Text=IsBank?"Selecione para inspecionar · Duplo clique para editar · Setas para navegar":"Selecione um espaço · Duplo clique para editar/criar · Mover / copiar escolhe a caixa de destino";
+        workspacePrevious.Enabled=IsBank?bankPage>0:save!=null&&!IsParty&&selectedBox>0;
+        workspaceNext.Enabled=IsBank?(bankPage+1)*BankPageSize<bankViewIndices.Length:save!=null&&!IsParty&&selectedBox+1<save.BoxCount;
+        pendingChanges.Text=hasUnsavedChanges?"Alterações pendentes · Ctrl+S":"";
+        saveButton.Enabled=save!=null&&hasUnsavedChanges;
         LayoutBoxCells();
     }
     private void ChangeWorkspaceBox(int direction)
     {
         if(IsBank){ChangeBankPage(direction,false);SyncWorkspace();return;}
-        if(save!=null)boxPicker.SelectedIndex=(boxPicker.SelectedIndex+direction+save.BoxCount+1)%(save.BoxCount+1);
+        if(save!=null&&!IsParty)boxPicker.SelectedIndex=Math.Clamp(selectedBox+direction,0,save.BoxCount-1);
     }
     private void LayoutBoxCells()
     {
@@ -85,6 +106,22 @@ internal sealed partial class PokemonBankView
         int width=Math.Max(40,(slots.ClientSize.Width-18)/6-8);
         int height=Math.Clamp((slots.ClientSize.Height-20)/5-8,24,112);
         foreach(var cell in slots.Controls.OfType<PokemonSlotButton>()){cell.Size=new Size(width,height);cell.Margin=new Padding(0,0,8,8);}
+    }
+    private async void RefreshSelectionLegality()
+    {
+        int request=++selectionRevision;
+        if(selectedSlot<0||GetSlot(selectedSlot).Species==0){selectionLegality.Text="Selecione para verificar legalidade.";selectionLegality.ForeColor=AppTheme.TextMuted;return;}
+        PKM pokemon=GetSlot(selectedSlot).Clone();selectionLegality.Text="Verificando com PKHeX…";selectionLegality.ForeColor=AppTheme.TextMuted;
+        await System.Threading.Tasks.Task.Delay(250);
+        if(IsDisposed||Disposing||request!=selectionRevision)return;
+        try
+        {
+            var result=await System.Threading.Tasks.Task.Run(()=>PokemonLegalityService.Analyze(pokemon));
+            if(IsDisposed||Disposing||request!=selectionRevision)return;
+            selectionLegality.Text=result.IsConsistent?"Legal segundo o PKHeX\nClique para ver a análise.":$"Revisar legalidade · {result.IssueCount} problema(s)\nClique para ver a análise.";
+            selectionLegality.ForeColor=result.IsConsistent?AppTheme.Green:AppTheme.Red;
+        }
+        catch(Exception error){if(IsDisposed||Disposing||request!=selectionRevision)return;selectionLegality.Text="Análise indisponível · clique para tentar";selectionLegality.ForeColor=AppTheme.Gold;workspaceTips.SetToolTip(selectionLegality,error.Message);}
     }
     private string InspectorText(PKM pk)
     {
@@ -98,9 +135,9 @@ internal sealed partial class PokemonBankView
         if(save==null||selectedSlot<0||GetSlot(selectedSlot).Species==0)return;
         using var dialog=new Form{Text=IsBank?"Copiar para caixa":"Mover ou copiar Pokémon",ClientSize=new Size(480,286),StartPosition=FormStartPosition.CenterParent,BackColor=AppTheme.Background,Font=AppTheme.Body,FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false,MinimizeBox=false};
         var title=new Label{Text=PokemonLabel(GetSlot(selectedSlot)),ForeColor=AppTheme.Text,Font=AppTheme.Section,AutoSize=true,Location=new Point(20,16)};
-        var box=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,Location=new Point(20,62),Width=438,Font=AppTheme.Body};box.Items.AddRange(BoxUtil.GetBoxNames(save).Cast<object>().ToArray());
+        var box=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,Location=new Point(20,62),Width=438,Font=AppTheme.Body,BackColor=AppTheme.SurfaceRaised,ForeColor=AppTheme.Text,FlatStyle=FlatStyle.Flat};box.Items.AddRange(BoxUtil.GetBoxNames(save).Cast<object>().ToArray());
         if(!IsBank&&!IsParty)box.Items.Add("Equipe");
-        var position=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,Location=new Point(20,112),Width=438,Font=AppTheme.Body};
+        var position=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,Location=new Point(20,112),Width=438,Font=AppTheme.Body,BackColor=AppTheme.SurfaceRaised,ForeColor=AppTheme.Text,FlatStyle=FlatStyle.Flat};
         box.SelectedIndexChanged+=(_,_)=>{
             position.Items.Clear();
             if(box.SelectedIndex==save.BoxCount){position.Items.Add(save.PartyCount>=6?"Equipe cheia":$"Próximo espaço disponível · {save.PartyCount+1}");position.SelectedIndex=0;return;}

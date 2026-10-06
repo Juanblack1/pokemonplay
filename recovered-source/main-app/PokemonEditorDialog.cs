@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using PKHeX.Core;
 
-internal sealed class PokemonEditorDialog : Form
+internal sealed partial class PokemonEditorDialog : Form
 {
     private sealed record Choice(int Value, string Name) { public override string ToString()=>Name; }
     private sealed record Binding(PropertyInfo Property, Control Control, Func<object> Read, object Initial);
@@ -16,7 +16,7 @@ internal sealed class PokemonEditorDialog : Form
     private PKM draft;
     private readonly SaveFile save;
     private readonly PKHeX.Core.GameStrings strings=PKHeX.Core.GameInfo.GetStrings("en");
-    private readonly TabControl tabs=new() {Dock=DockStyle.Fill,Font=AppTheme.Body,Multiline=true};
+    private readonly EditorPageHost tabs=new() {Dock=DockStyle.Fill};
     private readonly Label summary=new(){Dock=DockStyle.Fill,ForeColor=AppTheme.Text,Font=AppTheme.Body,Padding=new Padding(16)};
     private readonly Label status=new(){Dock=DockStyle.Fill,ForeColor=AppTheme.TextMuted,Font=AppTheme.Caption,AutoEllipsis=true,TextAlign=ContentAlignment.MiddleLeft};
     private readonly PictureBox sprite=new(){Dock=DockStyle.Top,Height=160,SizeMode=PictureBoxSizeMode.Zoom,BackColor=AppTheme.SurfaceRaised};
@@ -38,38 +38,38 @@ internal sealed class PokemonEditorDialog : Form
     {
         draft=pokemon.Clone();this.save=save;
         Text=(creating?"Criar Pokémon":"Editar Pokémon")+" · PK"+pokemon.Format;
-        ClientSize=new Size(1060,720);MinimumSize=new Size(940,660);StartPosition=FormStartPosition.CenterParent;
+        ClientSize=new Size(1180,780);MinimumSize=new Size(1000,700);StartPosition=FormStartPosition.CenterParent;
         BackColor=AppTheme.Background;Font=AppTheme.Body;MinimizeBox=false;
-        var header=new PixelHeader(creating?"Criar Pokémon":"Editor Pokémon","Pokémon · encontro · atributos · golpes · treinador",84);
+        var header=new PixelHeader(creating?"Criar Pokémon":"Editor Pokémon","Monte o conjunto · revise os atributos · acompanhe a legalidade",72);
         var side=new Panel{Dock=DockStyle.Left,Width=220,BackColor=AppTheme.Surface};side.Controls.Add(summary);side.Controls.Add(sprite);
         sprite.Paint+=(_,e)=>{if(sprite.Image==null)PaintTools.DrawPokeball(e.Graphics,new Rectangle(80,50,60,60),AppTheme.Focus,AppTheme.Background);};
         var body=new Panel{Dock=DockStyle.Fill,Padding=new Padding(16),BackColor=AppTheme.Background};body.Controls.Add(tabs);body.Controls.Add(side);
         var analyze=new ThemeButton("Verificar legalidade",ButtonKind.Secondary){AutoSize=true};analyze.Click+=(_,_)=>Analyze();
         var database=new ThemeButton("Base de encontros",ButtonKind.Secondary){AutoSize=true};database.Click+=(_,_)=>ShowEncounters();
-        var apply=new ThemeButton(creating?"Criar Pokémon":"Aplicar alterações",ButtonKind.Primary){AutoSize=true};apply.Click+=(_,_)=>Apply();
+        apply=new ThemeButton(creating?"Criar Pokémon":"Aplicar alterações",ButtonKind.Primary){AutoSize=true};apply.Click+=(_,_)=>Apply();
         var cancel=new ThemeButton("Cancelar",ButtonKind.Secondary){AutoSize=true,DialogResult=DialogResult.Cancel};CancelButton=cancel;
         var footer=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=62,Padding=new Padding(16,10,16,10),FlowDirection=FlowDirection.RightToLeft,WrapContents=false,BackColor=AppTheme.TopBar};footer.Controls.AddRange(new Control[]{apply,cancel,database,analyze});
         var note=new Panel{Dock=DockStyle.Bottom,Height=44,Padding=new Padding(20,0,20,0)};note.Controls.Add(status);
         Controls.Add(body);Controls.Add(note);Controls.Add(footer);Controls.Add(header);
         BuildFields();BuildEncounterPage();
-        species.SelectedIndexChanged+=(_,_)=>{if(!loading)_=UpdateSprite();};
         shiny.CheckedChanged+=(_,_)=>Changed(nameof(PKM.IsShiny));
-        tabs.TabPages.Add(new TabPage("Legalidade"){BackColor=AppTheme.Background,Padding=new Padding(12)});tabs.TabPages[^1].Controls.Add(report);
-        LoadFields();status.Text="Edite o rascunho ou escolha um encontro. A análise não comprova a origem real do Pokémon.";
-        FormClosed+=(_,_)=>{spriteSequence++;sprite.Image?.Dispose();sprite.Image=null;};
+        tabs.TabPages.Add(new Panel{Text="Legalidade",BackColor=AppTheme.Background,Padding=new Padding(12)});tabs.TabPages[^1].Controls.Add(report);
+        InitializeLiveFeedback();LoadFields();
+        FormClosed+=(_,_)=>{legalityTimer.Stop();legalityTimer.Dispose();spriteSequence++;sprite.Image?.Dispose();sprite.Image=null;};
     }
 
     private TableLayoutPanel Page(string title)
     {
-        var page=new TabPage(title){BackColor=AppTheme.Background,Padding=new Padding(14),AutoScroll=true};tabs.TabPages.Add(page);
-        var fields=new TableLayoutPanel{Dock=DockStyle.Top,AutoSize=true,ColumnCount=2,Padding=new Padding(0,8,8,8)};
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,190));fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));page.Controls.Add(fields);return fields;
+        var page=new Panel{Text=title,BackColor=AppTheme.Background,Padding=new Padding(14),AutoScroll=true};tabs.TabPages.Add(page);
+        var fields=FieldTable(172);page.Controls.Add(fields);return fields;
     }
     private void Row(TableLayoutPanel table,string label,Control control)
     {
         int row=table.RowCount++;table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var caption=new Label{Text=label,AutoSize=true,ForeColor=AppTheme.TextSecondary,Font=AppTheme.Body,Margin=new Padding(0,8,12,8)};
-        control.Dock=DockStyle.Top;control.Margin=new Padding(0,4,0,8);control.AccessibleName=label;table.Controls.Add(caption,0,row);table.Controls.Add(control,1,row);
+        control.AccessibleName=label;
+        Control field=control is ComboBox or NumericUpDown or TextBox ? new EditorFieldFrame(control) : control;
+        field.Dock=DockStyle.Top;field.Margin=new Padding(0,4,0,8);table.Controls.Add(caption,0,row);table.Controls.Add(field,1,row);
     }
     private void Bind(string property,Control control,Func<object> read)
     {
@@ -84,7 +84,7 @@ internal sealed class PokemonEditorDialog : Form
     {
         var combo=new ComboBox{DrawMode=DrawMode.OwnerDrawFixed,FlatStyle=FlatStyle.Flat,ItemHeight=24,DropDownStyle=ComboBoxStyle.DropDownList,Font=AppTheme.Body,BackColor=AppTheme.SurfaceRaised,ForeColor=AppTheme.Text,Height=32};
         combo.DrawItem+=(_,e)=>{if(e.Index<0)return;using var brush=new SolidBrush((e.State&DrawItemState.Selected)!=0?AppTheme.SurfaceHover:AppTheme.SurfaceRaised);e.Graphics.FillRectangle(brush,e.Bounds);TextRenderer.DrawText(e.Graphics,combo.Items[e.Index].ToString(),combo.Font,e.Bounds,AppTheme.Text,TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);e.DrawFocusRectangle();};
-        combo.Items.AddRange(choices.Cast<object>().ToArray());Row(table,label,combo);Bind(property,combo,()=>((Choice)combo.SelectedItem)?.Value ?? 0);return combo;
+        combo.Items.AddRange(choices.Cast<object>().ToArray());combo.DropDownStyle=ComboBoxStyle.DropDown;combo.AutoCompleteMode=AutoCompleteMode.SuggestAppend;combo.AutoCompleteSource=AutoCompleteSource.ListItems;combo.TextChanged+=(_,_)=>Changed(property);Row(table,label,combo);Bind(property,combo,()=>((Choice)combo.SelectedItem)?.Value ?? 0);return combo;
     }
     private ComboBox Named(TableLayoutPanel table,string label,string property,IReadOnlyList<string> names,int max,int min=0)
         => Pick(table,label,property,Enumerable.Range(min,Math.Max(0,Math.Min(names.Count-1,max)-min+1)).Select(id=>new Choice(id,$"{id:D3} · {names[id]}")));
@@ -102,15 +102,24 @@ internal sealed class PokemonEditorDialog : Form
     }
     private void BuildFields()
     {
-        var main=Page("Pokémon");
+        var overview=new Panel{Text="Conjunto",BackColor=AppTheme.Background,Padding=new Padding(10),AutoScroll=true};tabs.TabPages.Add(overview);
+        var columns=new TableLayoutPanel{Dock=DockStyle.Top,AutoSize=true,ColumnCount=2};
+        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));overview.Controls.Add(columns);
+        var main=FieldTable(96);main.Margin=new Padding(0,0,18,0);columns.Controls.Add(main,0,0);
         species=Pick(main,"Espécie",nameof(PKM.Species),Enumerable.Range(1,draft.MaxSpeciesID).Select(id=>new Choice(id,$"{strings.Species[id]} · {id:D3}")));
-        species.DropDownStyle=ComboBoxStyle.DropDown;species.AutoCompleteMode=AutoCompleteMode.SuggestAppend;species.AutoCompleteSource=AutoCompleteSource.ListItems;
-        TextField(main,"Apelido",nameof(PKM.Nickname),draft.MaxStringLengthNickname);Check(main,"Usar apelido",nameof(PKM.IsNicknamed));
-        Number(main,"Nível",nameof(PKM.CurrentLevel),1,100);Number(main,"Forma (ID)",nameof(PKM.Form),0,255);
-        Pick(main,"Sexo",nameof(PKM.Gender),new[]{new Choice(0,"Macho"),new Choice(1,"Fêmea"),new Choice(2,"Sem sexo")});
-        Named(main,"Natureza",nameof(PKM.Nature),strings.Natures,24);Named(main,"Habilidade",nameof(PKM.Ability),strings.Ability,draft.MaxAbilityID);
-        Pick(main,"Slot de habilidade",nameof(PKM.AbilityNumber),new[]{new Choice(1,"1 · normal"),new Choice(2,"2 · normal"),new Choice(4,"Oculta")});Named(main,"Item segurado",nameof(PKM.HeldItem),strings.Item,draft.MaxItemID);
-        Check(main,"É ovo",nameof(PKM.IsEgg));Row(main,"Cor",shiny);
+        Number(main,"Nível",nameof(PKM.CurrentLevel),1,100);
+        Named(main,"Natureza",nameof(PKM.Nature),strings.Natures,24);
+        Named(main,"Habilidade",nameof(PKM.Ability),strings.Ability,draft.MaxAbilityID);
+        Named(main,"Item",nameof(PKM.HeldItem),strings.Item,draft.MaxItemID);
+        Row(main,"",new Label{Text="Golpes",Font=AppTheme.Section,ForeColor=AppTheme.Text,AutoSize=true,Margin=new Padding(0,14,0,8)});
+        for(int i=1;i<=4;i++)Named(main,"Golpe "+i,"Move"+i,strings.Move,draft.MaxMoveID);
+        var stats=BuildStatTable();columns.Controls.Add(stats,1,0);
+        var identity=Page("Identidade");
+        TextField(identity,"Apelido",nameof(PKM.Nickname),draft.MaxStringLengthNickname);Check(identity,"Usar apelido",nameof(PKM.IsNicknamed));
+        Number(identity,"Forma (ID)",nameof(PKM.Form),0,255);
+        Pick(identity,"Sexo",nameof(PKM.Gender),new[]{new Choice(0,"Macho"),new Choice(1,"Fêmea"),new Choice(2,"Sem sexo")});
+        Pick(identity,"Slot de habilidade",nameof(PKM.AbilityNumber),new[]{new Choice(1,"1 · normal"),new Choice(2,"2 · normal"),new Choice(4,"Oculta")});
+        Check(identity,"É ovo",nameof(PKM.IsEgg));Row(identity,"Cor",shiny);
         var met=Page("Encontro");
         var versions=PokemonEditorService.Versions(draft.Format);
         Pick(met,"Jogo de origem",nameof(PKM.Version),versions.Select(v=>new Choice((int)v,PKHeX.Core.GameInfo.GetVersionName(v))));
@@ -123,24 +132,11 @@ internal sealed class PokemonEditorDialog : Form
         {
             var date=new DateTimePicker{Format=DateTimePickerFormat.Short,ShowCheckBox=true};Row(met,"Data de captura",date);Bind(nameof(PKM.MetDate),date,()=>date.Checked?(object)DateOnly.FromDateTime(date.Value):null);
         }
-        var stats=Page("Atributos");
-        // Use aligned IV/EV pairs, matching PKHeX's attribute layout.
-        Row(stats,"Atributo / IV / EV",new Label{Text="IVs: 0–31 · EVs: soma máxima 510",ForeColor=AppTheme.TextMuted,AutoSize=true});
-        foreach(var stat in new[]{("HP","HP"),("Ataque","ATK"),("Defesa","DEF"),("At. especial","SPA"),("Def. especial","SPD"),("Velocidade","SPE")})
-        {
-            var pair=new FlowLayoutPanel{AutoSize=true,WrapContents=false};
-            foreach(var prefix in new[]{"IV_","EV_"})
-            {
-                var number=new NumericUpDown{Width=100,Maximum=prefix=="IV_"?draft.MaxIV:draft.MaxEV,BackColor=AppTheme.SurfaceRaised,ForeColor=AppTheme.Text,Font=AppTheme.Body};
-                pair.Controls.Add(new Label{Text=prefix[..2],ForeColor=AppTheme.TextMuted,AutoSize=true,Margin=new Padding(0,8,8,0)});pair.Controls.Add(number);Bind(prefix+stat.Item2,number,()=>number.Value);number.AccessibleName=stat.Item1+" "+prefix[..2];
-            }
-            Row(stats,stat.Item1,pair);
-        }
         var moves=Page("Golpes");
         for(int i=1;i<=4;i++)
         {
             if(draft.Format>=6)Named(moves,"Golpe de reaprendizado "+i,"RelearnMove"+i,strings.Move,draft.MaxMoveID);
-            Named(moves,"Golpe "+i,"Move"+i,strings.Move,draft.MaxMoveID);
+
             Number(moves,"PP / PP Ups · "+i,"Move"+i+"_PP",0,99);Number(moves,"PP Ups · "+i,"Move"+i+"_PPUps",0,3);
         }
         var trainer=Page("Treinador / outros");
@@ -155,7 +151,7 @@ internal sealed class PokemonEditorDialog : Form
 
     private void LoadFields()
     {
-        loading=true;
+        revision++;loading=true;
         for(int i=0;i<bindings.Count;i++)
         {
             var binding=bindings[i];object value=binding.Property.GetValue(draft);
@@ -163,7 +159,7 @@ internal sealed class PokemonEditorDialog : Form
             {
                 case ComboBox combo:
                     int id=Convert.ToInt32(value);var found=combo.Items.Cast<Choice>().FirstOrDefault(c=>c.Value==id);
-                    if(found==null){found=new Choice(id,$"{id} · valor atual");combo.Items.Add(found);}combo.SelectedItem=found;break;
+                    if(found==null){found=new Choice(id,$"{id} · valor atual");combo.Items.Add(found);}combo.SelectedItem=found;combo.SelectionLength=0;break;
                 case NumericUpDown number:number.Value=Math.Clamp(Convert.ToDecimal(value),number.Minimum,number.Maximum);break;
                 case TextBox text:text.Text=Convert.ToString(value);break;
                 case CheckBox check:check.Checked=(bool)value;break;
@@ -172,12 +168,16 @@ internal sealed class PokemonEditorDialog : Form
             bindings[i]=binding with {Initial=binding.Read()};
         }
         initialShiny=draft.IsShiny;shiny.Checked=initialShiny;
-        loading=false;RefreshSummary();_ = UpdateSprite();
+        loading=false;RefreshSummary();RefreshValidation();QueueLegality();_ = UpdateSprite();
     }
-    internal PKM ReadDraft()
+    internal PKM ReadDraft(bool validate=true)
     {
-        if(species.SelectedItem is not Choice || !string.Equals(species.Text,species.SelectedItem.ToString(),StringComparison.Ordinal))
-            throw new InvalidOperationException("Escolha uma espécie da lista pelo nome ou número.");
+        foreach(var binding in bindings.Where(b=>b.Control is ComboBox))
+        {
+            var combo=(ComboBox)binding.Control;
+            if(combo.SelectedItem is not Choice || !string.Equals(combo.Text,combo.SelectedItem.ToString(),StringComparison.Ordinal))
+                throw new InvalidOperationException("Escolha um valor da lista para "+combo.AccessibleName+".");
+        }
         PKM edited=draft.Clone();
         foreach(var binding in bindings)
         {
@@ -208,40 +208,40 @@ internal sealed class PokemonEditorDialog : Form
             else if(edited.IsShiny)edited.SID16^=16;
         }
         if(!edited.IsNicknamed && (changedSpecies || bindings.Any(b=>b.Property.Name==nameof(PKM.IsNicknamed)&&!Equals(b.Read(),b.Initial))))edited.Nickname=SpeciesName.GetSpeciesNameGeneration(edited.Species,edited.Language,(byte)edited.Format);
-        if(edited.EVTotal>510)throw new InvalidOperationException("A soma dos EVs ultrapassa 510. Ajuste a aba Atributos antes de aplicar.");
+        if(validate&&edited.EVTotal>510)throw new InvalidOperationException($"EVs: {edited.EVTotal}/510. Remova {edited.EVTotal-510} pontos em Conjunto antes de aplicar.");
+        if(validate&&new[]{edited.EV_HP,edited.EV_ATK,edited.EV_DEF,edited.EV_SPA,edited.EV_SPD,edited.EV_SPE}.Any(ev=>ev>edited.MaxEV))
+            throw new InvalidOperationException($"Cada atributo aceita no máximo {edited.MaxEV} EVs em PK{edited.Format}.");
         edited.RefreshChecksum();return edited;
     }
     private void Changed(string property)
     {
         if(loading)return;
-        revision++;RefreshSummary();
-        status.Text="Rascunho alterado · verifique a legalidade novamente antes de aplicar.";
-        report.Text="O rascunho mudou. Use Verificar legalidade para atualizar o relatório.";
+        revision++;RefreshSummary();RefreshValidation();QueueLegality();
+        if(property is nameof(PKM.Species) or nameof(PKM.Form) or nameof(PKM.Gender) or nameof(PKM.IsShiny))_ = UpdateSprite();
         if(property is nameof(PKM.Species) or nameof(PKM.Form) or nameof(PKM.Version))
         {encounters.Items.Clear();useEncounter.Enabled=false;encounterInfo.Text="Espécie, forma ou versão alterada. Busque os encontros novamente.";}
     }
     private void RefreshSummary()
     {
         if(species==null||bindings.Count==0)return;
-        try{var pk=ReadDraft();summary.Text=$"{strings.Species[pk.Species]}\n\nPK{pk.Format} · Nível {pk.CurrentLevel}\n{(pk.IsShiny?"Shiny":"Não shiny")} · {(pk.IsEgg?"Ovo":"Pokémon")}\n\nNatureza: {strings.Natures[(int)pk.Nature]}\nIVs: {pk.IVTotal}\nEVs: {pk.EVTotal} / 510\n\nOT: {pk.OriginalTrainerName}\nTID: {pk.TID16} · SID: {pk.SID16}\n\nAlterações ficam no rascunho até aplicar.";}
+        try{var pk=ReadDraft(false);summary.Text=$"{strings.Species[pk.Species]}\n\nPK{pk.Format} · Nível {pk.CurrentLevel}\n{(pk.IsShiny?"Shiny":"Não shiny")} · {(pk.IsEgg?"Ovo":"Pokémon")}\n\nNatureza: {strings.Natures[(int)pk.Nature]}\nIVs: {pk.IVTotal}\nEVs: {pk.EVTotal} / 510\n\nOT: {pk.OriginalTrainerName}\nTID: {pk.TID16} · SID: {pk.SID16}";}
         catch(Exception error){summary.Text=error.Message;}
     }
     private async Task UpdateSprite()
     {
-        int request=++spriteSequence;PKM pk;try{pk=ReadDraft();}catch{return;}
+        int request=++spriteSequence;PKM pk;try{pk=ReadDraft(false);}catch{return;}
         Image image=await PokemonSpriteService.LoadAsync(pk.Species,pk.IsShiny,pk.Gender==1);
         if(IsDisposed||request!=spriteSequence){image?.Dispose();return;}
         Image previous=sprite.Image;sprite.Image=image;previous?.Dispose();
     }
     private void Analyze()
     {
-        try{var result=PokemonLegalityService.Analyze(ReadDraft());report.Text=(result.IsConsistent?"Nenhuma inconsistência encontrada.":$"{result.IssueCount} inconsistência(s) encontrada(s).")+"\r\n\r\n"+result.Report+"\r\n\r\nA análise verifica regras conhecidas. Ela não comprova captura real nem garante aceitação online.";tabs.SelectedTab=tabs.TabPages[^1];status.Text=result.IsConsistent?"Compatível com as verificações do PKHeX.":"Revise o relatório de legalidade.";}
-        catch(Exception error){status.Text=error.Message;}
+        legalityTimer.Stop();tabs.SelectedTab=tabs.TabPages[^1];_ = AnalyzeLive();
     }
-    internal void ShowEncounters(){tabs.SelectedTab=tabs.TabPages.Cast<TabPage>().Single(p=>p.Text=="Base de encontros");SearchEncounters();}
+    internal void ShowEncounters(){tabs.SelectedTab=tabs.TabPages.Cast<Panel>().Single(p=>p.Text=="Base de encontros");SearchEncounters();}
     private void BuildEncounterPage()
     {
-        var page=new TabPage("Base de encontros"){BackColor=AppTheme.Background,Padding=new Padding(12)};tabs.TabPages.Add(page);
+        var page=new Panel{Text="Base de encontros",BackColor=AppTheme.Background,Padding=new Padding(12)};tabs.TabPages.Add(page);
         var actions=new FlowLayoutPanel{Dock=DockStyle.Top,AutoSize=true,Padding=new Padding(0,4,0,12)};
         actions.Controls.AddRange(new Control[]{search,useEncounter});search.Click+=(_,_)=>SearchEncounters();useEncounter.Click+=(_,_)=>UseEncounter();
         foreach(var column in new[]{("Tipo",200),("Espécie",140),("Nível",70),("Local",240)})encounters.Columns.Add(column.Item1,column.Item2);
