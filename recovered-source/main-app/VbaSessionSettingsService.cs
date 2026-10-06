@@ -38,8 +38,8 @@ internal static class VbaSessionSettingsService
                 List<string> lines = File.ReadAllLines(state.ConfigPath).ToList();
                 if (FindPreferenceSection(lines) < 0) lines.Add("[preferences]");
                 int index = FindPreference(lines, "pauseWhenInactive");
-                if (index >= 0) lines[index] = "pauseWhenInactive=1";
-                else lines.Insert(PreferenceEnd(lines), "pauseWhenInactive=1");
+                if (index >= 0) lines[index] = "pauseWhenInactive=0";
+                else lines.Insert(PreferenceEnd(lines), "pauseWhenInactive=0");
                 WriteAtomically(state.ConfigPath, lines);
             }
             return markerPath;

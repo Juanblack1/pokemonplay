@@ -13,6 +13,7 @@ internal sealed class SettingsView : BufferedPanel
 	private readonly Panel canvas;
 
 	private readonly InputWorkbench controlsCard;
+    private readonly Panel scroll;
 
 	private readonly SectionCard dsCard;
 
@@ -71,7 +72,7 @@ internal sealed class SettingsView : BufferedPanel
  public SettingsView(string settingsFile)
  {
   this.settingsFile=settingsFile;root=Path.GetDirectoryName(Path.GetDirectoryName(Path.GetFullPath(settingsFile))); Dock=DockStyle.Fill; BackColor=Color.Transparent;
-  var scroll=new Panel{Dock=DockStyle.Fill,AutoScroll=true,BackColor=AppTheme.Background};
+  scroll=new Panel{Dock=DockStyle.Fill,AutoScroll=true,BackColor=AppTheme.Background};
   canvas=new PixelGridPanel{Width=900,Height=604,BackColor=AppTheme.Background};scroll.Controls.Add(canvas);
 
   dsCard=new SectionCard("Telas do Nintendo DS","Organize as duas telas do emulador."){Height=228};
@@ -113,6 +114,13 @@ internal sealed class SettingsView : BufferedPanel
   Controls.Add(scroll);Controls.Add(footer);Controls.Add(new PixelHeader("Configurações","Deixe os controles, o som e as conquistas do seu jeito.",100));
   preset.SelectedIndexChanged+=(_,_)=>UpdateMapping();volume.ValueChanged+=(_,_)=>UpdateVolumeLabel();mute.CheckedChanged+=(_,_)=>UpdateVolumeLabel();scroll.Resize+=(_,_)=>LayoutCards(scroll.ClientSize.Width,scroll.ClientSize.Height);
   LoadSettings();LoadRetroArchSettings();UpdateMapping();UpdateVolumeLabel();LayoutCards(1000,450);
+ }
+
+ internal void ShowSection(string section)
+ {
+  Control target = section == "audio" ? audioCard : controlsCard;
+  scroll.AutoScrollPosition = new Point(0, Math.Max(0, target.Top - 16));
+  if (section == "audio") volume.Focus(); else controlsCard.Focus();
  }
 
  private ThemeButton BrowseButton(string text,int x,int y,int width)=>new ThemeButton(text,ButtonKind.Secondary){Location=new Point(x,y),Size=new Size(width,34),AutoSize=false,AccessibleName=text.TrimEnd('…')};

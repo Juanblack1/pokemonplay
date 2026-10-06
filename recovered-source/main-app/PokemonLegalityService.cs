@@ -14,6 +14,6 @@ internal static class PokemonLegalityService
         var analysis = new LegalityAnalysis(pokemon, StorageSlotType.Box);
         string report = LegalityFormatting.Report(analysis, "en", verbose: false);
         int issues = analysis.Results.Count(result => !result.Valid);
-        return new PokemonLegalityResult(issues == 0, issues, report);
+        return new PokemonLegalityResult(analysis.Valid, analysis.Valid ? issues : Math.Max(1, issues), report);
     }
 }

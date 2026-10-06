@@ -105,6 +105,11 @@ internal sealed class LauncherForm : Form
         if (gameSession != null && !gameSession.IsDisposed)
             throw new InvalidOperationException("Já existe uma sessão de jogo aberta no launcher.");
         gameSession = session;
+        session.SettingsRequested = section =>
+        {
+            Navigate("settings");
+            if (contentHost.Controls.Count > 0 && contentHost.Controls[0] is SettingsView settings) settings.ShowSection(section);
+        };
         session.SessionHidden = hidden =>
         {
             if (!ReferenceEquals(gameSession, hidden)) return;
@@ -153,6 +158,7 @@ internal sealed class LauncherForm : Form
         session.FormBorderStyle = FormBorderStyle.None;
         session.Dock = DockStyle.Fill;
         if (!ReferenceEquals(session.Parent, contentHost)) contentHost.Controls.Add(session);
+        libraryNav.Active = savesNav.Active = pokemonNav.Active = settingsNav.Active = false;
         pageTitle.Text = session.GameTitle;
         pageHint.Text = "Perfil " + session.ProfileTitle + " · a navegação do Pokemon Play continua disponível";
         session.Show();
@@ -164,6 +170,10 @@ internal sealed class LauncherForm : Form
         Control page = pageUnderGame;
         if (page == null || IsDisposed || Disposing) return;
         pageUnderGame = null;
+        libraryNav.Active = page is LibraryView;
+        savesNav.Active = page is SaveManagerView;
+        pokemonNav.Active = page is PokemonBankView;
+        settingsNav.Active = page is SettingsView;
         pageTitle.Text = pageTitleUnderGame;
         pageHint.Text = pageHintUnderGame;
         if (page is LibraryView library) library.RefreshAfterGameSession();

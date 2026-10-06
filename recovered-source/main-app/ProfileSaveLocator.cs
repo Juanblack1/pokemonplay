@@ -29,7 +29,7 @@ internal static class ProfileSaveLocator
             try
             {
                 if (new FileInfo(file).Length > 2 * 1024 * 1024) continue;
-                var save = SaveUtil.GetSaveFile(file);
+                var save = ReadForGame(file, game);
                 if (extension == ".srm")
                 {
                     if (!string.Equals(System.IO.Path.GetFileName(file), LauncherSettings.RetroArchSaveFileName(game), StringComparison.OrdinalIgnoreCase)) continue;
@@ -55,7 +55,16 @@ internal static class ProfileSaveLocator
         byte[] data = File.ReadAllBytes(path);
         SaveFile detected = SaveUtil.GetSaveFile(data.AsMemory(), System.IO.Path.ChangeExtension(path, ".sav"));
         if (detected == null || detected.Generation != game.Generation) return null;
-        return game.Title switch
+        bool sameFamily = game.Title switch {
+            "FireRed" or "LeafGreen" => detected is SAV3FRLG,
+            "Emerald" => detected is SAV3E,
+            "HeartGold" or "SoulSilver" => detected is SAV4HGSS,
+            "Platinum" => detected is SAV4Pt,
+            "Black" or "White" => detected is SAV5BW,
+            "Black 2" or "White 2" => detected is SAV5B2W2,
+            _ => false };
+        if(!sameFamily)return null;
+        SaveFile loaded = game.Title switch
         {
             "FireRed" or "LeafGreen" => new SAV3FRLG(data.AsMemory()),
             "Emerald" => new SAV3E(data.AsMemory()),
@@ -65,5 +74,22 @@ internal static class ProfileSaveLocator
             "Black 2" or "White 2" => new SAV5B2W2(data.AsMemory()),
             _ => null
         };
+        ResolveGameVariant(loaded, game);
+        return loaded;
+    }
+
+    internal static SaveFile ReadForGame(string path, GameInfo game)
+    {
+        SaveFile loaded = System.IO.Path.GetExtension(path).Equals(".srm", StringComparison.OrdinalIgnoreCase)
+            ? ReadRetroArchSave(path, game, false) : SaveUtil.GetSaveFile(path);
+        ResolveGameVariant(loaded, game);
+        return loaded;
+    }
+
+    private static void ResolveGameVariant(SaveFile loaded, GameInfo game)
+    {
+        // FR/LG share a save layout. PKHeX defaults to FR; the selected profile supplies the variant.
+        if (loaded is SAV3FRLG frlg && game.Title is "FireRed" or "LeafGreen")
+            frlg.ResetPersonal(SaveProfileService.GameVersionFor(game.Title));
     }
 }

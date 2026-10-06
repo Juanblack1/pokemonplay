@@ -94,9 +94,7 @@ internal static class SaveProfileService
         if (importPath != null)
         {
             if (new FileInfo(importPath).Length > 2 * 1024 * 1024) throw new InvalidDataException("O save é grande demais.");
-            var save = string.Equals(Path.GetExtension(importPath), ".srm", StringComparison.OrdinalIgnoreCase)
-                ? ProfileSaveLocator.ReadRetroArchSave(importPath, game, false)
-                : SaveUtil.GetSaveFile(importPath);
+            var save = ProfileSaveLocator.ReadForGame(importPath, game);
             var expected = GameVersionFor(game.Title);
             if (save == null || save.Generation != game.Generation || !save.Version.Contains(expected) || !save.ChecksumsValid)
                 throw new InvalidDataException("Selecione um save normal deste jogo com checksums válidos.");
