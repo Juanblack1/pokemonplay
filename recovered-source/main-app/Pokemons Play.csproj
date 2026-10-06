@@ -1,8 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>Pokemons Play</AssemblyName>
     <GenerateAssemblyInfo>True</GenerateAssemblyInfo>
-    <Version Condition="'$(Version)' == ''">172.0.4</Version>
+    <Version Condition="'$(Version)' == ''">172.0.5</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>True</UseWindowsForms>
