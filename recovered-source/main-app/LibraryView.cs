@@ -51,7 +51,7 @@ internal sealed class LibraryView : BufferedPanel
 		games = GameCatalog.Build(root);
         importedAvailability=ImportedGameAvailability.Inspect(root);
 		Dock = DockStyle.Fill;
-		BackColor = Color.Transparent;
+		BackColor = AppTheme.Background;
 		Controls.Add(CreateContentArea());
 		chips = new BufferedPanel
 		{
@@ -126,20 +126,20 @@ internal sealed class LibraryView : BufferedPanel
 
 	private Panel CreateContentArea()
 	{
-		scroll = new Panel
+		scroll = new LibraryScrollPanel
 		{
 			Dock = DockStyle.Fill,
 			AutoScroll = true,
-			BackColor = Color.Transparent
+			BackColor = AppTheme.Background
 		};
-		content = new FlowLayoutPanel
+		content = new LibraryFlowPanel
 		{
 			FlowDirection = FlowDirection.TopDown,
 			WrapContents = false,
-			AutoSize = true,
+			AutoSize = false,
 			AutoSizeMode = AutoSizeMode.GrowAndShrink,
 			Padding = new Padding(24, 18, 24, 32),
-			BackColor = Color.Transparent
+			BackColor = AppTheme.Background
 		};
 		scroll.Controls.Add(content);
 		scroll.Resize += (object param0, EventArgs param1) =>
@@ -384,14 +384,28 @@ internal sealed class LibraryView : BufferedPanel
 			{
 				flowLayoutPanel.Width = Math.Max(340, content.ClientSize.Width - content.Padding.Horizontal);
 				int columns = Math.Max(1, flowLayoutPanel.Width / 242);
-				int rowHeight = (flowLayoutPanel.Controls.Count > 0 ? flowLayoutPanel.Controls[0].Height : 344) + 16;
-				flowLayoutPanel.Height = ((flowLayoutPanel.Controls.Count + columns - 1) / columns) * rowHeight;
+				int height = 0;
+				for (int first = 0; first < flowLayoutPanel.Controls.Count; first += columns)
+				{
+					int rowHeight = 0;
+					for (int index = first; index < Math.Min(first + columns, flowLayoutPanel.Controls.Count); index++)
+					{
+						Control card = flowLayoutPanel.Controls[index];
+						rowHeight = Math.Max(rowHeight, card.Height + card.Margin.Vertical);
+					}
+					height += rowHeight;
+				}
+				flowLayoutPanel.Height = height;
 			}
 			if (control is Label label)
 			{
 				label.Width = Math.Max(340, content.ClientSize.Width - content.Padding.Horizontal);
 			}
 		}
+		content.PerformLayout();
+		content.Height = content.GetPreferredSize(new Size(content.Width, 0)).Height;
+		scroll.AutoScrollMinSize = new Size(0, content.Height);
+		scroll.PerformLayout();
 	}
 
 	private static IEnumerable<Control> GetChildren(Control parent)
@@ -530,13 +544,13 @@ internal sealed class LibraryView : BufferedPanel
 				}
 				flag = true;
 				if (recentOnly) AddRecentHeader(); else if (alphabeticalOnly) AddAlphabeticalHeader(); else if (mostPlayedOnly) AddMostPlayedHeader(); else AddGenerationHeader(i);
-				FlowLayoutPanel flowLayoutPanel = new FlowLayoutPanel();
+				FlowLayoutPanel flowLayoutPanel = new LibraryFlowPanel();
 				flowLayoutPanel.FlowDirection = FlowDirection.LeftToRight;
 				flowLayoutPanel.WrapContents = true;
 				flowLayoutPanel.AutoScroll = false;
 				flowLayoutPanel.AutoSize = false;
 				flowLayoutPanel.Width = 820;
-				flowLayoutPanel.BackColor = Color.Transparent;
+				flowLayoutPanel.BackColor = AppTheme.Background;
 				flowLayoutPanel.Margin = new Padding(0, 0, 0, 10);
 				flowLayoutPanel.Padding = new Padding(0);
 				FlowLayoutPanel flowLayoutPanel2 = flowLayoutPanel;

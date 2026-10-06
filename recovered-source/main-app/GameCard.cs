@@ -46,6 +46,7 @@ internal sealed class GameCard : BufferedPanel
         playLabel=presentation.Label;profileProblem=presentation.Problem;
 		isFavorite = GameFavoriteService.Load(root).Contains(game.Title);
 		Width = 228;
+		BackColor = AppTheme.Background;
 		Height = game.IsHackRom ? (lastPlayedAt.HasValue ? 398 : 366) : lastPlayedAt.HasValue ? 376 : 344;
 		Margin = new Padding(0, 0, 14, 16);
 		Cursor = Cursors.Hand;
@@ -55,7 +56,7 @@ internal sealed class GameCard : BufferedPanel
 		if (lastPlayedAt.HasValue)
 			AccessibleDescription = "Jogado em " + lastPlayedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") + ". Tempo total: " + FormatPlayTime(this.totalPlayTimeSeconds);
         if(profileProblem!=null)AccessibleDescription=(AccessibleDescription+" "+profileProblem).Trim();
-		favoriteButton = new ThemeButton(isFavorite ? "★" : "☆", ButtonKind.Ghost) { Size = new Size(32, 32), Location = new Point(Width - 43, 12), Margin = Padding.Empty, TabStop = true, AccessibleName = isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos", AccessibleDescription = game.Title };
+		favoriteButton = new GameFavoriteButton(isFavorite) { Size = new Size(36, 36), Location = new Point(Width - 48, 12), Margin = Padding.Empty, TabStop = true, AccessibleName = isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos", AccessibleDescription = game.Title };
 		favoriteButton.Click += (_, _) => ToggleFavorite();
 		Controls.Add(favoriteButton);
 		cover = GameCoverService.Load(root, game.Cover);
@@ -263,28 +264,28 @@ internal sealed class GameCard : BufferedPanel
 		else
 		{
 			PaintTools.DrawPokeball(e.Graphics, new Rectangle(75, 65, 66, 66), game.Accent, Color.FromArgb(9, 14, 38));
-			TextRenderer.DrawText(e.Graphics, "Capa não encontrada", AppTheme.Caption, new Rectangle(18, 139, Width - 36, 22), AppTheme.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
+			TextRenderer.DrawText(e.Graphics, "Capa não encontrada", AppTheme.Caption, new Rectangle(18, 139, Width - 36, 22), AppTheme.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
 			string hint = string.IsNullOrWhiteSpace(game.Cover) ? "Pokemon 3DS - Capas" : game.Cover;
-			TextRenderer.DrawText(e.Graphics, hint, AppTheme.Caption, new Rectangle(18, 162, Width - 36, 22), AppTheme.TextMuted, TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+			TextRenderer.DrawText(e.Graphics, hint, AppTheme.Caption, new Rectangle(18, 162, Width - 36, 22), AppTheme.TextMuted, TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
 		}
-		TextRenderer.DrawText(e.Graphics, game.Title, AppTheme.BodyBold, new Rectangle(14, 226, Width - 28, 25), AppTheme.Text, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+		TextRenderer.DrawText(e.Graphics, game.Title, AppTheme.BodyBold, new Rectangle(14, 226, Width - 28, 25), AppTheme.Text, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
 		int actionTop = 292;
 		if (game.IsHackRom)
 		{
 			Rectangle badge = new Rectangle(14, 252, 80, 20);
 			using (SolidBrush badgeBrush = new SolidBrush(Color.FromArgb(65, 52, 124))) PaintTools.FillRounded(e.Graphics, badgeBrush, badge, 4);
 			using (Pen badgePen = new Pen(Color.FromArgb(137, 111, 220), 1f)) PaintTools.DrawRounded(e.Graphics, badgePen, badge, 4);
-			TextRenderer.DrawText(e.Graphics, "HACK ROM", AppTheme.CaptionBold, badge, Color.FromArgb(224, 213, 255), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-			TextRenderer.DrawText(e.Graphics, game.Subtitle, AppTheme.Caption, new Rectangle(14, 275, Width - 28, 18), AppTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+			TextRenderer.DrawText(e.Graphics, "HACK ROM", AppTheme.CaptionBold, badge, Color.FromArgb(224, 213, 255), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
+			TextRenderer.DrawText(e.Graphics, game.Subtitle, AppTheme.Caption, new Rectangle(14, 275, Width - 28, 18), AppTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
 			actionTop = 314;
 		}
 		else
-			TextRenderer.DrawText(e.Graphics, game.Subtitle, AppTheme.Caption, new Rectangle(14, 254, Width - 28, 22), AppTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+			TextRenderer.DrawText(e.Graphics, game.Subtitle, AppTheme.Caption, new Rectangle(14, 254, Width - 28, 22), AppTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
 		if (lastPlayedAt.HasValue)
 		{
 			int historyTop = game.IsHackRom ? 300 : 278;
-			TextRenderer.DrawText(e.Graphics, "Jogado em " + lastPlayedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm"), AppTheme.Caption, new Rectangle(14, historyTop, Width - 28, 18), AppTheme.TextMuted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-			TextRenderer.DrawText(e.Graphics, "Tempo total: " + FormatPlayTime(totalPlayTimeSeconds), AppTheme.Caption, new Rectangle(14, historyTop + 20, Width - 28, 18), AppTheme.TextMuted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+			TextRenderer.DrawText(e.Graphics, "Jogado em " + lastPlayedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm"), AppTheme.Caption, new Rectangle(14, historyTop, Width - 28, 18), AppTheme.TextMuted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
+			TextRenderer.DrawText(e.Graphics, "Tempo total: " + FormatPlayTime(totalPlayTimeSeconds), AppTheme.Caption, new Rectangle(14, historyTop + 20, Width - 28, 18), AppTheme.TextMuted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
 			actionTop = game.IsHackRom ? 346 : 324;
 		}
 		using (SolidBrush brush3 = new SolidBrush(game.Accent))
@@ -299,7 +300,7 @@ internal sealed class GameCard : BufferedPanel
 		{
 			PaintTools.DrawRounded(e.Graphics, pen2, new Rectangle(14, actionTop, Width - 28, 40), 8);
 		}
-		TextRenderer.DrawText(e.Graphics, playLabel, AppTheme.BodyBold, new Rectangle(14, actionTop, Width - 28, 40), profileProblem==null?AppTheme.Text:AppTheme.Red, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+		TextRenderer.DrawText(e.Graphics, playLabel, AppTheme.BodyBold, new Rectangle(14, actionTop, Width - 28, 40), profileProblem==null?AppTheme.Text:AppTheme.Red, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.PreserveGraphicsClipping);
 	}
     internal bool RefreshProfileStatus()
     {
