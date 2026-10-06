@@ -65,6 +65,11 @@ internal static class BankEditorCheck
             foreach(string name in new[]{"EV_HP","EV_ATK","EV_SPE"})((NumericUpDown)Field(editor,name)).Value=255;
             while(!stale.IsCompleted){Application.DoEvents();System.Threading.Thread.Sleep(10);}stale.GetAwaiter().GetResult();
             Assert(editor.LegalityStateText.Contains("Não é possível aplicar"),"late analysis cannot overwrite a newer invalid draft");
+            editor.ShowEncounters();
+            var matches=(ListView)typeof(PokemonEditorDialog).GetField("encounters",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(editor);
+            for(int wait=0;wait<300&&matches.Items.Count==0;wait++){Application.DoEvents();System.Threading.Thread.Sleep(10);}
+            Assert(matches.Items.Count>0,"encounter database remains usable to repair a draft with excess EVs");
+            var pages=(EditorPageHost)typeof(PokemonEditorDialog).GetField("tabs",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(editor);pages.SelectedTab=pages.TabPages[0];
             foreach(string name in new[]{"EV_HP","EV_ATK","EV_SPE"})((NumericUpDown)Field(editor,name)).Value=0;
             if(output!=null)
             {

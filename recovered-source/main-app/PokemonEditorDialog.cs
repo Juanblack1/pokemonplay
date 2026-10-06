@@ -55,7 +55,7 @@ internal sealed partial class PokemonEditorDialog : Form
         shiny.CheckedChanged+=(_,_)=>Changed(nameof(PKM.IsShiny));
         tabs.TabPages.Add(new Panel{Text="Legalidade",BackColor=AppTheme.Background,Padding=new Padding(12)});tabs.TabPages[^1].Controls.Add(report);
         InitializeLiveFeedback();LoadFields();
-        FormClosed+=(_,_)=>{legalityTimer.Stop();legalityTimer.Dispose();spriteSequence++;sprite.Image?.Dispose();sprite.Image=null;};
+        Disposed+=(_,_)=>{legalityTimer.Stop();legalityTimer.Dispose();spriteSequence++;sprite.Image?.Dispose();sprite.Image=null;};
     }
 
     private TableLayoutPanel Page(string title)
@@ -252,7 +252,7 @@ internal sealed partial class PokemonEditorDialog : Form
     }
     private async void SearchEncounters()
     {
-        if(busy)return;PKM pk;try{pk=ReadDraft();}catch(Exception e){status.Text=e.Message;return;}
+        if(busy)return;PKM pk;try{pk=ReadDraft(false);}catch(Exception e){status.Text=e.Message;return;}
         long searchedRevision=revision;
         busy=true;search.Enabled=useEncounter.Enabled=false;encounters.Items.Clear();encounterInfo.Text="Consultando encontros…";
         try
@@ -272,7 +272,7 @@ internal sealed partial class PokemonEditorDialog : Form
     private void UseEncounter()
     {
         if(busy||encounters.SelectedItems.Count!=1)return;
-        try{draft=PokemonEditorService.FromEncounter((IEncounterable)encounters.SelectedItems[0].Tag,ReadDraft(),save);LoadFields();Analyze();status.Text="Modelo de encontro carregado. Revise a análise antes de aplicar; nenhum arquivo foi gravado.";}
+        try{draft=PokemonEditorService.FromEncounter((IEncounterable)encounters.SelectedItems[0].Tag,ReadDraft(false),save);LoadFields();Analyze();status.Text="Modelo de encontro carregado. Revise a análise antes de aplicar; nenhum arquivo foi gravado.";}
         catch(Exception error){status.Text=error.Message;}
     }
     private void Apply()
