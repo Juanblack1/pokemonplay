@@ -287,6 +287,11 @@ internal static class RetroAchievementsCheck
                 System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(rawSave.AsSpan(offset + 0xFF4), (ushort)sector);
                 System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(rawSave.AsSpan(offset + 0xFF8), 0x08012025);
             }
+        // Emerald needs its security key and expanded small-block data for native format detection.
+        foreach(int group in new[]{0,1}) {
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(rawSave.AsSpan(group*14*0x1000+0xAC),0x12345678);
+            rawSave[group*14*0x1000+0x890]=1;
+        }
         var gameSave = new SAV3E(rawSave);
         gameSave.ClearBoxes();
         PKM pokemon = gameSave.BlankPKM.Clone();
@@ -300,6 +305,7 @@ internal static class RetroAchievementsCheck
         Directory.CreateDirectory(profile);
         string srmPath = Path.Combine(profile, "Pokemon - Emerald Version (USA, Europe).srm");
         File.WriteAllBytes(srmPath, gameSave.Write().ToArray());
+        Assert(SaveUtil.GetSaveFile(File.ReadAllBytes(srmPath).AsMemory(),Path.ChangeExtension(srmPath,".sav")) is SAV3E,"SRAM fixture is natively detected as Emerald before profile lookup");
         var fireRed = Activator.CreateInstance(app.GetType("GameInfo"));
         app.GetType("GameInfo").GetField("Title").SetValue(fireRed, "Emerald");
         app.GetType("GameInfo").GetField("Generation").SetValue(fireRed, 3);
