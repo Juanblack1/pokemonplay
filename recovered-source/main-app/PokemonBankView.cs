@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using PKHeX.Core;
 
-internal sealed class PokemonBankView : BufferedPanel
+internal sealed partial class PokemonBankView : BufferedPanel
 {
     private readonly string root;
     private readonly ThemeSelect boxPicker = new ThemeSelect();
@@ -54,16 +54,18 @@ internal sealed class PokemonBankView : BufferedPanel
     private readonly Button exportPokemonButton;
     private readonly Button removePokemonButton;
     private readonly Button legalityButton;
+    private readonly ThemeSelect creationFormat = new(){Width=138};
     private readonly Button restoreRemovedButton;
     private SaveFile save;
     private string savePath;
+    private GameInfo loadedGame;
     private byte[] openedHash;
     private int selectedBox;
     private int selectedSlot = -1;
     private string[] bankFiles = Array.Empty<string>();
     private int[] bankViewIndices = Array.Empty<int>();
     private int bankPage;
-    private const int BankPageSize = 48;
+    private const int BankPageSize = 30;
     internal const string PokemonImportFileFilter = "Pokémon suportados (*.pk3;*.pk4;*.pk5;*.pk6;*.pk7;*.pk8;*.pk9)|*.pk3;*.pk4;*.pk5;*.pk6;*.pk7;*.pk8;*.pk9|Pokémon Gen 3 (*.pk3)|*.pk3|Pokémon Gen 4 (*.pk4)|*.pk4|Pokémon Gen 5 (*.pk5)|*.pk5|Pokémon Gen 6 (*.pk6)|*.pk6|Pokémon Gen 7 (*.pk7)|*.pk7|Pokémon Gen 8 (*.pk8)|*.pk8|Pokémon Gen 9 (*.pk9)|*.pk9";
     private sealed record BankSearchEntry(long Length, long LastWriteTicks, ushort Species, string Nickname, string SpeciesSearchText, byte Level, int Format, bool Shiny, byte Gender, bool Egg, byte Type1, byte Type2, DateOnly? MetDate, bool Valid);
     private readonly ThemeSelect gamePicker = new();
@@ -92,7 +94,9 @@ internal sealed class PokemonBankView : BufferedPanel
         ConfirmSaveChange=()=>MessageBox.Show(this,"Há alterações pendentes no save aberto. Deseja salvá-las antes de abrir outro save?","Trocar save",MessageBoxButtons.YesNoCancel,MessageBoxIcon.Question);
         var toolbar=new FlowLayoutPanel{Dock=DockStyle.Top,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,Padding=new Padding(24,8,24,8),BackColor=AppTheme.Background,WrapContents=true};
         var openButton=MakeButton("Abrir arquivo…",0,0,OpenSave);
-        saveButton=MakeButton("Salvar com backup",0,0,SaveChanges);createButton=MakeButton("Criar Pokémon · sandbox",0,0,CreatePokemon);
+        saveButton=MakeButton("Salvar com backup",0,0,SaveChanges);createButton=MakeButton("Criar Pokémon",0,0,CreatePokemon);((ThemeButton)createButton).Kind=ButtonKind.Primary;
+        creationFormat.Items.AddRange(new object[]{"PK3 · GBA","PK4 · DS","PK5 · DS","PK6 · 3DS","PK7 · 3DS","PK8 · Switch","PK9 · Switch"});creationFormat.SelectedIndex=0;
+        var encounterButton=MakeButton("Base de encontros",0,0,(_,_)=>OpenCreationEditor(true));
         exportBankButton=MakeButton("Exportar banco ZIP",0,0,ExportBank);importBankButton=MakeButton("Importar banco ZIP",0,0,ImportBank);
         openBankFolderButton=MakeButton("Abrir pasta do banco",0,0,OpenBankFolder);
         restoreRemovedButton=MakeButton("Restaurar removido…",0,0,RestoreRemovedPokemon);
@@ -101,7 +105,7 @@ internal sealed class PokemonBankView : BufferedPanel
         exportPokemonButton=MakeButton("Exportar Pokémon",0,0,ExportPokemonFile);
         var toolsButton=MakeButton("Ferramentas do banco…",0,0,(_,_)=>{});
         var toolsMenu=new ContextMenuStrip{BackColor=AppTheme.Surface,ForeColor=AppTheme.Text,Font=AppTheme.Body};
-        var toolCommands=new (Button Button,EventHandler Action)[]{(exportBankButton,ExportBank),(importBankButton,ImportBank),(openBankFolderButton,OpenBankFolder),(restoreRemovedButton,RestoreRemovedPokemon),(createButton,CreatePokemon)};
+        var toolCommands=new (Button Button,EventHandler Action)[]{(exportBankButton,ExportBank),(importBankButton,ImportBank),(openBankFolderButton,OpenBankFolder),(restoreRemovedButton,RestoreRemovedPokemon)};
         foreach(var command in toolCommands)
         {
             var item=new ToolStripMenuItem(command.Button.Text);item.Click+=command.Action;toolsMenu.Items.Add(item);
@@ -109,14 +113,14 @@ internal sealed class PokemonBankView : BufferedPanel
         toolsMenu.Opening+=(_,_)=>{for(int i=0;i<toolCommands.Length;i++)toolsMenu.Items[i].Enabled=toolCommands[i].Button.Enabled&&(i!=3||IsBank);};
         toolsButton.Click+=(_,_)=>toolsMenu.Show(toolsButton,new Point(0,toolsButton.Height));
         Disposed+=(_,_)=>toolsMenu.Dispose();
-        var profileToggle=MakeButton("Abrir save…",0,0,(_,_)=>{});
-        toolbar.Controls.AddRange(new Control[]{boxPicker,importPokemonButton,profileToggle,saveButton,toolsButton});
+
+        toolbar.Controls.AddRange(new Control[]{boxPicker,createButton,creationFormat,encounterButton,importPokemonButton,saveButton,toolsButton});
         var openFileItem=new ToolStripMenuItem("Abrir arquivo de save…");openFileItem.Click+=OpenSave;toolsMenu.Items.Add(openFileItem);
         var info=new Panel{Dock=DockStyle.Top,Height=48,BackColor=AppTheme.Background,Padding=new Padding(24,0,24,0)};
         openedContext.Dock=DockStyle.Top;openedContext.Height=26;openedContext.ForeColor=AppTheme.Text;openedContext.Font=AppTheme.CaptionBold;openedContext.Text="Nenhum save aberto";
         status.Dock=DockStyle.Fill;status.TextAlign=ContentAlignment.MiddleLeft;status.ForeColor=AppTheme.TextMuted;status.Font=AppTheme.Caption;status.AutoEllipsis=true;info.Controls.Add(status);
         info.Controls.Add(openedContext);
-        var body=new PixelGridPanel{Dock=DockStyle.Fill,BackColor=AppTheme.Background,Padding=new Padding(24,0,24,24)};
+        var body=new Panel{Dock=DockStyle.Fill,BackColor=AppTheme.Background,Padding=new Padding(24,0,24,24)};
         bankSpeciesLabel.Text="Buscar";bankSpeciesLabel.AutoSize=true;bankSpeciesLabel.ForeColor=AppTheme.TextMuted;bankSpeciesLabel.Font=AppTheme.Caption;bankSpeciesLabel.Margin=new Padding(0,8,8,0);
         bankSpeciesSearch.Width=240;bankSpeciesSearch.Height=32;bankSpeciesSearch.Margin=new Padding(0,0,12,8);bankSpeciesSearch.PlaceholderText="Número, espécie ou apelido";bankSpeciesSearch.AccessibleName="Filtrar banco por número, nome da espécie ou apelido";bankSpeciesSearch.BackColor=AppTheme.SurfaceRaised;bankSpeciesSearch.ForeColor=AppTheme.Text;bankSpeciesSearch.BorderStyle=BorderStyle.FixedSingle;bankSpeciesSearch.Font=AppTheme.Body;
         bankSortLabel.Text="Ordenar";bankSortLabel.AutoSize=true;bankSortLabel.ForeColor=AppTheme.TextMuted;bankSortLabel.Font=AppTheme.Caption;bankSortLabel.Margin=new Padding(8,8,8,0);
@@ -146,7 +150,7 @@ internal sealed class PokemonBankView : BufferedPanel
         bankNavigation.Controls.AddRange(new Control[]{FilterField("Buscar",bankSpeciesSearch),FilterField("Geração da espécie",bankGenerationPicker),FilterField("Pokédex regional",bankDexPicker),FilterField("Ordenar",bankSortPicker),moreFilters,clearFilters});
         bankPaging.Controls.AddRange(new Control[]{bankPreviousPage,bankPageStatus,bankNextPage});
         slots.Dock=DockStyle.Fill;slots.AutoScroll=true;slots.BackColor=Color.Transparent;slots.Padding=new Padding(0);slots.WrapContents=true;
-        slots.Controls.Add(new EmptyStatePanel("Seu banco Pokémon","Escolha um jogo e um perfil acima para abrir sua equipe e acessar a coleção global.","Abrir perfil",OpenProfileSave){Width=600,Height=180});
+        slots.Controls.Add(new EmptyStatePanel("Seu banco Pokémon","Escolha um jogo e um perfil à esquerda para abrir sua equipe e acessar a coleção global.","Abrir perfil",OpenProfileSave){Width=600,Height=180});
         var side=new Panel{Dock=DockStyle.Right,Width=272,BackColor=AppTheme.Surface,Padding=new Padding(12),AutoScroll=true};
         selectedSpritePreview.Height=112;selectedSpritePreview.Dock=DockStyle.Top;selectedSpritePreview.Margin=new Padding(0,0,0,8);selectedSpritePreview.SizeMode=PictureBoxSizeMode.Zoom;selectedSpritePreview.BackColor=AppTheme.SurfaceRaised;selectedSpritePreview.BorderStyle=BorderStyle.FixedSingle;selectedSpritePreview.Visible=false;selectedSpritePreview.AccessibleName="Prévia ampliada do Pokémon selecionado";selectedSpritePreview.AccessibleRole=AccessibleRole.Graphic;
         selectedSpritePreview.AccessibleDescription="A imagem do Pokémon selecionado aparece aqui em tamanho ampliado.";
@@ -156,7 +160,7 @@ internal sealed class PokemonBankView : BufferedPanel
         var actions=new FlowLayoutPanel{Dock=DockStyle.Bottom,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,BackColor=AppTheme.Surface,FlowDirection=FlowDirection.TopDown,WrapContents=false,Margin=Padding.Empty};
         editButton=MakeButton("Editar Pokémon",0,0,EditPokemon);moveButton=MakeButton("Mover Pokémon",0,0,MovePokemon);archiveButton=MakeButton("Copiar para banco",0,0,ArchivePokemon);
         removePokemonButton=MakeButton("Remover do banco",0,0,RemovePokemonFromBank);
-        legalityButton=MakeButton("Analisar com PKHeX",0,0,AnalyzeSelectedPokemon);
+        legalityButton=MakeButton("Verificar legalidade",0,0,AnalyzeSelectedPokemon);
         foreach(var action in new[]{editButton,legalityButton,moveButton,archiveButton,exportPokemonButton,removePokemonButton}){action.AutoSize=false;action.Width=240;action.Height=36;action.Margin=new Padding(0,0,0,4);}
         actions.Controls.AddRange(new Control[]{editButton,legalityButton,moveButton,archiveButton,exportPokemonButton,removePokemonButton});
         var selectionLayout=new TableLayoutPanel{Dock=DockStyle.Top,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=1,RowCount=3,BackColor=AppTheme.Surface,Margin=Padding.Empty};
@@ -164,7 +168,7 @@ internal sealed class PokemonBankView : BufferedPanel
         actions.Dock=DockStyle.Top;selectionLayout.Controls.Add(selectedSpritePreview,0,0);selectionLayout.Controls.Add(details,0,1);selectionLayout.Controls.Add(actions,0,2);side.Controls.Add(selectionLayout);
         side.Controls.Add(bankExtraFilters);
         moreFilters.Click+=(_,_)=>{bankExtraFilters.Visible=!bankExtraFilters.Visible;selectionLayout.Visible=!bankExtraFilters.Visible;side.AutoScroll=!bankExtraFilters.Visible;UpdateExtraFilterCaption();};
-        slots.ControlAdded+=(_,_)=>{if(!IsBank){bankExtraFilters.Visible=false;selectionLayout.Visible=true;side.AutoScroll=true;moreFilters.Text="Mais filtros";}};
+        slots.ControlAdded+=(_,_)=>{if(!IsBank){bankExtraFilters.Visible=false;selectionLayout.Visible=true;side.AutoScroll=true;moreFilters.Text="Filtros";}};
         // Keep the search and paging strip outside the content area so the right-side
         // actions begin below it instead of being covered by the bank navigation row.
         var contentArea=new Panel{Dock=DockStyle.Fill,BackColor=AppTheme.Background};
@@ -176,10 +180,10 @@ internal sealed class PokemonBankView : BufferedPanel
         foreach(var picker in new[]{gamePicker,profilePicker,savePicker})picker.Margin=new Padding(0,0,8,8);
         Label Caption(string text)=>new Label{Text=text,AutoSize=true,ForeColor=AppTheme.TextMuted,Font=AppTheme.Caption,Margin=new Padding(0,12,8,0)};
         var openProfile=MakeButton("Abrir perfil",0,0,OpenProfileSave);((ThemeButton)openProfile).Kind=ButtonKind.Primary;
-        profiles.Controls.AddRange(new Control[]{Caption("Jogo"),gamePicker,Caption("Perfil"),profilePicker,savePicker,openProfile});
+        profiles.Controls.AddRange(new Control[]{Caption("Jogo"),gamePicker,Caption("Perfil"),profilePicker,savePicker,openProfile,MakeButton("Atualizar saves",0,0,(_,_)=>RefreshProfileSaves())});
         var cloudBar=new Panel{Dock=DockStyle.Top,Height=82,Padding=new Padding(24,8,24,6),BackColor=AppTheme.Surface};
-        profiles.Visible=false;cloudBar.Visible=false;
-        profileToggle.Click+=(_,_)=>{profiles.Visible=!profiles.Visible;profileToggle.Text=profiles.Visible?"Ocultar perfis":"Abrir save…";};
+        profiles.Visible=true;cloudBar.Visible=false;
+
         var cloudItem=new ToolStripMenuItem("Conta e cópia na nuvem…");cloudItem.Click+=(_,_)=>cloudBar.Visible=!cloudBar.Visible;toolsMenu.Items.Add(cloudItem);
         var cloudActions=new FlowLayoutPanel{Dock=DockStyle.Right,Width=530,Height=48,AutoSize=false,FlowDirection=FlowDirection.LeftToRight,WrapContents=false,BackColor=AppTheme.Surface};
         cloudLoginButton=MakeButton("Google",0,0,CloudLogin);cloudLoginButton.AutoSize=false;cloudLoginButton.Width=112;
@@ -198,6 +202,7 @@ internal sealed class PokemonBankView : BufferedPanel
         gamePicker.SelectedIndexChanged+=(_,_)=>RefreshProfiles();
         profilePicker.SelectedIndexChanged+=(_,_)=>RefreshProfileSaves();
         Controls.Add(body);Controls.Add(info);Controls.Add(toolbar);Controls.Add(profiles);Controls.Add(cloudBar);Controls.Add(new PixelHeader("Banco Pokémon","Sua equipe, seus perfis e sua coleção global.",100));SetLoadedState(false);RefreshCloudControls();RefreshBankSummary();boxPicker.SelectedIndex=0;
+        BuildBankWorkspace(toolbar, profiles, info, body, contentArea, side, cloudBar, openProfile);
         if(games.Count>0)gamePicker.SelectedIndex=0;
     }
     private Button MakeButton(string text,int x,int y,EventHandler action)
@@ -227,7 +232,7 @@ internal sealed class PokemonBankView : BufferedPanel
     private void UpdateExtraFilterCaption()
     {
         int count=new[]{bankFormatPicker,bankTypePicker,bankShinyPicker,bankGenderPicker,bankEggPicker,bankDuplicatePicker}.Count(p=>p.SelectedIndex>0)+(bankMinLevel.Value!=1||bankMaxLevel.Value!=100?1:0);
-        bankMoreFilters.Text=bankExtraFilters.Visible?"Ver detalhes":count>0?$"Mais filtros ({count})":"Mais filtros";
+        bankMoreFilters.Text=bankExtraFilters.Visible?"Ver detalhes":count>0?$"Filtros ({count})":"Filtros";
     }
 
     private void ClearBankFilters()
@@ -250,10 +255,10 @@ internal sealed class PokemonBankView : BufferedPanel
         {
             Title = "Selecione o save normal do jogo",
             InitialDirectory = Directory.Exists(savesPath) ? savesPath : root,
-            Filter = "Arquivos de save|*.sav;*.dsv;*.dat;*.bin|Todos os arquivos|*.*",
+            Filter = "Arquivos de save|*.sav;*.srm;*.dsv;*.dat;*.bin|Todos os arquivos|*.*",
             CheckFileExists = true
         };
-        if (dialog.ShowDialog(this) == DialogResult.OK) LoadSave(dialog.FileName);
+        if (dialog.ShowDialog(this) == DialogResult.OK) LoadSave(dialog.FileName, Path.GetExtension(dialog.FileName).Equals(".srm",StringComparison.OrdinalIgnoreCase)&&gamePicker.SelectedIndex>=0 ? games[gamePicker.SelectedIndex] : null);
     }
 
     private void RefreshProfiles()
@@ -303,7 +308,7 @@ internal sealed class PokemonBankView : BufferedPanel
             return;
         }
         string path=profileSaves[savePicker.SelectedIndex].Path;
-        LoadSave(path);
+        LoadSave(path, games[gamePicker.SelectedIndex]);
         if(string.Equals(savePath,path,StringComparison.OrdinalIgnoreCase))
             openedContext.Text="Save aberto: "+games[gamePicker.SelectedIndex].Title+" · "+profileState.Profiles[profilePicker.SelectedIndex].Name;
         }
@@ -320,21 +325,22 @@ internal sealed class PokemonBankView : BufferedPanel
     }
     internal bool PrepareForUpdate()=>CanReplaceSave();
 
-    private void LoadSave(string path)
+    private void LoadSave(string path, GameInfo game = null)
     {
         try
         {
             SaveProfileService.EnsureEmulatorsClosed();
-            var loaded = SaveUtil.GetSaveFile(path);
+            var loaded = game == null ? SaveUtil.GetSaveFile(path) : ProfileSaveLocator.ReadForGame(path, game);
             if (loaded == null || loaded.Generation is < 3 or > 5 || !loaded.HasBox)
             {
                 MessageBox.Show(this, "Este arquivo não foi reconhecido como save compatível de Pokémon das gerações 3–5. O arquivo não foi alterado.", "Save não suportado", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if(!CanReplaceSave())return;
-            loaded=SaveUtil.GetSaveFile(path);
+            loaded=game == null ? SaveUtil.GetSaveFile(path) : ProfileSaveLocator.ReadForGame(path, game);
             save = loaded;
             savePath = path;
+            loadedGame = game;
             openedHash = HashFile(path);
             hasUnsavedChanges=false;
             openedContext.Text="Save aberto: arquivo manual · "+Path.GetFileName(path);
@@ -343,8 +349,8 @@ internal sealed class PokemonBankView : BufferedPanel
             boxPicker.Items.Clear();
             foreach (var name in BoxUtil.GetBoxNames(save)) boxPicker.Items.Add(name);
             boxPicker.Items.Add("Equipe");
-            boxPicker.Items.Add("Banco local");
-            boxPicker.SelectedIndex = 0;
+            boxPicker.Items.Add("Banco global");
+            boxPicker.SelectedIndex = save.PartyCount>0 ? save.BoxCount : 0;
             status.Text = $"{save.Version} · Geração {save.Generation} · {Path.GetFileName(path)} · {save.BoxCount} caixas × {save.BoxSlotCount} espaços · {(save.ChecksumsValid ? "checksums OK" : "checksum requer atenção")}";
             SetLoadedState(true);
             RenderSlots();
@@ -359,7 +365,8 @@ internal sealed class PokemonBankView : BufferedPanel
     {
         saveButton.Enabled = loaded;
         saveButton.Visible = loaded;
-        createButton.Enabled = loaded;
+        createButton.Enabled = true;
+        creationFormat.Visible = !loaded;
         boxPicker.Enabled = true;
         editButton.Enabled = moveButton.Enabled = archiveButton.Enabled = false;
         if (!loaded) status.Text = "O banco global pode ser consultado sem abrir um save. Abra um jogo para transferir Pokémon.";
@@ -824,8 +831,9 @@ internal sealed class PokemonBankView : BufferedPanel
 
     private void RenderSlots()
     {
+        SyncWorkspace();
         UpdateExtraFilterCaption();
-        moveButton.Text = IsBank ? "Copiar para save" : "Mover Pokémon";
+        moveButton.Text = IsBank ? "Copiar para caixa…" : "Mover / copiar…";
         moveButton.AccessibleName = IsBank ? "Copiar Pokémon do Banco global para o save aberto" : "Mover Pokémon entre slots do save";
         removePokemonButton.Enabled = IsBank && selectedSlot >= 0 && selectedSlot < bankFiles.Length;
         restoreRemovedButton.Visible = IsBank;
@@ -847,9 +855,9 @@ internal sealed class PokemonBankView : BufferedPanel
         importPokemonButton.Enabled = IsBank;
         exportPokemonButton.Enabled = IsBank && selectedSlot >= 0 && selectedSlot < bankFiles.Length;
         bankNavigation.Visible = IsBank;
-        bankPaging.Visible = IsBank;
+        bankPaging.Visible = false;
         exportPokemonButton.Visible = IsBank;
-        if(selectedSlot < 0){editButton.Enabled=moveButton.Enabled=archiveButton.Enabled=false;details.Text="Selecione um Pokémon\n\nOs detalhes e as ações aparecem aqui.\n\nUse a busca e os filtros para encontrar um Pokémon na coleção.";}
+        if(selectedSlot < 0){editButton.Enabled=moveButton.Enabled=archiveButton.Enabled=false;details.Text="Selecione um Pokémon\n\nClique em um sprite para ver atributos e ações.\n\nDuplo clique para editar. Espaços vazios abrem a criação.";}
         bankSpeciesLabel.Visible = bankSpeciesSearch.Visible = bankGenerationLabel.Visible = bankGenerationPicker.Visible = bankSortLabel.Visible = bankSortPicker.Visible = bankPreviousPage.Visible = bankNextPage.Visible = bankPageStatus.Visible = IsBank;
         int pageCount = Math.Max(1, (bankViewIndices.Length + BankPageSize - 1) / BankPageSize);
         bankPageStatus.Text = bankViewIndices.Length == 0 ? "0 Pokémon" : $"Página {bankPage + 1} de {pageCount} · {bankPage * BankPageSize + 1}–{Math.Min((bankPage + 1) * BankPageSize, bankViewIndices.Length)} de {bankViewIndices.Length} Pokémon";
@@ -858,9 +866,9 @@ internal sealed class PokemonBankView : BufferedPanel
         if (save == null && !IsBank) { slots.ResumeLayout(); return; }
         if (IsBank && bankFiles.Length == 0)
         {
-            details.Text = "Banco local vazio\n\nAbra um save e copie Pokémon para esta coleção. Ela continuará compartilhada entre os perfis.";
+            details.Text = "Banco global\n\nUse Criar Pokémon, Base de encontros ou Importar Pokémon para começar.\n\nSelecione um jogo e perfil para abrir sua equipe e caixas.";
             editButton.Enabled = moveButton.Enabled = archiveButton.Enabled = false;
-            slots.Controls.Add(new EmptyStatePanel("Banco global vazio", "Abra um save e copie Pokémon para esta coleção. O banco continuará compartilhado entre os perfis.", "Abrir perfil", OpenProfileSave) { Width = Math.Max(280, slots.ClientSize.Width - 20), Height = 180 });
+            slots.Controls.Add(new EmptyStatePanel("Comece sua coleção", "Crie um Pokémon no editor, escolha um modelo na base de encontros ou importe um arquivo. Para acessar sua equipe, abra o jogo e perfil à esquerda.", "Criar Pokémon", CreatePokemon) { Width = Math.Max(280, slots.ClientSize.Width - 20), Height = 180 });
         }
         if (IsBank && bankFiles.Length > 0 && bankViewIndices.Length == 0)
         {
@@ -901,7 +909,7 @@ internal sealed class PokemonBankView : BufferedPanel
                 Width = IsBank ? 192 : 136, Height = IsBank ? 118 : 96, Margin = new Padding(0,0,8,8), FlatStyle = FlatStyle.Flat,
                 BackColor = slotIndex == selectedSlot ? AppTheme.SurfaceSelected : occupied ? AppTheme.SurfaceRaised : AppTheme.Surface,
                 ForeColor = occupied ? AppTheme.Text : AppTheme.TextMuted,
-                Font = AppTheme.Caption, TextAlign = ContentAlignment.MiddleCenter,
+                BoxMode = true, Font = AppTheme.Body, TextAlign = ContentAlignment.MiddleCenter,
                 Text = IsBank ? $"#{bankPosition} · {PokemonLabel(pk)}\nNv. {pk.CurrentLevel} · Gen {pk.Format}" : occupied ? $"#{i + 1}\n{PokemonLabel(pk)}\nNv. {pk.CurrentLevel}" : $"#{i + 1}\n— vazio —",
                 Cursor = Cursors.Hand
             };
@@ -926,17 +934,18 @@ internal sealed class PokemonBankView : BufferedPanel
                 button.HandleCreated += (_, _) => _ = LoadPokemonSpriteAsync(button, pk.Species, pk.IsShiny, pk.Gender == 1);
             button.FlatAppearance.BorderColor = slotIndex == selectedSlot ? AppTheme.Focus : AppTheme.BorderSoft;
             button.Click += (_, _) => SelectSlot(slotIndex);
-            if (IsBank && occupied)
-                button.KeyDown += NavigateBankCards;
+            button.DoubleClick += (_, _) => {SelectSlot(slotIndex);if(occupied)EditPokemon(button,EventArgs.Empty);else CreatePokemon(button,EventArgs.Empty);};
+            button.KeyDown += NavigateBankCards;
             slots.Controls.Add(button);
         }
         slots.ResumeLayout();
+        LayoutBoxCells();
         UpdateSelectedSpritePreview();
     }
 
     private void NavigateBankCards(object sender, KeyEventArgs e)
     {
-        if (!IsBank || e.Modifiers != Keys.None || sender is not PokemonSlotButton current)
+        if (e.Modifiers != Keys.None || sender is not PokemonSlotButton current)
             return;
         if (e.KeyCode is Keys.PageUp or Keys.PageDown)
         {
@@ -1144,7 +1153,7 @@ internal sealed class PokemonBankView : BufferedPanel
         var pk = GetSlot(index);
         if (IsBank)
         {
-            details.Text = BuildBankPokemonDetails(pk, save?.Generation ?? 0, Path.GetFileName(bankFiles[index]));
+            details.Text = InspectorText(pk);
             editButton.Enabled = true;
             moveButton.Enabled = save != null && pk.GetType() == save.PKMType;
             archiveButton.Enabled = false;
@@ -1152,9 +1161,7 @@ internal sealed class PokemonBankView : BufferedPanel
             return;
         }
         editButton.Enabled = moveButton.Enabled = archiveButton.Enabled = pk.Species != 0;
-        details.Text = pk.Species == 0
-            ? $"Slot {index + 1}\n\nVazio\n\nSelecione Criar Pokémon para preencher este slot."
-            : $"{PokemonLabel(pk)}\n\nEspécie: {pk.Species}\nNível: {pk.CurrentLevel}\nSexo: {GenderLabel(pk.Gender)}\nShiny: {(pk.IsShiny ? "sim" : "não")}\n\nFormato: Gen {pk.Format}\nSlot: {index + 1}";
+        details.Text = pk.Species == 0 ? $"Espaço {index+1} disponível\n\nUse Criar Pokémon para preencher este espaço.\nDuplo clique também abre a criação." : InspectorText(pk);
         UpdateSelection();
     }
 
@@ -1174,10 +1181,10 @@ internal sealed class PokemonBankView : BufferedPanel
 
     private void UpdateSelectedSpritePreview()
     {
-        PokemonSlotButton selectedButton = IsBank && selectedSlot >= 0
+        PokemonSlotButton selectedButton = selectedSlot >= 0 && GetSlot(selectedSlot).Species!=0
             ? slots.Controls.OfType<PokemonSlotButton>().FirstOrDefault(button => button.Tag is int index && index == selectedSlot)
             : null;
-        Image nextImage = selectedButton?.Sprite == null ? null : new Bitmap(selectedButton.Sprite);
+        Image nextImage = selectedButton?.Sprite == null ? null : selectedButton.Sprite is Bitmap bitmap ? bitmap.Clone(selectedButton.SpriteInk,bitmap.PixelFormat) : new Bitmap(selectedButton.Sprite);
         Image previousImage = selectedSpritePreviewImage;
         selectedSpritePreviewImage = nextImage;
         selectedSpritePreview.Image = nextImage;
@@ -1210,11 +1217,9 @@ internal sealed class PokemonBankView : BufferedPanel
         PKM original = GetSlot(selectedSlot);
         if (original.Species == 0) return;
         PKM edited = original.Clone();
-        using var form = new EditPokemonDialog(edited);
+        using var form = new PokemonEditorDialog(edited, save);
         if (form.ShowDialog(this) != DialogResult.OK) return;
-        edited.Nickname = form.Nickname;
-        edited.IsNicknamed = !string.IsNullOrWhiteSpace(form.Nickname);
-        edited.CurrentLevel = (byte)form.Level;
+        edited = form.Result;
         edited.RefreshChecksum();
         if (IsBank) { WriteBankPokemon(bankFiles[selectedSlot], edited); RefreshBankSummary(); }
         else SetSlot(edited, selectedSlot);
@@ -1223,43 +1228,7 @@ internal sealed class PokemonBankView : BufferedPanel
         if(selectedSlot>=0)SelectSlot(selectedSlot);
     }
 
-    private void MovePokemon(object sender, EventArgs e)
-    {
-        if (save == null || selectedSlot < 0) return;
-        PKM pokemon = GetSlot(selectedSlot);
-        if (pokemon.Species == 0) return;
-        if (IsBank)
-        {
-            if (pokemon.GetType() != save.PKMType)
-            {
-                MessageBox.Show(this, "O formato deste Pokémon é de outra geração. A conversão ainda não está habilitada para evitar perda silenciosa de dados.", "Formato diferente", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-            int destination = FindEmptyBoxSlot();
-            if (destination < 0) { MessageBox.Show(this, "Não há espaço vazio nas caixas do save.", "Banco cheio", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
-            save.SetBoxSlotAtIndex(pokemon, destination);
-            hasUnsavedChanges=true;
-            status.Text = "Cópia inserida no primeiro slot vazio do save · grave para persistir";
-            return;
-        }
-        if (IsParty)
-        {
-            int destination = FindEmptyBoxSlot();
-            if (destination < 0) { MessageBox.Show(this, "Não há espaço vazio nas caixas.", "Banco cheio", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
-            save.SetBoxSlotAtIndex(pokemon, destination);
-            save.DeletePartySlot(selectedSlot);
-        }
-        else
-        {
-            if (save.PartyCount >= 6) { MessageBox.Show(this, "A equipe já tem seis Pokémon.", "Equipe cheia", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
-            save.SetPartySlotAtIndex(pokemon, save.PartyCount);
-            save.SetBoxSlotAtIndex(save.BlankPKM, selectedBox, selectedSlot);
-        }
-        selectedSlot = -1;
-        hasUnsavedChanges=true;
-        status.Text = "Pokémon movido na sessão · grave para persistir no save";
-        RenderSlots();
-    }
+    private void MovePokemon(object sender, EventArgs e) => ChooseTransferDestination();
 
     private int FindEmptyBoxSlot()
     {
@@ -1321,47 +1290,37 @@ internal sealed class PokemonBankView : BufferedPanel
         else File.Move(temp, path);
     }
 
-    private void CreatePokemon(object sender, EventArgs e)
+    private void CreatePokemon(object sender, EventArgs e) => OpenCreationEditor(false);
+
+    private void OpenCreationEditor(bool fromEncounter)
     {
-        if (save == null) return;
-        int slot = IsBank ? 0 : selectedSlot >= 0 && GetSlot(selectedSlot).Species == 0 ? selectedSlot : FindEmptySlot();
+        int slot = save == null || IsBank ? 0 : selectedSlot >= 0 && GetSlot(selectedSlot).Species == 0 ? selectedSlot : FindEmptySlot();
         if (slot < 0)
         {
-            MessageBox.Show(this, "Esta caixa/equipe não tem espaço vazio.", "Sem espaço", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            status.Text = "Esta caixa/equipe não tem espaço vazio. Escolha outra caixa.";
             return;
         }
-        using var form = new CreatePokemonDialog(save.MaxSpeciesID);
-        if (form.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            PKM pokemon = save.BlankPKM.Clone();
-            EntityTemplates.TemplateFields(pokemon, save);
-            pokemon.Species = (ushort)form.Species;
-            pokemon.CurrentLevel = (byte)form.Level;
-            pokemon.MetLevel = (byte)form.Level;
-            pokemon.Gender = pokemon.GetSaneGender();
-            pokemon.HealPP();
-            pokemon.RefreshChecksum();
-            if (IsBank)
+            PKM blank = PokemonEditorService.Blank(save?.Generation ?? creationFormat.SelectedIndex + 3, save,
+                loadedGame == null ? null : SaveProfileService.GameVersionFor(loadedGame.Title));
+            using var form = new PokemonEditorDialog(blank, save, creating:true);
+            if (fromEncounter) form.Shown += (_,_) => form.ShowEncounters();
+            if (form.ShowDialog(this) != DialogResult.OK) return;
+            PKM pokemon = form.Result;
+            if (save == null || IsBank)
             {
-                WriteBankPokemon(NewBankPath(pokemon), pokemon);
-                RefreshBankFiles();
-                RefreshBankSummary();
-                selectedSlot = bankFiles.Length - 1;
+                Directory.CreateDirectory(Path.Combine(root, "Pokemon Bank"));
+                string path = NewBankPath(pokemon);
+                WriteBankPokemon(path, pokemon);
+                RefreshBankFiles();RefreshBankSummary();
+                selectedSlot = Array.FindIndex(bankFiles,file=>string.Equals(file,path,StringComparison.OrdinalIgnoreCase));
             }
-            else
-            {
-                SetSlot(pokemon, slot);
-                selectedSlot = slot;
-            }
-            status.Text = $"Pokémon criado em modo sandbox · {PokemonLabel(pokemon)} · alteração pendente";
-            RenderSlots();
-            SelectSlot(selectedSlot);
+            else { SetSlot(pokemon, slot);selectedSlot = slot; }
+            status.Text = save == null || IsBank ? "Pokémon criado no Banco global. A análise está disponível no editor e na seleção." : "Pokémon criado no rascunho do save · use Salvar com backup para gravar.";
+            RenderSlots();if(selectedSlot>=0)SelectSlot(selectedSlot);
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, "Não foi possível criar o registro para este save.\n\n" + ex.Message, "Criação não concluída", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
+        catch (Exception ex) { status.Text = "Não foi possível criar o Pokémon: " + ex.Message; }
     }
 
     private void SetSlot(PKM pk, int slot)
@@ -1392,7 +1351,7 @@ internal sealed class PokemonBankView : BufferedPanel
             File.WriteAllBytes(temp, output);
             File.Replace(temp, savePath, null);
             openedHash = HashFile(savePath);
-            save = SaveUtil.GetSaveFile(savePath);
+            save = loadedGame == null ? SaveUtil.GetSaveFile(savePath) : ProfileSaveLocator.ReadForGame(savePath, loadedGame);
             hasUnsavedChanges=false;
             status.Text = $"Salvo e validado · backup: {Path.GetFileName(backup)}";
             RenderSlots();
@@ -1444,14 +1403,18 @@ internal sealed class CreatePokemonDialog : Form
 }
 internal sealed class PokemonSlotButton : Button
 {
+ public Rectangle SpriteInk=>spriteInk.IsEmpty&&sprite!=null?new Rectangle(Point.Empty,sprite.Size):spriteInk;
+ public bool BoxMode { get; set; }
  public string Title { get; set; }
  public string PokemonName { get; set; }
  public string Metadata { get; set; }
  public string Facts { get; set; }
- public Image Sprite { get; set; }
+ private Image sprite;
+ private Rectangle spriteInk;
+ public Image Sprite { get=>sprite; set {sprite=value;spriteInk=Rectangle.Empty;if(value is Bitmap bitmap){int left=bitmap.Width,top=bitmap.Height,right=0,bottom=0;for(int y=0;y<bitmap.Height;y++)for(int x=0;x<bitmap.Width;x++)if(bitmap.GetPixel(x,y).A>16){left=Math.Min(left,x);top=Math.Min(top,y);right=Math.Max(right,x);bottom=Math.Max(bottom,y);}if(left<=right&&top<=bottom)spriteInk=Rectangle.FromLTRB(left,top,right+1,bottom+1);}} }
  public int PrimaryType { get; set; } = -1;
  public int SecondaryType { get; set; } = -1;
- public PokemonSlotButton(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);}
+ public PokemonSlotButton(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.StandardClick|ControlStyles.StandardDoubleClick,true);}
  protected override bool IsInputKey(Keys keyData)
  {
   Keys key=keyData&Keys.KeyCode;
@@ -1459,6 +1422,7 @@ internal sealed class PokemonSlotButton : Button
  }
  protected override void OnPaint(PaintEventArgs e)
  {
+  if(BoxMode){PaintBoxCell(e);return;}
   e.Graphics.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.None;using var brush=new SolidBrush(BackColor);var rect=new Rectangle(1,1,Width-3,Height-3);PaintTools.FillRounded(e.Graphics,brush,rect,8);using var pen=new Pen(Focused?AppTheme.Focus:FlatAppearance.BorderColor);PaintTools.DrawRounded(e.Graphics,pen,rect,8);
   if(Title!=null)
   {
@@ -1482,6 +1446,17 @@ internal sealed class PokemonSlotButton : Button
    TextRenderer.DrawText(e.Graphics,Facts,AppTheme.Caption,new Rectangle(56,67,Width-64,17),AppTheme.TextMuted,TextFormatFlags.Left|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPadding);
   }
   else TextRenderer.DrawText(e.Graphics,Text,Font,new Rectangle(8,8,Width-16,Height-16),ForeColor,TextFormatFlags.WordBreak|TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPadding);
+ }
+ private void PaintBoxCell(PaintEventArgs e)
+ {
+  var g=e.Graphics;g.Clear(BackColor);
+  var bounds=new Rectangle(1,1,Width-3,Height-3);using var pen=new Pen(Focused?AppTheme.Focus:FlatAppearance.BorderColor);g.DrawRectangle(pen,bounds);
+  string position=(Text??"").Split('\n')[0].Split('·')[0].Trim();TextRenderer.DrawText(g,position,AppTheme.Caption,new Rectangle(6,3,Width-12,16),AppTheme.TextMuted,TextFormatFlags.Left|TextFormatFlags.EndEllipsis);
+  int art=Math.Min(64,Math.Min(Width-12,Height-38));var artBounds=new Rectangle((Width-art)/2,18,art,art);
+  if(Sprite!=null){g.InterpolationMode=System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;var ink=spriteInk.IsEmpty?new Rectangle(Point.Empty,Sprite.Size):spriteInk;double scale=Math.Min((double)artBounds.Width/ink.Width,(double)artBounds.Height/ink.Height);var draw=new Rectangle(artBounds.X+(artBounds.Width-(int)(ink.Width*scale))/2,artBounds.Y+(artBounds.Height-(int)(ink.Height*scale))/2,(int)(ink.Width*scale),(int)(ink.Height*scale));g.DrawImage(Sprite,draw,ink,GraphicsUnit.Pixel);}
+  else if(PokemonName!=null||Title!=null)PaintTools.DrawPokeball(g,new Rectangle(Width/2-12,Height/2-8,24,24),AppTheme.Focus,AppTheme.Background);
+  else {using var empty=new SolidBrush(AppTheme.BorderSoft);g.FillEllipse(empty,Width/2-3,Height/2-3,6,6);}
+  if(PokemonName!=null||Title!=null)TextRenderer.DrawText(g,Width<95?(Facts??"").Split('·')[0]:Facts,AppTheme.Caption,new Rectangle(4,Height-17,Width-8,15),AppTheme.TextSecondary,TextFormatFlags.HorizontalCenter|TextFormatFlags.EndEllipsis);
  }
  private static int TypeBadgeWidth(int type)
  {

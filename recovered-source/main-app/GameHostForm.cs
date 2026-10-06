@@ -42,6 +42,11 @@ internal sealed class GameHostForm : Form
 	private bool emulatorEmbedded;
 	private bool emulatorTopLevel;
 	private IntPtr embeddedWindowHandle;
+    private EmbeddedEmulatorWindow embeddedWindow;
+    private bool pausedForMenu;
+    private Size lastEmbeddedSize;
+    internal Action<string> SettingsRequested { get; set; }
+    internal Func<IntPtr, bool> ForegroundActivator { get; set; } = hwnd => SetForegroundWindow(hwnd);
 	private bool launchFailed;
 	private bool azaharPausedForMenu;
 	private bool azaharResumePending;
@@ -126,7 +131,7 @@ internal sealed class GameHostForm : Form
 		Panel toolbar = new BufferedPanel
 		{
 			Dock = DockStyle.Top,
-			Height = 56,
+			Height = 76,
 			BackColor = AppTheme.TopBar
 		};
 		Label value = new Label
@@ -134,7 +139,7 @@ internal sealed class GameHostForm : Form
 			Text = $"{gameTitle} · Perfil {profileName}",
 			Font = AppTheme.Section,
 			ForeColor = AppTheme.Text,
-			Location = new Point(22, 10),
+			Location = new Point(24, 14),
 			AutoSize = false,
 			AutoEllipsis = true,
 			Width = 920,
@@ -143,11 +148,11 @@ internal sealed class GameHostForm : Form
 		Label value2 = new Label
 		{
 			Text = canPauseToMenu
-				? "F12 ou PAUSAR · MENU volta à Biblioteca e mantém o jogo pausado; use Retomar no topo para continuar."
+				? "F12 · Menu   |   Retomar devolve o foco ao jogo."
 				: "F12 ou VOLTAR AO MENU encerra o emulador após confirmação.",
 			Font = AppTheme.Caption,
 			ForeColor = AppTheme.TextMuted,
-			Location = new Point(23, 31),
+			Location = new Point(24, 42),
 			AutoSize = false,
 			AutoEllipsis = true,
 			Width = 920,
@@ -164,23 +169,33 @@ internal sealed class GameHostForm : Form
         }
 		ThemeButton back = new ThemeButton(canPauseToMenu ? "PAUSAR · MENU" : "VOLTAR AO MENU", ButtonKind.Secondary)
 		{
-			Width = 158,
-			Height = 34,
+			AutoSize = true,
+			Height = 40,
 			Anchor = (AnchorStyles.Top | AnchorStyles.Right)
 		};
 		back.Click += (object param0, EventArgs param1) =>
 		{
 			if (canPauseToMenu) ReturnToMenu(); else CloseWithConfirmation();
 		};
-		toolbar.Controls.Add(value);
-		toolbar.Controls.Add(value2);
-		toolbar.Controls.Add(back);
-		toolbar.Resize += (object param0, EventArgs param1) =>
-		{
-			back.Left = toolbar.ClientSize.Width - back.Width - 20;
-			back.Top = 11;
-			value.Width = value2.Width = Math.Max(120, toolbar.ClientSize.Width - back.Width - 72);
-		};
+        var resume = new ThemeButton("Retomar", ButtonKind.Primary) { AutoSize = true, AccessibleName = "Retomar e focar o jogo" };
+        var audio = new ThemeButton("Áudio", ButtonKind.Secondary) { AutoSize = true, AccessibleDescription = "Pausa a sessão e abre as configurações de áudio." };
+        var controls = new ThemeButton("Controles", ButtonKind.Secondary) { AutoSize = true, AccessibleDescription = "Pausa a sessão e abre as configurações de controle." };
+        resume.Click += (_, _) => ResumeSession();
+        audio.Click += (_, _) => OpenSessionSettings("audio");
+        controls.Click += (_, _) => OpenSessionSettings("controls");
+        toolbar.Controls.AddRange(new Control[] { value, value2, resume, audio, controls, back });
+        void LayoutToolbar()
+        {
+            int right = toolbar.ClientSize.Width - 24;
+            foreach (var button in new[] { back, controls, audio, resume })
+            {
+                button.SetBounds(right - button.Width, 18, button.Width, 40);
+                right = button.Left - 8;
+            }
+            value.Width = value2.Width = Math.Max(1, right - value.Left - 16);
+        }
+        toolbar.Resize += (_, _) => LayoutToolbar();
+        LayoutToolbar();
 		gamePanel = new Panel
 		{
 			Dock = DockStyle.Fill,
@@ -188,6 +203,8 @@ internal sealed class GameHostForm : Form
 		};
 		Controls.Add(gamePanel);
 		Controls.Add(toolbar);
+        gamePanel.SizeChanged += (_, _) => ResizeEmbedded();
+        gamePanel.MouseDown += (_, _) => FocusEmulator();
         if(InputDeviceProfile.Load(Path.Combine(AppPaths.Root,"Settings","input-device.json")).Mode==3)
         {
             virtualPad=new ControllerVisualizer {Dock=DockStyle.Bottom,Height=260,VirtualInput=true,Testing=true,ConsoleModel=configuredConsoleModel is >= 0 and <= 2 ? configuredConsoleModel : processName=="visualboyadvance-m"?0:processName=="azahar"?2:1};
@@ -275,6 +292,12 @@ internal sealed class GameHostForm : Form
 		timer.Tick += (object param0, EventArgs param1) =>
 		{
 			TryEmbed();
+            if (emulatorEmbedded)
+            {
+                InputReader.GetWindowThreadProcessId(InputReader.GetForegroundWindow(), out uint activeProcess);
+                if (!closing && !launchFailed && !pausedForMenu && Visible && (activeProcess == Environment.ProcessId || IsEmulatorForeground())) sessionClock?.Start();
+                else RecordSessionPlayTime();
+            }
 		};
 		timer.Start();
 	}
@@ -288,6 +311,9 @@ internal sealed class GameHostForm : Form
         if (!canPauseToMenu || launchFailed || closing || closeInProgress || IsDisposed)
 			return;
 		RecordSessionPlayTime();
+        pausedForMenu = true;
+        embeddedWindow?.SetVbaPaused(true);
+        virtualPad?.ReleaseVirtual();
 		if (string.Equals(processName, "azahar", StringComparison.OrdinalIgnoreCase)) azaharPausedForMenu = true;
 		Hide();
 		SessionHidden?.Invoke(this);
@@ -299,8 +325,11 @@ internal sealed class GameHostForm : Form
 			return;
 		Show();
 		WindowState = FormWindowState.Normal;
-		Activate();
-		if(emulatorTopLevel)BeginInvoke((Action)FocusEmulator);
+		(TopLevel ? this : Parent?.FindForm())?.Activate();
+        pausedForMenu = false;
+        embeddedWindow?.SetVbaPaused(false);
+        FocusEmulator();
+        if (azaharPausedForMenu) ResumeAzaharAfterFocus();
 		sessionClock?.Start();
 	}
 
@@ -327,16 +356,29 @@ internal sealed class GameHostForm : Form
 		finally { azaharResumePending = false; }
 	}
 
-	internal void NotifyApplicationDeactivated() => RecordSessionPlayTime();
+    private bool IsVba => string.Equals(processName, "visualboyadvance-m", StringComparison.OrdinalIgnoreCase);
 
-	internal void NotifyApplicationActivated()
-	{
-		if (!closing && !launchFailed && Visible) sessionClock?.Start();
-		// This form is a child of LauncherForm, so its Activated event does not
-		// restore focus to RetroArch's separate top-level window.
-		if (emulatorTopLevel && !closing && !launchFailed && Visible && IsHandleCreated)
-			BeginInvoke((Action)(() => { if (Visible && !closing && !launchFailed) FocusEmulator(); }));
-	}
+    private void OpenSessionSettings(string section)
+    {
+        if (SettingsRequested == null || launchFailed) return;
+        ReturnToMenu();
+        SettingsRequested(section);
+    }
+
+    internal void NotifyApplicationDeactivated()
+    {
+        RecordSessionPlayTime();
+        embeddedWindow?.SetVbaPaused(true);
+    }
+
+    internal void NotifyApplicationActivated()
+    {
+        if (closing || launchFailed || !Visible || pausedForMenu) return;
+        embeddedWindow?.SetVbaPaused(false);
+        sessionClock?.Start();
+        // Do not activate RetroArch here: activation precedes mouse-up on launcher buttons.
+        // Focus is transferred only by Retomar, a game click, or a held virtual input.
+    }
 
 	internal void RequestClose() => CloseWithConfirmation();
 
@@ -376,7 +418,6 @@ internal sealed class GameHostForm : Form
         }
         if (emulatorEmbedded){
             ResizeEmbedded();
-            if(emulatorTopLevel && IsInputHostFocused) FocusEmulator();
             return;
         }
         if(emulator==null){timer?.Stop();ShowLaunchFailure(new InvalidOperationException("O processo iniciado não forneceu uma identidade para incorporar a janela."));return;}
@@ -389,6 +430,7 @@ internal sealed class GameHostForm : Form
             timer?.Stop();embeddedWindowHandle=IntPtr.Zero;emulatorEmbedded=false;ShowLaunchFailure(failure);return;
         }
         embeddedWindowHandle=mainWindowHandle;
+        if (keepForegroundWindow) embeddedWindow = new EmbeddedEmulatorWindow(mainWindowHandle, IsVba, (TopLevel ? this : Parent?.FindForm())?.Handle ?? IntPtr.Zero);
         emulatorTopLevel=keepForegroundWindow;
         inputBridge=new GameInputBridge(AppPaths.Root,GetEmulatorProcessId,()=>IsInputHostFocused,
             ()=>virtualPad?.VirtualActions??new bool[12],()=>virtualPad!=null&&virtualPad.Capture&&virtualPad.Actions.Any(action=>action),FocusEmulator,()=>emulatorTopLevel);
@@ -432,9 +474,10 @@ internal sealed class GameHostForm : Form
             GetWindowThreadProcessId(panel,out uint panelPid);
             if(expectedPid<=0||pid!=expectedPid||panelPid!=Environment.ProcessId)throw new InvalidOperationException("A identidade da janela não corresponde ao processo iniciado e ao painel deste aplicativo.");
             childBefore=ReadWindowDpi(window);panelBefore=ReadWindowDpi(panel);
+            embeddedWindow = new EmbeddedEmulatorWindow(window, IsVba);
             original=GetWindowLong(window,GWL_STYLE);int readError=Marshal.GetLastPInvokeError();
             if(original==0&&readError!=0)throw new System.ComponentModel.Win32Exception(readError,"Não foi possível ler o estilo da janela.");
-            requested=(original&~WS_POPUP)|WS_CHILD;
+            requested=(original&~(WS_POPUP|0x00CF0000))|WS_CHILD|0x06000000;
             styleReturn=SetWindowLong(window,GWL_STYLE,requested);styleError=Marshal.GetLastPInvokeError();
             if(styleReturn==0&&styleError!=0)throw new System.ComponentModel.Win32Exception(styleError,"Não foi possível preparar o estilo da janela.");
             styleChanged=true;
@@ -522,13 +565,15 @@ internal sealed class GameHostForm : Form
 	{
 		if (embeddedWindowHandle == IntPtr.Zero || IsProcessExited(emulator))return;
 		if(emulatorTopLevel){
-			bool shouldShow=Visible&&WindowState!=FormWindowState.Minimized;
+			bool shouldShow=Visible&&(TopLevel ? this : Parent?.FindForm())?.WindowState!=FormWindowState.Minimized;
 			if(!shouldShow){ShowWindow(embeddedWindowHandle,0);return;}
             if(!MoveTopLevelToGamePanel(embeddedWindowHandle))return;
 			ShowWindow(embeddedWindowHandle,8);
 			return;
 		}
-		MoveWindow(embeddedWindowHandle,0,0,gamePanel.ClientSize.Width,gamePanel.ClientSize.Height,repaint:true);
+		if (lastEmbeddedSize == gamePanel.ClientSize) return;
+        lastEmbeddedSize = gamePanel.ClientSize;
+        SetWindowPos(embeddedWindowHandle, IntPtr.Zero, 0, 0, lastEmbeddedSize.Width, lastEmbeddedSize.Height, 0x0014);
 	}
     private bool MoveTopLevelToGamePanel(IntPtr window)
     {
@@ -573,7 +618,7 @@ internal sealed class GameHostForm : Form
 		{
 			try
 			{
-				if (emulator.CloseMainWindow())
+				if (embeddedWindowHandle != IntPtr.Zero ? PostWindowMessage(embeddedWindowHandle, 0x0010, IntPtr.Zero, IntPtr.Zero) : emulator.CloseMainWindow())
 				{
 					try { await emulator.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15)); }
 					catch (TimeoutException) { }
@@ -652,11 +697,12 @@ internal sealed class GameHostForm : Form
     }
     private void FocusEmulator()
     {
+        if (closing || pausedForMenu || !Visible) return;
         IntPtr hwnd=embeddedWindowHandle;
         if(hwnd==IntPtr.Zero&&!TryGetMainWindowHandle(emulator,out hwnd))return;
         // Activating a top-level window already gives its thread keyboard focus.
         // Joining the two UI queues is only needed for a genuinely embedded child.
-        if(emulatorTopLevel){SetForegroundWindow(hwnd);return;}
+        if(emulatorTopLevel){ForegroundActivator(hwnd);return;}
         uint target=InputReader.GetWindowThreadProcessId(hwnd,out _),current=GetCurrentThreadId();
         bool attached=target!=current&&AttachThreadInput(current,target,true);
         try{SetFocus(hwnd);}finally{if(attached)AttachThreadInput(current,target,false);}

@@ -1,5 +1,9 @@
 # Sistema visual — Pokemons Play v26 · Pixel
 
+## Banco v172.0.4 — caixas e inspector
+
+Modo Operate. Referências consultadas: a imagem box-annotated.png e as páginas The Box View e The Bank da wiki oficial do PKForge. Implementação própria em WinForms, mantendo a paleta e o título Pixel, com comandos Segoe UI. Origem e lista de caixas à esquerda, grade de seis colunas por cinco linhas ao centro, inspector à direita. Sprites ampliados pelo recorte da transparência; os nomes longos ficam no inspector e nos nomes acessíveis. Equipe e coleção global têm acessos distintos. A coleção usa páginas de 30, busca e ordenação visíveis e filtros recolhidos. Transferências escolhem caixa/equipe e espaço, com opção de copiar; alterações em save permanecem pendentes até salvar. Prévias preenchidas usam dados de teste em memória.
+
 ## Biblioteca — botões e rolagem
 
 A coleção usa fundo opaco na paleta existente e painéis com buffer de desenho. A área rolável acompanha a altura real do conteúdo; cada linha reserva espaço para seu cartão mais alto, incluindo hacks e histórico. Textos respeitam o recorte durante a repintura. O favorito tem alvo de 36 px e estrela desenhada, independente dos glifos da fonte pixel, preservando os nomes acessíveis e a navegação por teclado.
@@ -153,3 +157,16 @@ Seletor de GBA/DS/3DS em Configurações e janela própria de teste com área am
 Carcaças substituídas por sprites transparentes gerados com Imagegen, com contornos de hardware, dobradiças, relevos e brilho em pixel. Permanecem a paleta violeta/índigo/azul petróleo e as regiões interativas desenhadas pelo aplicativo. Sprites embutidos e prompts em Assets/Consoles. Imagens finais integradas em output/v29-confirmed.
 
 Prévia dos controles reais em `output/v26-pixel/desktop` e `output/v26-confirmed`: telas, posições com rolagem e diálogos. São renderizações DrawToBitmap, não testes de integração de emuladores ou login de nuvem.
+
+
+## Sessão de jogo — integração e ações acessíveis
+
+A barra da sessão mantém a identidade pixel, com título/perfil à esquerda e Retomar, Áudio, Controles e Pausar · Menu à direita. Usa 76 px de altura e ações de 40 px; o texto encurta com reticências em janelas menores. A navegação não marca uma página enquanto o jogo está visível.
+
+O VBA-M desliga temporariamente a pausa por inatividade. O host mantém o comando nativo de pausa, pausa ao sair para o menu ou perder a ativação e retoma explicitamente. A configuração original continua restaurada ao encerrar. Janelas incorporadas perdem menus/bordas e só recebem atualização de tamanho quando o painel muda.
+
+O RetroArch conserva o modo de janela superior necessário à entrada Libretro, sem menu nativo nem bordas; pertence à janela do launcher e acompanha sua minimização. Ativar o launcher e executar o timer não puxam foco para o emulador: Retomar, clique no jogo ou entrada virtual fazem essa transferência. Assim os botões do launcher podem completar seus cliques.
+
+Áudio e Controles pausam a sessão e abrem diretamente a seção correspondente em Configurações, com Retomar no topo para voltar ao jogo. As preferências mantêm a regra existente de aplicação no próximo jogo.
+
+Verificação: `ProfilesCheck --game-window-ux`, `--game-controls`, `--embedded-session-config` e `--embedding-lifecycle`. Prévia sintética em `Z:/PokemonPlay/output/game-window-ux-confirmed`; não representa uma ROM executando. Ainda é necessário confirmar jogabilidade com os emuladores reais.

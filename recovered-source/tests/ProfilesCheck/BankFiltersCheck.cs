@@ -193,7 +193,7 @@ internal static class BankFiltersCheck
         for(int group=0;group<2;group++)for(int sector=0;sector<14;sector++){int offset=(group*14+sector)*0x1000;System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(rawSave.AsSpan(offset+0xFF4),(ushort)sector);System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(rawSave.AsSpan(offset+0xFF8),0x08012025);}
         var fixtureSave=new SAV3E(rawSave);fixtureSave.ClearBoxes();fixtureSave.OT="TESTE";fixtureSave.Language=2;
         PKM savePokemon=fixtureSave.BlankPKM.Clone();EntityTemplates.TemplateFields(savePokemon,fixtureSave);savePokemon.Species=25;savePokemon.PID=0x12345678;savePokemon.CurrentLevel=20;savePokemon.Nickname="TESTE";savePokemon.IsNicknamed=true;savePokemon.RefreshChecksum();fixtureSave.SetBoxSlotAtIndex(savePokemon,0,0);
-        string savePath=Path.Combine(fixture,"sprite-preview.sav");File.WriteAllBytes(savePath,fixtureSave.Write().ToArray());Call("LoadSave",savePath);Application.DoEvents();
+        string savePath=Path.Combine(fixture,"sprite-preview.sav");File.WriteAllBytes(savePath,fixtureSave.Write().ToArray());Call("LoadSave",savePath,null);Application.DoEvents();
         var savePokemonCard=slotPanel.Controls.OfType<Button>().Single(button=>button.GetType().Name=="PokemonSlotButton"&&Convert.ToInt32(button.Tag)==0);
         DateTime saveSpriteDeadline=DateTime.UtcNow.AddSeconds(3);
         while(savePokemonCard.GetType().GetProperty("Sprite").GetValue(savePokemonCard)==null&&DateTime.UtcNow<saveSpriteDeadline){Application.DoEvents();System.Threading.Thread.Sleep(10);}
