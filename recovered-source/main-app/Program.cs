@@ -94,6 +94,16 @@ internal static class Program
             string candidate=Path.GetFullPath(args[1]);string name=Path.GetFileName(candidate);
             if(string.Equals(Path.GetDirectoryName(candidate),Path.GetFullPath(AppPaths.Root),StringComparison.OrdinalIgnoreCase)&&name.StartsWith(".pokemonplay-update-",StringComparison.Ordinal)&&Guid.TryParseExact(name.Substring(20),"N",out _)&&Directory.Exists(candidate)) updateStage=candidate;
         }
+        if(updateStage==null)
+        {
+            try
+            {
+                using var updates=new AppUpdateService(AppPaths.Root);
+                string pending=PendingAppUpdate.Find(AppPaths.Root,updates.Repository);
+                if(pending!=null){SaveProfileService.EnsureEmulatorsClosed();PendingAppUpdate.Start(AppPaths.Root,pending);return;}
+            }
+            catch(Exception){/* Recovery or an active game must never block opening the launcher. */}
+        }
         if(updateStage!=null&&File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"emulators-runtime.zip")))
             UpdatePreparationForm.Prepare(AppDomain.CurrentDomain.BaseDirectory,AppPaths.Root,updateStage);
         else BundledEmulatorArchive.EnsureExtracted(AppDomain.CurrentDomain.BaseDirectory);

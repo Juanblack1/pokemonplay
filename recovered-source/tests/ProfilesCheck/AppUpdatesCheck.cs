@@ -63,13 +63,35 @@ internal static class AppUpdatesCheck
         {
             service.SetRepository("owner/repository");
             var update=new AppUpdate(nextTag,"Notes","https://github.com/owner/repository/releases/tag/"+nextTag,"https://github.com/owner/repository/releases/download/"+nextTag+"/"+AppUpdateService.AssetName,bytes.Length,digest);
-            string downloaded=service.DownloadAsync(update,null,CancellationToken.None).GetAwaiter().GetResult();Assert(File.ReadAllText(Path.Combine(downloaded,"PokemonPlayUpdater.exe"))=="current trusted helper","download validates SHA-256 and stages the currently installed updater helper");AppUpdateService.TryClean(downloaded);
+            string downloaded=service.DownloadAsync(update,null,CancellationToken.None).GetAwaiter().GetResult();Assert(File.ReadAllText(Path.Combine(downloaded,"PokemonPlayUpdater.exe"))=="current trusted helper","download validates SHA-256 and stages the currently installed updater helper");PendingAppUpdate.Save(downloaded,update,service.Repository);
+            Assert(PendingAppUpdate.Find(downloadRoot,service.Repository)==downloaded,"verified automatic update survives closing the app");
+            Assert(PendingAppUpdate.Find(downloadRoot,"other/repository")==null,"automatic update is bound to its configured repository");
+            File.WriteAllText(Path.Combine(downloaded,"failed"),"simulated failed install");
+            Assert(PendingAppUpdate.Find(downloadRoot,service.Repository)==null,"failed automatic installation is never retried on startup");File.Delete(Path.Combine(downloaded,"failed"));
+            File.AppendAllText(Path.Combine(downloaded,"PokemonPlayRuntime","Pokemons Play.dll"),"tampered");
+            Assert(PendingAppUpdate.Find(downloadRoot,service.Repository)==null,"modified staged payload cannot be automatically installed");
+            AppUpdateService.TryClean(downloaded);
             Reject(()=>service.DownloadAsync(update with{Sha256=new string('0',64)},null,CancellationToken.None).GetAwaiter().GetResult(),"download integrity failure preserves installed runtime");
             using var cancellation=new CancellationTokenSource();cancellation.Cancel();Reject(()=>service.DownloadAsync(update,null,cancellation.Token).GetAwaiter().GetResult(),"cancelled downloads do not apply updates");
             Assert(!Directory.GetDirectories(downloadRoot,".pokemonplay-update-*").Any(),"failed and cancelled downloads clean their temporary stages");
             using var dialog=new AppUpdateDialog(service,update);Assert(Controls(dialog).OfType<Button>().Any(b=>b.Text=="Agora não")&&Controls(dialog).OfType<Button>().Any(b=>b.Text=="Atualizar e reabrir"&&b.Enabled),"update prompt offers install and defer as separate choices");
             string preview=Environment.GetEnvironmentVariable("POKEMONPLAY_UPDATE_PREVIEW");
             if(!string.IsNullOrEmpty(preview)){Directory.CreateDirectory(preview);dialog.Show();Application.DoEvents();using var image=new System.Drawing.Bitmap(dialog.Width,dialog.Height);dialog.DrawToBitmap(image,new System.Drawing.Rectangle(0,0,image.Width,image.Height));image.Save(Path.Combine(preview,"update-dialog.png"));dialog.Close();using var launcher=new LauncherForm(downloadRoot){UpdatesEnabled=false};typeof(LauncherForm).GetField("availableUpdate",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(launcher,update);typeof(LauncherForm).GetMethod("ShowUpdateNotice",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(launcher,null);launcher.Width=1000;launcher.Height=720;launcher.Show();Application.DoEvents();using var shell=new System.Drawing.Bitmap(launcher.Width,launcher.Height);launcher.DrawToBitmap(shell,new System.Drawing.Rectangle(0,0,shell.Width,shell.Height));shell.Save(Path.Combine(preview,"update-notice.png"));launcher.Close();}
+        }
+        var automaticHttp=new AutomaticHttp(bytes,nextTag,digest);
+        using(var launcher=new LauncherForm(downloadRoot,new HttpClient(automaticHttp)){UpdatesEnabled=false})
+        {
+            launcher.Show();Application.DoEvents();
+            var method=typeof(LauncherForm).GetMethod("CheckForUpdates",BindingFlags.Instance|BindingFlags.NonPublic);
+            var pending=(Task)method.Invoke(launcher,null);
+            var duplicate=(Task)method.Invoke(launcher,null);
+            var deadline=DateTime.UtcNow.AddSeconds(30);
+            while(!pending.IsCompleted&&DateTime.UtcNow<deadline){Application.DoEvents();Thread.Sleep(10);}
+            Assert(pending.IsCompleted,"background automatic update completes without blocking the launcher");pending.GetAwaiter().GetResult();
+            Assert(duplicate.IsCompleted&&automaticHttp.Checks==1&&automaticHttp.Downloads==1,"concurrent update checks share one download");
+            string prepared=PendingAppUpdate.Find(downloadRoot,"owner/repository");
+            Assert(prepared!=null&&Controls(launcher).OfType<Button>().Any(b=>b.Text=="Reiniciar e atualizar"&&b.Enabled),"opening app automatically downloads update and offers restart when ready");
+            launcher.Close();Assert(PendingAppUpdate.Find(downloadRoot,"owner/repository")==prepared,"closing launcher preserves verified update for next startup");AppUpdateService.TryClean(prepared);
         }
         string helper=Path.GetFullPath("recovered-source/updater/bin/Release/net10.0-windows/PokemonPlayUpdater.dll");Type engine=Assembly.LoadFrom(helper).GetType("Program");
         void Apply(string install,string staged,Action start)
@@ -85,6 +107,19 @@ internal static class AppUpdatesCheck
         Assert(File.ReadAllText(Path.Combine(runtime,"Pokemons Play.exe"))=="stable before preparation"&&File.ReadAllText(Path.Combine(installRoot,"Saves","progress.sav"))=="saved progress"&&!File.Exists(Path.Combine(preparation,"success")),"preparation failure restores the previous runtime after bootstrap acknowledgment and preserves saves");
     }
     private static System.Collections.Generic.IEnumerable<Control> Controls(Control parent)=>parent.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(Controls(c)));
+    private sealed class AutomaticHttp(byte[] bytes,string tag,string digest):HttpMessageHandler
+    {
+        internal int Checks,Downloads;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancel)
+        {
+            await Task.Delay(30,cancel);
+            if(request.RequestUri.Host=="api.github.com")
+            {
+                Checks++;return new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(JsonSerializer.Serialize(new{tag_name=tag,draft=false,prerelease=false,body="Notes",assets=new[]{new{name=AppUpdateService.AssetName,size=bytes.Length,browser_download_url="https://github.com/owner/repository/releases/download/"+tag+"/"+AppUpdateService.AssetName,digest="sha256:"+digest}}}))};
+            }
+            Downloads++;return new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(bytes)};
+        }
+    }
     private sealed class FakeHttp(byte[] bytes):HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancel){cancel.ThrowIfCancellationRequested();return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(bytes)});}
